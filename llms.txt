@@ -1,0 +1,129 @@
+# Dakota TypeScript SDK
+
+> Official TypeScript SDK for Dakota Platform - stablecoin payments infrastructure
+
+## Install
+
+```bash
+npm install dakota-ts-sdk
+```
+
+## Quick Start
+
+```typescript
+import { DakotaClient, Environment } from 'dakota-ts-sdk';
+
+const client = new DakotaClient({
+  apiKey: 'your_api_key',
+  environment: Environment.Sandbox, // default
+});
+
+// List customers
+for await (const customer of client.customers.list()) {
+  console.log(customer.name);
+}
+
+// Create customer
+const customer = await client.customers.create({
+  name: 'Acme Corp',
+  customer_type: 'business',
+});
+```
+
+## Resources
+
+| Resource | Description |
+|----------|-------------|
+| `client.customers` | Customer management |
+| `client.recipients` | Recipient entities |
+| `client.destinations` | Bank/crypto destinations |
+| `client.accounts` | On-ramp/off-ramp accounts |
+| `client.transactions` | Transaction operations |
+| `client.autoTransactions` | Automated transactions |
+| `client.wallets` | Non-custodial wallets |
+| `client.events` | Event history |
+| `client.applications` | KYB applications |
+| `client.policies` | Transaction policies |
+| `client.signerGroups` | Multi-sig signer groups |
+| `client.signers` | Individual signers |
+| `client.apiKeys` | API key management |
+| `client.users` | User management |
+| `client.webhooks` | Webhook targets |
+| `client.info` | Platform capabilities |
+| `client.sandbox` | Test simulations |
+
+## Common Methods
+
+Each resource typically has:
+- `list(params?)` - Returns async iterator
+- `get(id)` - Get single item
+- `create(data)` - Create new item
+- `update(id, data)` - Update item
+- `delete(id)` - Delete item
+
+## Pagination
+
+```typescript
+// Async iteration
+for await (const item of client.customers.list()) {
+  console.log(item);
+}
+
+// Collect to array
+const all = await client.customers.list().toArray();
+
+// Get first
+const first = await client.customers.list().first();
+```
+
+## Webhooks
+
+```typescript
+import { WebhookHandler } from 'dakota-ts-sdk/webhook';
+
+const handler = new WebhookHandler({ publicKey: 'hex_key' });
+handler.on('customer.created', async (event) => { /* ... */ });
+handler.on('transaction.*', async (event) => { /* wildcard */ });
+handler.onDefault(async (event) => { /* fallback */ });
+
+// Express
+app.post('/webhooks', express.raw({ type: 'application/json' }), handler.expressMiddleware());
+```
+
+## Error Handling
+
+```typescript
+import { APIError, TransportError } from 'dakota-ts-sdk';
+
+try {
+  await client.customers.get('invalid');
+} catch (error) {
+  if (error instanceof APIError) {
+    console.log(error.statusCode, error.code, error.message);
+    console.log(error.requestId); // for support
+    console.log(error.retryable); // safe to retry?
+  }
+  if (error instanceof TransportError) {
+    console.log(error.message, error.cause);
+  }
+}
+```
+
+## Environments
+
+- **Sandbox** (default): `https://api.platform.sandbox.dakota.xyz`
+- **Production**: Set `environment: Environment.Production`
+
+## Configuration
+
+```typescript
+const client = new DakotaClient({
+  apiKey: 'required',
+  applicationToken: 'optional', // for /applications
+  environment: Environment.Production,
+  timeout: 30000,
+  retryPolicy: { maxAttempts: 5, initialBackoffMs: 100, maxBackoffMs: 5000 },
+  automaticIdempotency: true,
+  logger: console,
+});
+```

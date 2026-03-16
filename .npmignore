@@ -1,0 +1,19 @@
+# Source
+src/
+tests/
+
+# Config
+.eslintrc.cjs
+.prettierrc
+tsconfig.json
+tsup.config.ts
+vitest.config.ts
+
+# Development
+.github/
+.vscode/
+coverage/
+
+# Misc
+.DS_Store
+*.log
