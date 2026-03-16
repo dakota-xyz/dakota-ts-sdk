@@ -25,10 +25,7 @@
 export { DakotaClient } from './client/client.js';
 
 // Configuration
-export {
-  Environment,
-  getEnvironmentURL,
-} from './client/environment.js';
+export { Environment, getEnvironmentURL } from './client/environment.js';
 
 export {
   type DakotaClientConfig,
@@ -42,11 +39,7 @@ export {
 } from './client/config.js';
 
 // Errors
-export {
-  APIError,
-  TransportError,
-  ConfigurationError,
-} from './client/errors.js';
+export { APIError, TransportError, ConfigurationError } from './client/errors.js';
 
 // Pagination
 export {

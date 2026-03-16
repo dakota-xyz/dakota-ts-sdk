@@ -62,6 +62,10 @@ export class DestinationsResource extends BaseResource {
    * ```
    */
   list(recipientId: string, params?: ListParams): PaginatedIterator<Destination> {
-    return this.paginate<Destination>(`/recipients/${recipientId}/destinations`, params);
+    return this.paginate<Destination>(
+      `/recipients/${recipientId}/destinations`,
+      params,
+      (item) => item.destination_id
+    );
   }
 }

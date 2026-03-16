@@ -186,9 +186,9 @@ describe('Webhook Signature', () => {
       const oldTimestamp = (Math.floor(Date.now() / 1000) - 600).toString();
       const signature = await createSignature(payload, oldTimestamp);
 
-      await expect(
-        verifySignature(payload, signature, oldTimestamp, publicKeyHex)
-      ).rejects.toThrow('expired');
+      await expect(verifySignature(payload, signature, oldTimestamp, publicKeyHex)).rejects.toThrow(
+        'expired'
+      );
     });
 
     it('uses custom tolerance', async () => {

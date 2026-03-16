@@ -3,21 +3,21 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
-import {
-  PaginatedIterator,
-  paginate,
-  defaultCursorExtractor,
-} from '../../src/client/pagination.js';
+import { paginate, defaultCursorExtractor, type PageFetcher } from '../../src/client/pagination.js';
+
+interface TestItem {
+  id: string;
+}
 
 describe('Pagination', () => {
   describe('defaultCursorExtractor', () => {
     it('extracts id from object', () => {
-      const cursor = defaultCursorExtractor({ id: 'item_123', name: 'Test' });
+      const cursor = defaultCursorExtractor({ id: 'item_123' });
       expect(cursor).toBe('item_123');
     });
 
     it('throws if object has no id', () => {
-      expect(() => defaultCursorExtractor({ name: 'Test' })).toThrow(
+      expect(() => defaultCursorExtractor({ id: undefined })).toThrow(
         'Item does not have an id field'
       );
     });
@@ -25,7 +25,7 @@ describe('Pagination', () => {
 
   describe('PaginatedIterator', () => {
     it('iterates through single page', async () => {
-      const fetcher = vi.fn().mockResolvedValueOnce({
+      const fetcher: PageFetcher<TestItem> = vi.fn().mockResolvedValueOnce({
         data: [{ id: '1' }, { id: '2' }, { id: '3' }],
         meta: { has_more_after: false },
       });
@@ -39,7 +39,7 @@ describe('Pagination', () => {
     });
 
     it('iterates through multiple pages', async () => {
-      const fetcher = vi
+      const fetcher: PageFetcher<TestItem> = vi
         .fn()
         .mockResolvedValueOnce({
           data: [{ id: '1' }, { id: '2' }],
@@ -63,7 +63,7 @@ describe('Pagination', () => {
     });
 
     it('passes cursor to fetcher', async () => {
-      const fetcher = vi
+      const fetcher: PageFetcher<TestItem> = vi
         .fn()
         .mockResolvedValueOnce({
           data: [{ id: 'a' }, { id: 'b' }],
@@ -82,13 +82,13 @@ describe('Pagination', () => {
     });
 
     it('supports for-await-of syntax', async () => {
-      const fetcher = vi.fn().mockResolvedValueOnce({
+      const fetcher: PageFetcher<TestItem> = vi.fn().mockResolvedValueOnce({
         data: [{ id: '1' }, { id: '2' }],
         meta: { has_more_after: false },
       });
 
       const iterator = paginate(fetcher);
-      const items: { id: string }[] = [];
+      const items: TestItem[] = [];
 
       for await (const item of iterator) {
         items.push(item);
@@ -98,7 +98,7 @@ describe('Pagination', () => {
     });
 
     it('handles empty results', async () => {
-      const fetcher = vi.fn().mockResolvedValueOnce({
+      const fetcher: PageFetcher<TestItem> = vi.fn().mockResolvedValueOnce({
         data: [],
         meta: { has_more_after: false },
       });
@@ -110,7 +110,7 @@ describe('Pagination', () => {
     });
 
     it('first() returns first item', async () => {
-      const fetcher = vi.fn().mockResolvedValueOnce({
+      const fetcher: PageFetcher<TestItem> = vi.fn().mockResolvedValueOnce({
         data: [{ id: '1' }, { id: '2' }],
         meta: { has_more_after: true },
       });
@@ -123,7 +123,7 @@ describe('Pagination', () => {
     });
 
     it('first() returns null for empty results', async () => {
-      const fetcher = vi.fn().mockResolvedValueOnce({
+      const fetcher: PageFetcher<TestItem> = vi.fn().mockResolvedValueOnce({
         data: [],
         meta: { has_more_after: false },
       });
@@ -135,7 +135,7 @@ describe('Pagination', () => {
     });
 
     it('next() returns items one at a time', async () => {
-      const fetcher = vi.fn().mockResolvedValueOnce({
+      const fetcher: PageFetcher<TestItem> = vi.fn().mockResolvedValueOnce({
         data: [{ id: '1' }, { id: '2' }],
         meta: { has_more_after: false },
       });
@@ -152,7 +152,10 @@ describe('Pagination', () => {
     });
 
     it('uses custom cursor extractor', async () => {
-      const fetcher = vi
+      interface CursorItem {
+        cursor: string;
+      }
+      const fetcher: PageFetcher<CursorItem> = vi
         .fn()
         .mockResolvedValueOnce({
           data: [{ cursor: 'x' }, { cursor: 'y' }],
@@ -163,7 +166,7 @@ describe('Pagination', () => {
           meta: { has_more_after: false },
         });
 
-      const customExtractor = (item: { cursor: string }) => item.cursor;
+      const customExtractor = (item: CursorItem) => item.cursor;
       const iterator = paginate(fetcher, customExtractor);
       await iterator.toArray();
 

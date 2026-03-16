@@ -136,7 +136,9 @@ describe('Errors', () => {
     it('formats error with cause', () => {
       const cause = new Error('Connection refused');
       const error = new TransportError('Network error', cause);
-      expect(error.toString()).toBe('TransportError: Network error (caused by: Connection refused)');
+      expect(error.toString()).toBe(
+        'TransportError: Network error (caused by: Connection refused)'
+      );
     });
 
     it('formats error without cause', () => {

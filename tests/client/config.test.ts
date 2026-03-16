@@ -3,11 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import {
-  resolveConfig,
-  AuthMode,
-  DEFAULT_RETRY_POLICY,
-} from '../../src/client/config.js';
+import { resolveConfig, AuthMode, DEFAULT_RETRY_POLICY } from '../../src/client/config.js';
 import { Environment } from '../../src/client/environment.js';
 import { ConfigurationError } from '../../src/client/errors.js';
 

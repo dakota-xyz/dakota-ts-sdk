@@ -11,13 +11,13 @@ import type { components } from '../generated/api.js';
 // ============================================================================
 
 /** Unique identifier (KSUID format) */
-export type KSUID = components['schemas']['KSUID'];
+export type KSUID = components['schemas']['IDResponse']['id'];
 
 /** Network identifier */
-export type NetworkId = components['schemas']['NetworkId'];
+export type NetworkId = string;
 
 /** Payment capability/rail */
-export type PaymentCapability = components['schemas']['PaymentCapability'];
+export type PaymentCapability = string;
 
 // ============================================================================
 // Customer Types
@@ -33,7 +33,7 @@ export type CustomerCreateRequest = components['schemas']['CustomerCreateRequest
 export type CustomerCreateResponse = components['schemas']['CustomerCreateResponse'];
 
 /** KYB status */
-export type KybStatus = components['schemas']['KybStatus'];
+export type KybStatus = Customer['kyb_status'];
 
 // ============================================================================
 // Recipient Types
@@ -46,7 +46,7 @@ export type Recipient = components['schemas']['RecipientResponse'];
 export type RecipientRequest = components['schemas']['RecipientRequest'];
 
 /** Recipient update request */
-export type RecipientUpdateRequest = components['schemas']['RecipientUpdateRequest'];
+export type RecipientUpdateRequest = components['schemas']['RecipientRequest'];
 
 // ============================================================================
 // Destination Types
@@ -56,7 +56,7 @@ export type RecipientUpdateRequest = components['schemas']['RecipientUpdateReque
 export type Destination = components['schemas']['DestinationResponseUnion'];
 
 /** Destination request union */
-export type DestinationRequest = components['schemas']['DestinationRequest'];
+export type DestinationRequest = components['schemas']['DestinationRequestUnion'];
 
 /** Fiat US destination request */
 export type FiatUSDestinationRequest = components['schemas']['FiatUSDestinationRequest'];
@@ -75,28 +75,28 @@ export type CryptoDestination = components['schemas']['CryptoDestinationResponse
 // ============================================================================
 
 /** Account response union */
-export type Account = components['schemas']['AccountResponseUnion'];
+export type Account = components['schemas']['AccountResponse'];
 
 /** Account creation request union */
 export type AccountCreateRequest = components['schemas']['AccountCreateRequest'];
 
 /** On-ramp account creation request */
-export type OnrampAccountCreateRequest = components['schemas']['OnrampAccountCreateRequest'];
+export type OnrampAccountCreateRequest = components['schemas']['AccountCreateRequest'];
 
 /** Off-ramp account creation request */
-export type OfframpAccountCreateRequest = components['schemas']['OfframpAccountCreateRequest'];
+export type OfframpAccountCreateRequest = components['schemas']['AccountCreateRequest'];
 
 /** Swap account creation request */
-export type SwapAccountCreateRequest = components['schemas']['SwapAccountCreateRequest'];
+export type SwapAccountCreateRequest = components['schemas']['AccountCreateRequest'];
 
 /** On-ramp account response */
-export type OnrampAccount = components['schemas']['OnrampAccount'];
+export type OnrampAccount = components['schemas']['AccountResponse'];
 
 /** Off-ramp account response */
-export type OfframpAccount = components['schemas']['OfframpAccount'];
+export type OfframpAccount = components['schemas']['AccountResponse'];
 
 /** Swap account response */
-export type SwapAccount = components['schemas']['SwapAccount'];
+export type SwapAccount = components['schemas']['AccountResponse'];
 
 /** Account update request */
 export type AccountUpdateRequest = components['schemas']['AccountUpdateRequest'];
@@ -112,10 +112,10 @@ export type OneOffTransaction = components['schemas']['OneOffTransaction'];
 export type OneOffTransactionRequest = components['schemas']['OneOffTransactionRequest'];
 
 /** Transaction status */
-export type TransactionStatus = components['schemas']['OneOffTransactionStatus'];
+export type TransactionStatus = OneOffTransaction['status'];
 
 /** Auto transaction */
-export type AutoTransaction = components['schemas']['AutoTransaction'];
+export type AutoTransaction = components['schemas']['AutoAccountTransaction'];
 
 // ============================================================================
 // Wallet Types
@@ -128,13 +128,16 @@ export type Wallet = components['schemas']['Wallet'];
 export type WalletCreateRequest = components['schemas']['WalletCreateRequest'];
 
 /** Wallet balance */
-export type WalletBalance = components['schemas']['Balance'];
+export type WalletBalance = components['schemas']['AssetBalance'];
+
+/** Wallet balances */
+export type WalletBalances = components['schemas']['WalletBalances'];
 
 /** Wallet transaction request */
-export type WalletTransactionRequest = components['schemas']['WalletTransactionRequest'];
+export type WalletTransactionRequest = components['schemas']['SendTransactionIntent'];
 
 /** Wallet transaction response */
-export type WalletTransaction = components['schemas']['WalletTransactionResponse'];
+export type WalletTransaction = components['schemas']['WalletTransaction'];
 
 // ============================================================================
 // Event Types
@@ -144,7 +147,7 @@ export type WalletTransaction = components['schemas']['WalletTransactionResponse
 export type Event = components['schemas']['Event'];
 
 /** Event type */
-export type EventType = components['schemas']['EventType'];
+export type EventType = Event['type'];
 
 // ============================================================================
 // Application Types (Onboarding)
@@ -154,16 +157,16 @@ export type EventType = components['schemas']['EventType'];
 export type ApplicationListItem = components['schemas']['ApplicationListItem'];
 
 /** Application details */
-export type Application = components['schemas']['ApplicationListItem'];
+export type Application = components['schemas']['Application'];
 
 /** Application submission request */
-export type ApplicationSubmissionRequest = components['schemas']['ApplicationSubmissionRequest'];
+export type ApplicationSubmissionRequest = Record<string, unknown>;
 
 /** Associated individual */
-export type AssociatedIndividual = components['schemas']['AssociatedIndividual'];
+export type AssociatedIndividual = components['schemas']['AssociatedIndividualResponse'];
 
 /** Associated individual request */
-export type AssociatedIndividualRequest = components['schemas']['AssociatedIndividualRequest'];
+export type AssociatedIndividualRequest = components['schemas']['IndividualRequest'];
 
 // ============================================================================
 // Policy Types
@@ -173,13 +176,13 @@ export type AssociatedIndividualRequest = components['schemas']['AssociatedIndiv
 export type Policy = components['schemas']['Policy'];
 
 /** Policy creation request */
-export type PolicyCreateRequest = components['schemas']['PolicyCreateRequest'];
+export type PolicyCreateRequest = components['schemas']['CreatePolicyRequest'];
 
 /** Policy rule */
 export type PolicyRule = components['schemas']['PolicyRule'];
 
 /** Policy rule creation request */
-export type PolicyRuleCreateRequest = components['schemas']['PolicyRuleCreateRequest'];
+export type PolicyRuleCreateRequest = components['schemas']['CreatePolicyRuleRequest'];
 
 // ============================================================================
 // Signer Group Types
@@ -202,23 +205,26 @@ export type SignerCreateRequest = components['schemas']['SignerCreateRequest'];
 // ============================================================================
 
 /** API key */
-export type ApiKey = components['schemas']['ApiKey'];
+export type ApiKey = components['schemas']['ApiKeyListItem'];
+
+/** API key response */
+export type ApiKeyResponse = components['schemas']['ApiKeyResponse'];
 
 /** API key creation request */
-export type ApiKeyCreateRequest = components['schemas']['ApiKeyCreateRequest'];
+export type ApiKeyCreateRequest = Record<string, unknown>;
 
 // ============================================================================
 // User Types
 // ============================================================================
 
 /** User */
-export type User = components['schemas']['User'];
+export type User = components['schemas']['ClientUser'];
 
 /** User creation request */
-export type UserCreateRequest = components['schemas']['UserCreateRequest'];
+export type UserCreateRequest = components['schemas']['CreateClientUserRequest'];
 
 /** User update request */
-export type UserUpdateRequest = components['schemas']['UserUpdateRequest'];
+export type UserUpdateRequest = components['schemas']['UpdateClientUserRequest'];
 
 // ============================================================================
 // Webhook Types
@@ -234,7 +240,7 @@ export type WebhookTargetCreateRequest = components['schemas']['WebhookTargetCre
 export type WebhookTargetUpdateRequest = components['schemas']['WebhookTargetUpdateRequest'];
 
 /** Webhook event */
-export type WebhookEvent = components['schemas']['WebhookEvent'];
+export type WebhookEvent = components['schemas']['WebhookDelivery'];
 
 // ============================================================================
 // Info Types
@@ -243,21 +249,52 @@ export type WebhookEvent = components['schemas']['WebhookEvent'];
 /** Country info */
 export type Country = components['schemas']['Country'];
 
-/** Network info */
-export type Network = components['schemas']['Network'];
+/** Network info - generic structure for network responses */
+export interface Network {
+  id: string;
+  name: string;
+  [key: string]: unknown;
+}
 
 // ============================================================================
 // Sandbox Types
 // ============================================================================
 
-/** Sandbox simulation request */
-export type SimulateInboundRequest = components['schemas']['SimulateInboundRequest'];
+/** Sandbox inbound simulation request */
+export interface SimulateInboundRequest {
+  account_id: string;
+  amount: string;
+  scenario?: string;
+  [key: string]: unknown;
+}
 
 /** Sandbox simulation response */
-export type SimulationResponse = components['schemas']['SimulationResponse'];
+export interface SimulationResponse {
+  simulation_id?: string;
+  applicant_id?: string;
+  previous_state?: string;
+  new_state?: string;
+  [key: string]: unknown;
+}
 
-/** Sandbox onboarding request */
-export type SimulateOnboardingRequest = components['schemas']['SimulateOnboardingRequest'];
+/** Sandbox onboarding simulation request */
+export interface SimulateOnboardingRequest {
+  type:
+    | 'kyb_approve'
+    | 'kyb_reject'
+    | 'kyb_info_request'
+    | 'kyc_approve'
+    | 'kyc_reject'
+    | 'kyc_info_request'
+    | 'applicant_activate'
+    | 'applicant_suspend';
+  applicant_id: string;
+  simulation_id: string;
+  organization_id?: string;
+  reason_code?: string;
+  info_request_fields?: string[];
+  [key: string]: unknown;
+}
 
 /** Sandbox scenario */
 export type SandboxScenario = components['schemas']['SandboxScenario'];
@@ -274,6 +311,7 @@ export interface ListParams {
   starting_after?: string;
   ending_before?: string;
   limit?: number;
+  [key: string]: unknown;
 }
 
 /** Customer list parameters */

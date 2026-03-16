@@ -61,7 +61,10 @@ export class ApplicationsResource extends BaseResource {
    * @param params - Pagination parameters
    * @returns Async iterator of individuals
    */
-  listIndividuals(applicationId: string, params?: ListParams): PaginatedIterator<AssociatedIndividual> {
+  listIndividuals(
+    applicationId: string,
+    params?: ListParams
+  ): PaginatedIterator<AssociatedIndividual> {
     return this.paginate<AssociatedIndividual>(
       `/applications/${applicationId}/associated-individuals`,
       params

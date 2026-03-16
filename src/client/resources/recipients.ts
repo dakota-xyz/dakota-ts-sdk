@@ -4,12 +4,7 @@
 
 import { BaseResource } from './base.js';
 import { PaginatedIterator } from '../pagination.js';
-import type {
-  Recipient,
-  RecipientRequest,
-  RecipientUpdateRequest,
-  ListParams,
-} from '../types.js';
+import type { Recipient, RecipientRequest, RecipientUpdateRequest, ListParams } from '../types.js';
 
 /**
  * Recipients API resource.
@@ -91,7 +86,7 @@ export class RecipientsResource extends BaseResource {
    */
   async update(recipientId: string, data: RecipientUpdateRequest): Promise<Recipient> {
     return this.transport.request<Recipient>({
-      method: 'PATCH',
+      method: 'PUT',
       path: `/recipients/${recipientId}`,
       body: data,
     });

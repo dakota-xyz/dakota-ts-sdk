@@ -35,9 +35,7 @@ describe('Transport', () => {
 
   describe('request', () => {
     it('makes GET request', async () => {
-      mockFetch = createMockFetch([
-        { status: 200, body: { data: [{ id: '1', name: 'Test' }] } },
-      ]);
+      mockFetch = createMockFetch([{ status: 200, body: { data: [{ id: '1', name: 'Test' }] } }]);
       const config = resolveConfig({
         apiKey: 'test_api_key',
         fetch: mockFetch as unknown as typeof fetch,
@@ -54,9 +52,7 @@ describe('Transport', () => {
     });
 
     it('makes POST request with body', async () => {
-      mockFetch = createMockFetch([
-        { status: 201, body: { id: '1', name: 'New Customer' } },
-      ]);
+      mockFetch = createMockFetch([{ status: 201, body: { id: '1', name: 'New Customer' } }]);
       const config = resolveConfig({
         apiKey: 'test_api_key',
         fetch: mockFetch as unknown as typeof fetch,
@@ -344,9 +340,7 @@ describe('Transport', () => {
     });
 
     it('does not retry 400 Bad Request', async () => {
-      mockFetch = createMockFetch([
-        { status: 400, body: { message: 'Bad request' } },
-      ]);
+      mockFetch = createMockFetch([{ status: 400, body: { message: 'Bad request' } }]);
       const config = resolveConfig({
         apiKey: 'test_api_key',
         retryPolicy: { maxAttempts: 3, initialBackoffMs: 10, maxBackoffMs: 50 },
@@ -365,9 +359,7 @@ describe('Transport', () => {
     });
 
     it('does not retry POST without idempotency key on 503', async () => {
-      mockFetch = createMockFetch([
-        { status: 503, body: {} },
-      ]);
+      mockFetch = createMockFetch([{ status: 503, body: {} }]);
       const config = resolveConfig({
         apiKey: 'test_api_key',
         automaticIdempotency: false,

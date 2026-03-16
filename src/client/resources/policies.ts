@@ -54,21 +54,6 @@ export class PoliciesResource extends BaseResource {
   }
 
   /**
-   * Update a policy.
-   *
-   * @param policyId - Policy ID
-   * @param data - Update data
-   * @returns Updated policy
-   */
-  async update(policyId: string, data: Partial<PolicyCreateRequest>): Promise<Policy> {
-    return this.transport.request<Policy>({
-      method: 'PATCH',
-      path: `/policies/${policyId}`,
-      body: data,
-    });
-  }
-
-  /**
    * Delete a policy.
    *
    * @param policyId - Policy ID
@@ -136,7 +121,7 @@ export class PoliciesResource extends BaseResource {
    */
   async attachToWallet(policyId: string, walletId: string): Promise<void> {
     await this.transport.request<void>({
-      method: 'POST',
+      method: 'PUT',
       path: `/policies/${policyId}/wallets/${walletId}`,
     });
   }

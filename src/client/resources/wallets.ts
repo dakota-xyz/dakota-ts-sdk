@@ -80,7 +80,10 @@ export class WalletsResource extends BaseResource {
    * });
    * ```
    */
-  async createTransaction(walletId: string, data: WalletTransactionRequest): Promise<WalletTransaction> {
+  async createTransaction(
+    walletId: string,
+    data: WalletTransactionRequest
+  ): Promise<WalletTransaction> {
     return this.transport.request<WalletTransaction>({
       method: 'POST',
       path: `/wallets/${walletId}/transactions`,

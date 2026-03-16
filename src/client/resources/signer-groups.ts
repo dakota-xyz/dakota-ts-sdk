@@ -54,21 +54,6 @@ export class SignerGroupsResource extends BaseResource {
   }
 
   /**
-   * Update a signer group.
-   *
-   * @param signerGroupId - Signer group ID
-   * @param data - Update data
-   * @returns Updated signer group
-   */
-  async update(signerGroupId: string, data: Partial<SignerGroupCreateRequest>): Promise<SignerGroup> {
-    return this.transport.request<SignerGroup>({
-      method: 'PATCH',
-      path: `/signer-groups/${signerGroupId}`,
-      body: data,
-    });
-  }
-
-  /**
    * Add a signer to a group.
    *
    * @param signerGroupId - Signer group ID
@@ -104,7 +89,7 @@ export class SignerGroupsResource extends BaseResource {
    */
   async attachToWallet(walletId: string, signerGroupId: string): Promise<void> {
     await this.transport.request<void>({
-      method: 'POST',
+      method: 'PUT',
       path: `/wallets/${walletId}/signer-groups/${signerGroupId}`,
     });
   }
@@ -146,6 +131,20 @@ export class SignersResource extends BaseResource {
   async getByPublicKey(publicKey: string): Promise<Signer> {
     return this.transport.request<Signer>({
       method: 'GET',
+      path: `/signers/${publicKey}`,
+    });
+  }
+
+  /**
+   * Delete a signer by public key.
+   *
+   * Soft-deletes all signers with the given public key.
+   *
+   * @param publicKey - Signer public key
+   */
+  async delete(publicKey: string): Promise<void> {
+    await this.transport.request<void>({
+      method: 'DELETE',
       path: `/signers/${publicKey}`,
     });
   }

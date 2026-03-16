@@ -61,4 +61,16 @@ export class UsersResource extends BaseResource {
       body: data,
     });
   }
+
+  /**
+   * Delete a user.
+   *
+   * @param userId - User ID
+   */
+  async delete(userId: string): Promise<void> {
+    await this.transport.request<void>({
+      method: 'DELETE',
+      path: `/users/${userId}`,
+    });
+  }
 }

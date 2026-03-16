@@ -261,7 +261,10 @@ export class WebhookHandler {
    */
   expressMiddleware(): (
     req: { body: Buffer | string; headers: WebhookHeaders },
-    res: { status: (code: number) => { send: (body: string) => void }; sendStatus: (code: number) => void },
+    res: {
+      status: (code: number) => { send: (body: string) => void };
+      sendStatus: (code: number) => void;
+    },
     next: (error?: Error) => void
   ) => Promise<void> {
     return async (req, res, next) => {

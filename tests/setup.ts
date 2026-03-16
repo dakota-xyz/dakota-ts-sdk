@@ -26,7 +26,9 @@ afterEach(() => {
 /**
  * Create a mock fetch function.
  */
-export function createMockFetch(responses: Array<{ status: number; body?: unknown; headers?: Record<string, string> }>) {
+export function createMockFetch(
+  responses: Array<{ status: number; body?: unknown; headers?: Record<string, string> }>
+) {
   let callIndex = 0;
 
   return vi.fn(async (_url: string, _init?: RequestInit) => {
@@ -37,16 +39,13 @@ export function createMockFetch(responses: Array<{ status: number; body?: unknow
       throw new Error('No mock response configured');
     }
 
-    return new Response(
-      response.body !== undefined ? JSON.stringify(response.body) : null,
-      {
-        status: response.status,
-        headers: {
-          'content-type': 'application/json',
-          ...response.headers,
-        },
-      }
-    );
+    return new Response(response.body !== undefined ? JSON.stringify(response.body) : null, {
+      status: response.status,
+      headers: {
+        'content-type': 'application/json',
+        ...response.headers,
+      },
+    });
   });
 }
 
@@ -83,7 +82,7 @@ export const testUtils = {
       if (Date.now() - start > timeout) {
         throw new Error('Timeout waiting for condition');
       }
-      await new Promise(resolve => setTimeout(resolve, 10));
+      await new Promise((resolve) => setTimeout(resolve, 10));
     }
   },
 
@@ -91,6 +90,6 @@ export const testUtils = {
    * Create a delay.
    */
   delay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   },
 };

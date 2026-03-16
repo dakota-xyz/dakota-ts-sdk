@@ -3,7 +3,7 @@
  */
 
 import { Transport } from '../transport.js';
-import { PaginatedIterator, paginate, PageFetcher } from '../pagination.js';
+import { PaginatedIterator, paginate, PageFetcher, CursorExtractor } from '../pagination.js';
 
 /**
  * Base class for API resources.
@@ -18,9 +18,10 @@ export abstract class BaseResource {
   /**
    * Create a paginated iterator for a list endpoint.
    */
-  protected paginate<T extends { id?: string }>(
+  protected paginate<T>(
     path: string,
-    params?: Record<string, unknown>
+    params?: Record<string, unknown>,
+    cursorExtractor?: CursorExtractor<T>
   ): PaginatedIterator<T> {
     const fetcher: PageFetcher<T> = async (cursor?: string) => {
       const query: Record<string, string | number | boolean | undefined> = {};
@@ -38,7 +39,10 @@ export abstract class BaseResource {
         query.starting_after = cursor;
       }
 
-      const response = await this.transport.request<{ data: T[]; meta?: { has_more_after?: boolean } }>({
+      const response = await this.transport.request<{
+        data: T[];
+        meta?: { has_more_after?: boolean };
+      }>({
         method: 'GET',
         path,
         query,
@@ -50,6 +54,6 @@ export abstract class BaseResource {
       };
     };
 
-    return paginate(fetcher);
+    return paginate(fetcher, cursorExtractor);
   }
 }

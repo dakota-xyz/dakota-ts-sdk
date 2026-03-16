@@ -11,15 +11,6 @@ const RETRYABLE_STATUS_CODES = new Set([429, 500, 502, 503, 504]);
 /** HTTP methods that are safe to retry without idempotency key */
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'PUT', 'DELETE', 'OPTIONS']);
 
-/** Headers that should be redacted in logs */
-const SENSITIVE_HEADERS = new Set([
-  'authorization',
-  'x-api-key',
-  'x-application-token',
-  'cookie',
-  'set-cookie',
-]);
-
 /**
  * Request options for the transport layer.
  */
@@ -70,7 +61,10 @@ export class Transport {
   /**
    * Build the full URL with query parameters.
    */
-  private buildURL(path: string, query?: Record<string, string | number | boolean | undefined>): string {
+  private buildURL(
+    path: string,
+    query?: Record<string, string | number | boolean | undefined>
+  ): string {
     const url = new URL(path, this.config.baseURL);
 
     if (query) {
@@ -105,7 +99,9 @@ export class Transport {
 
     // Add idempotency key for POST requests
     if (method === 'POST') {
-      const key = idempotencyKey ?? (this.config.automaticIdempotency ? this.config.idempotencyKeyGenerator() : undefined);
+      const key =
+        idempotencyKey ??
+        (this.config.automaticIdempotency ? this.config.idempotencyKeyGenerator() : undefined);
       if (key) {
         headers['x-idempotency-key'] = key;
       }
@@ -242,12 +238,7 @@ export class Transport {
   /**
    * Determine if a request should be retried based on status code.
    */
-  private shouldRetry(
-    status: number,
-    method: string,
-    init: RequestInit,
-    attempt: number
-  ): boolean {
+  private shouldRetry(status: number, method: string, init: RequestInit, attempt: number): boolean {
     if (attempt >= this.config.retryPolicy.maxAttempts) {
       return false;
     }
@@ -353,7 +344,9 @@ export class Transport {
    * Log outgoing request.
    */
   private logRequest(method: string, url: string, attempt: number): void {
-    this.config.logger.debug(`Request: ${method} ${url}${attempt > 1 ? ` (attempt ${attempt})` : ''}`);
+    this.config.logger.debug(
+      `Request: ${method} ${url}${attempt > 1 ? ` (attempt ${attempt})` : ''}`
+    );
   }
 
   /**
@@ -363,21 +356,5 @@ export class Transport {
     this.config.logger.debug(
       `Response: ${method} ${url} -> ${status}${attempt > 1 ? ` (attempt ${attempt})` : ''}`
     );
-  }
-
-  /**
-   * Redact sensitive header values for logging.
-   */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  private redactHeaders(headers: Record<string, string>): Record<string, string> {
-    const redacted: Record<string, string> = {};
-    for (const [key, value] of Object.entries(headers)) {
-      if (SENSITIVE_HEADERS.has(key.toLowerCase())) {
-        redacted[key] = '[REDACTED]';
-      } else {
-        redacted[key] = value;
-      }
-    }
-    return redacted;
   }
 }

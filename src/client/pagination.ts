@@ -59,9 +59,9 @@ export class PaginatedIterator<T> implements AsyncIterable<T> {
   private hasMore = true;
   private started = false;
 
-  constructor(fetcher: PageFetcher<T>, cursorExtractor: CursorExtractor<T> = defaultCursorExtractor) {
+  constructor(fetcher: PageFetcher<T>, cursorExtractor?: CursorExtractor<T>) {
     this.fetcher = fetcher;
-    this.cursorExtractor = cursorExtractor;
+    this.cursorExtractor = cursorExtractor ?? (defaultCursorExtractor as CursorExtractor<T>);
   }
 
   /**

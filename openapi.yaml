@@ -11611,8 +11611,6 @@ components:
         - arbitrum-sepolia
         - optimism-mainnet
         - optimism-sepolia
-        - avalanche-mainnet
-        - avalanche-fuji
         - polygon-mainnet
         - polygon-amoy
       minLength: 1

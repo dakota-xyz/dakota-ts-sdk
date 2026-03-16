@@ -28,3 +28,6 @@ npm-debug.log*
 
 # Test
 .vitest-result.json
+
+# Local reports (not for git)
+E2E_RESULTS.md

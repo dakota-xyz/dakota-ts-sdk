@@ -1815,7 +1815,7 @@ export type components = {
          * @example ethereum-mainnet
          * @enum {string}
          */
-        readonly NetworkId: "ethereum-mainnet" | "ethereum-sepolia" | "ethereum-goerli" | "ethereum-holesky" | "solana-mainnet" | "solana-devnet" | "solana-testnet" | "base-mainnet" | "base-sepolia" | "arbitrum-mainnet" | "arbitrum-sepolia" | "optimism-mainnet" | "optimism-sepolia" | "avalanche-mainnet" | "avalanche-fuji" | "polygon-mainnet" | "polygon-amoy";
+        readonly NetworkId: "ethereum-mainnet" | "ethereum-sepolia" | "ethereum-goerli" | "ethereum-holesky" | "solana-mainnet" | "solana-devnet" | "solana-testnet" | "base-mainnet" | "base-sepolia" | "arbitrum-mainnet" | "arbitrum-sepolia" | "optimism-mainnet" | "optimism-sepolia" | "polygon-mainnet" | "polygon-amoy";
         readonly ApiKeyResponse: {
             readonly id: components["schemas"]["KSUID"];
             /**
