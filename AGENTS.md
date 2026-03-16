@@ -67,17 +67,19 @@ const updated = await client.recipients.update(recipientId, {
 // Create bank destination (for off-ramp)
 const bankDest = await client.destinations.create(recipientId, {
   destination_type: 'fiat_us',
+  name: 'Primary Bank Account',
   bank_name: 'Chase Bank',
   account_holder_name: 'Acme Corp',
   account_number: '123456789',
-  routing_number: '021000021',
+  aba_routing_number: '021000021',
   account_type: 'checking',
 });
 
 // Create crypto destination (for on-ramp)
 const cryptoDest = await client.destinations.create(recipientId, {
   destination_type: 'crypto',
-  crypto_address: '0x742d35Cc6634C0532925a3b844Bc9e7595f...',
+  name: 'Crypto Wallet',
+  address: '0x742d35Cc6634C0532925a3b844Bc9e7595f...',
   network_id: 'ethereum-mainnet',
 });
 
@@ -94,11 +96,11 @@ for await (const dest of client.destinations.list(recipientId)) {
 const offramp = await client.accounts.create({
   account_type: 'offramp',
   customer_id: customerId,
-  destination_id: bankDestId,
-  source_asset: 'USDC',
-  source_network_id: 'ethereum-mainnet',
-  destination_asset: 'USD',
-  destination_rail: 'ach',
+  fiat_destination_id: bankDestId,
+  asset: 'USDC',
+  network_id: 'ethereum-mainnet',
+  rail: 'ach',
+  capabilities: ['ach'],
 });
 // Returns: { crypto_address: '0x...' } - customer sends USDC here
 
@@ -106,21 +108,21 @@ const offramp = await client.accounts.create({
 const onramp = await client.accounts.create({
   account_type: 'onramp',
   customer_id: customerId,
-  destination_id: cryptoDestId,
-  source_asset: 'USD',
-  source_rail: 'ach',
-  destination_asset: 'USDC',
-  destination_network_id: 'ethereum-mainnet',
+  crypto_destination_id: cryptoDestId,
+  asset: 'USDC',
+  network_id: 'ethereum-mainnet',
+  rail: 'ach',
+  capabilities: ['ach'],
 });
-// Returns: { bank_name, routing_number, account_number } - customer sends USD here
+// Returns: { bank_account: { bank_name, aba_routing_number, account_number } } - customer sends USD here
 
 // Create swap account (crypto → crypto)
 const swap = await client.accounts.create({
   account_type: 'swap',
   customer_id: customerId,
-  destination_id: cryptoDestId,
-  source_asset: 'USDC',
-  source_network_id: 'ethereum-mainnet',
+  crypto_destination_id: cryptoDestId,
+  asset: 'USDC',
+  network_id: 'ethereum-mainnet',
   destination_asset: 'USDT',
   destination_network_id: 'polygon-mainnet',
 });
@@ -280,6 +282,9 @@ for await (const policy of client.policies.list()) {
 // Get policy
 const policy = await client.policies.get(policyId);
 
+// Delete policy
+await client.policies.delete(policyId);
+
 // Add rule
 const rule = await client.policies.addRule(policyId, {
   type: 'daily_limit',
@@ -315,6 +320,24 @@ const signer = await client.signerGroups.addSigner(groupId, {
 
 // Attach to wallet
 await client.signerGroups.attachToWallet(walletId, groupId);
+
+// Detach from wallet
+await client.signerGroups.detachFromWallet(walletId, groupId);
+```
+
+### Signers
+
+```typescript
+// List all signers
+for await (const signer of client.signers.list()) {
+  console.log(signer.public_key);
+}
+
+// Get signer by public key
+const signer = await client.signers.getByPublicKey(publicKey);
+
+// Delete signer by public key
+await client.signers.delete(publicKey);
 ```
 
 ### API Keys
@@ -354,6 +377,9 @@ const user = await client.users.get(userId);
 
 // Update user
 const updated = await client.users.update(userId, { role: 'viewer' });
+
+// Delete user
+await client.users.delete(userId);
 ```
 
 ### Webhooks
@@ -409,10 +435,11 @@ const result = await client.sandbox.simulateInbound({
   amount: '1000.00',
 });
 
-// Simulate KYB completion
+// Simulate KYB approval (requires application_id from customer creation)
 const result = await client.sandbox.simulateOnboarding({
-  customer_id: customerId,
-  decision: 'approved', // or 'rejected'
+  type: 'kyb_approve',        // or 'kyb_reject', 'applicant_activate'
+  applicant_id: applicationId,
+  simulation_id: 'sim_' + Date.now(),
 });
 
 // Get simulation

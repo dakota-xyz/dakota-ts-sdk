@@ -33,11 +33,11 @@ export class AccountsResource extends BaseResource {
    * const offramp = await client.accounts.create({
    *   account_type: 'offramp',
    *   customer_id: customerId,
-   *   destination_id: bankDestinationId,
-   *   source_asset: 'USDC',
-   *   source_network_id: 'ethereum-mainnet',
-   *   destination_asset: 'USD',
-   *   destination_rail: 'ach',
+   *   fiat_destination_id: bankDestinationId,
+   *   asset: 'USDC',
+   *   network_id: 'ethereum-mainnet',
+   *   rail: 'ach',
+   *   capabilities: ['ach'],
    * });
    * // Returns: { crypto_address: '0x...' } - customer sends USDC here
    *
@@ -45,13 +45,13 @@ export class AccountsResource extends BaseResource {
    * const onramp = await client.accounts.create({
    *   account_type: 'onramp',
    *   customer_id: customerId,
-   *   destination_id: cryptoDestinationId,
-   *   source_asset: 'USD',
-   *   source_rail: 'ach',
-   *   destination_asset: 'USDC',
-   *   destination_network_id: 'ethereum-mainnet',
+   *   crypto_destination_id: cryptoDestinationId,
+   *   asset: 'USDC',
+   *   network_id: 'ethereum-mainnet',
+   *   rail: 'ach',
+   *   capabilities: ['ach'],
    * });
-   * // Returns: { bank_name, routing_number, account_number } - customer sends USD here
+   * // Returns: { bank_account: { bank_name, aba_routing_number, account_number } } - customer sends USD here
    * ```
    */
   async create(data: AccountCreateRequest): Promise<Account> {

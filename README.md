@@ -73,10 +73,11 @@ console.log(`Created recipient: ${recipientId}`);
 // Step 3: Create a bank destination (where USD will be sent)
 const bankDest = await client.destinations.create(recipientId, {
   destination_type: 'fiat_us',
+  name: 'Primary Bank Account',
   bank_name: 'Chase Bank',
   account_holder_name: 'Acme Corporation',
   account_number: '123456789',
-  routing_number: '021000021',
+  aba_routing_number: '021000021',
   account_type: 'checking',
 });
 
@@ -87,11 +88,11 @@ console.log(`Created bank destination: ${bankDest.id}`);
 const account = await client.accounts.create({
   account_type: 'offramp',
   customer_id: customerId,
-  destination_id: bankDest.id,
-  source_asset: 'USDC',
-  source_network_id: 'ethereum-mainnet',
-  destination_asset: 'USD',
-  destination_rail: 'ach',
+  fiat_destination_id: bankDest.id,
+  asset: 'USDC',
+  network_id: 'ethereum-mainnet',
+  rail: 'ach',
+  capabilities: ['ach'],
 });
 
 console.log('Off-ramp account created!');
@@ -115,7 +116,8 @@ Accept USD bank transfers and deliver stablecoins to customer wallets.
 // Step 3: Create a crypto destination (where stablecoins will be sent)
 const cryptoDest = await client.destinations.create(recipientId, {
   destination_type: 'crypto',
-  crypto_address: '0x742d35Cc6634C0532925a3b844Bc9e7595f...',
+  name: 'Crypto Wallet',
+  address: '0x742d35Cc6634C0532925a3b844Bc9e7595f...',
   network_id: 'ethereum-mainnet',
 });
 
@@ -124,17 +126,17 @@ const cryptoDest = await client.destinations.create(recipientId, {
 const onramp = await client.accounts.create({
   account_type: 'onramp',
   customer_id: customerId,
-  destination_id: cryptoDest.id,
-  source_asset: 'USD',
-  source_rail: 'ach',
-  destination_asset: 'USDC',
-  destination_network_id: 'ethereum-mainnet',
+  crypto_destination_id: cryptoDest.id,
+  asset: 'USDC',
+  network_id: 'ethereum-mainnet',
+  rail: 'ach',
+  capabilities: ['ach'],
 });
 
 console.log('Send USD to:');
-console.log(`  Bank: ${onramp.bank_name}`);
-console.log(`  Routing: ${onramp.routing_number}`);
-console.log(`  Account: ${onramp.account_number}`);
+console.log(`  Bank: ${onramp.bank_account.bank_name}`);
+console.log(`  Routing: ${onramp.bank_account.aba_routing_number}`);
+console.log(`  Account: ${onramp.bank_account.account_number}`);
 
 // When customer sends USD:
 // 1. Dakota receives the bank transfer
@@ -442,7 +444,6 @@ Manage transaction policies and rules.
 | `policies.create(data)` | Create policy |
 | `policies.list(params?)` | List policies |
 | `policies.get(id)` | Get policy by ID |
-| `policies.update(id, data)` | Update policy |
 | `policies.delete(id)` | Delete policy |
 | `policies.addRule(policyId, data)` | Add rule to policy |
 | `policies.updateRule(policyId, ruleId, data)` | Update rule |
@@ -459,7 +460,6 @@ Manage multi-party authorization.
 | `signerGroups.create(data)` | Create signer group |
 | `signerGroups.list(params?)` | List signer groups |
 | `signerGroups.get(id)` | Get signer group by ID |
-| `signerGroups.update(id, data)` | Update signer group |
 | `signerGroups.addSigner(groupId, data)` | Add signer to group |
 | `signerGroups.removeSigner(groupId, signerId)` | Remove signer |
 | `signerGroups.attachToWallet(walletId, groupId)` | Attach to wallet |
@@ -473,6 +473,7 @@ Manage individual signers.
 |--------|-------------|
 | `signers.list(params?)` | List all signers |
 | `signers.getByPublicKey(publicKey)` | Get signer by public key |
+| `signers.delete(publicKey)` | Delete signer by public key |
 
 ### API Keys
 
@@ -494,6 +495,7 @@ Manage platform users.
 | `users.list(params?)` | List users |
 | `users.get(id)` | Get user by ID |
 | `users.update(id, data)` | Update user |
+| `users.delete(id)` | Delete user |
 
 ### Webhooks
 

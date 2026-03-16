@@ -53,8 +53,9 @@ export class SandboxResource extends BaseResource {
    * @example
    * ```typescript
    * const result = await client.sandbox.simulateOnboarding({
-   *   customer_id: customerId,
-   *   decision: 'approved',
+   *   type: 'kyb_approve',  // or 'kyb_reject', 'applicant_activate'
+   *   applicant_id: applicationId,
+   *   simulation_id: 'sim_' + Date.now(),
    * });
    * ```
    */

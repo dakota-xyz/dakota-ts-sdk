@@ -58,14 +58,17 @@ src/
 3. Check `src/generated/api.ts` for available types
 
 ### For API Method Questions
-All resources follow the pattern:
+Most resources follow this pattern (but not all methods exist on every resource):
 ```typescript
 client.{resource}.list(params?)        // Returns PaginatedIterator
 client.{resource}.get(id)              // Returns single item
 client.{resource}.create(data)         // Creates new item
-client.{resource}.update(id, data)     // Updates item
-client.{resource}.delete(id)           // Deletes item
+client.{resource}.update(id, data)     // Updates item (not all resources)
+client.{resource}.delete(id)           // Deletes item (not all resources)
 ```
+
+**Resources WITHOUT update():** policies, signerGroups, destinations, apiKeys
+**Resources WITHOUT delete():** customers, recipients, destinations, accounts, transactions
 
 ### For Environment Questions
 - Default: Sandbox (`https://api.platform.sandbox.dakota.xyz`)
