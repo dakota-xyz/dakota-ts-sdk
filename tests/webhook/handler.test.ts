@@ -2,7 +2,7 @@
  * Webhook handler tests.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, beforeAll } from 'vitest';
 import * as ed25519 from '@noble/ed25519';
 import {
   WebhookHandler,
@@ -10,10 +10,16 @@ import {
   MemoryIdempotencyStore,
 } from '../../src/webhook/index.js';
 
-// Generate test key pair
-const privateKey = ed25519.utils.randomPrivateKey();
-const publicKey = ed25519.getPublicKey(privateKey);
-const publicKeyHex = Buffer.from(publicKey).toString('hex');
+// Test key pair (initialized in beforeAll after setup configures ed25519)
+let privateKey: Uint8Array;
+let publicKey: Uint8Array;
+let publicKeyHex: string;
+
+beforeAll(() => {
+  privateKey = ed25519.utils.randomPrivateKey();
+  publicKey = ed25519.getPublicKey(privateKey);
+  publicKeyHex = Buffer.from(publicKey).toString('hex');
+});
 
 /**
  * Create a signed webhook request.
