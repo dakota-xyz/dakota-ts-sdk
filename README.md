@@ -13,6 +13,14 @@ Dakota provides APIs to:
 
 ## Install
 
+This package is hosted on **GitHub Packages**. First, configure npm to use the GitHub registry for `@dakota-xyz` packages:
+
+**1. Create or update `.npmrc` in your project root:**
+```
+@dakota-xyz:registry=https://npm.pkg.github.com
+```
+
+**2. Install the package:**
 ```bash
 npm install @dakota-xyz/ts-sdk
 # or
@@ -20,11 +28,6 @@ yarn add @dakota-xyz/ts-sdk
 # or
 pnpm add @dakota-xyz/ts-sdk
 ```
-
-> **Note:** This package is hosted on GitHub Packages. Add this to your `.npmrc`:
-> ```
-> @dakota-xyz:registry=https://npm.pkg.github.com
-> ```
 
 ## Quick Start
 
