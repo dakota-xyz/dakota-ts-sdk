@@ -3,7 +3,7 @@
 ## Quick Start
 
 ```typescript
-import { DakotaClient, Environment } from 'dakota-ts-sdk';
+import { DakotaClient, Environment } from '@dakota-xyz/ts-sdk';
 
 const client = new DakotaClient({
   apiKey: process.env.DAKOTA_API_KEY!,
@@ -457,7 +457,7 @@ for await (const scenario of client.sandbox.listScenarios()) {
 ## Webhook Handling
 
 ```typescript
-import { WebhookHandler, WebhookEventType } from 'dakota-ts-sdk/webhook';
+import { WebhookHandler, WebhookEventType } from '@dakota-xyz/ts-sdk/webhook';
 
 const handler = new WebhookHandler({
   publicKey: process.env.WEBHOOK_PUBLIC_KEY!,
@@ -501,7 +501,7 @@ app.post('/webhooks', async (req, res) => {
 ## Error Handling
 
 ```typescript
-import { DakotaClient, APIError, TransportError } from 'dakota-ts-sdk';
+import { DakotaClient, APIError, TransportError } from '@dakota-xyz/ts-sdk';
 
 try {
   await client.customers.get('invalid');

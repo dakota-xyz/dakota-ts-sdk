@@ -1,5 +1,5 @@
 {
-  "name": "dakota-ts-sdk",
+  "name": "@dakota-xyz/ts-sdk",
   "version": "1.0.0",
   "description": "Official TypeScript SDK for Dakota Platform - stablecoin payments infrastructure",
   "author": "Dakota <support@dakota.xyz>",
@@ -84,6 +84,10 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/dakota-xyz/ts-sdk.git"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com",
+    "access": "public"
   },
   "bugs": {
     "url": "https://github.com/dakota-xyz/ts-sdk/issues"

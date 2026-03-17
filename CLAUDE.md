@@ -77,7 +77,7 @@ client.{resource}.delete(id)           // Deletes item (not all resources)
 ### For Error Handling
 Always catch `APIError` and `TransportError`:
 ```typescript
-import { DakotaClient, APIError, TransportError } from 'dakota-ts-sdk';
+import { DakotaClient, APIError, TransportError } from '@dakota-xyz/ts-sdk';
 
 try {
   await client.customers.get(id);
@@ -145,7 +145,7 @@ const first = await client.customers.list().first();
 
 ### Webhooks
 ```typescript
-import { WebhookHandler } from 'dakota-ts-sdk/webhook';
+import { WebhookHandler } from '@dakota-xyz/ts-sdk/webhook';
 
 const handler = new WebhookHandler({ publicKey: 'hex_key' });
 handler.on('customer.created', async (event) => { /* ... */ });

@@ -14,17 +14,22 @@ Dakota provides APIs to:
 ## Install
 
 ```bash
-npm install dakota-ts-sdk
+npm install @dakota-xyz/ts-sdk
 # or
-yarn add dakota-ts-sdk
+yarn add @dakota-xyz/ts-sdk
 # or
-pnpm add dakota-ts-sdk
+pnpm add @dakota-xyz/ts-sdk
 ```
+
+> **Note:** This package is hosted on GitHub Packages. Add this to your `.npmrc`:
+> ```
+> @dakota-xyz:registry=https://npm.pkg.github.com
+> ```
 
 ## Quick Start
 
 ```typescript
-import { DakotaClient, Environment } from 'dakota-ts-sdk';
+import { DakotaClient, Environment } from '@dakota-xyz/ts-sdk';
 
 const client = new DakotaClient({
   apiKey: 'your_api_key',
@@ -43,7 +48,7 @@ for await (const customer of client.customers.list()) {
 This example shows a complete off-ramp flow where a customer sends USDC and receives USD in their bank account.
 
 ```typescript
-import { DakotaClient } from 'dakota-ts-sdk';
+import { DakotaClient } from '@dakota-xyz/ts-sdk';
 
 const client = new DakotaClient({ apiKey: 'your_api_key' });
 
@@ -171,7 +176,7 @@ Dakota sends webhooks for all status changes. Set up a handler:
 
 ```typescript
 import express from 'express';
-import { WebhookHandler, WebhookEventType } from 'dakota-ts-sdk/webhook';
+import { WebhookHandler, WebhookEventType } from '@dakota-xyz/ts-sdk/webhook';
 
 const app = express();
 
@@ -237,7 +242,7 @@ const completedTxs = client.transactions.list({
 ## Error Handling
 
 ```typescript
-import { DakotaClient, APIError, TransportError } from 'dakota-ts-sdk';
+import { DakotaClient, APIError, TransportError } from '@dakota-xyz/ts-sdk';
 
 try {
   const customer = await client.customers.get('invalid_id');
@@ -286,7 +291,7 @@ const client = new DakotaClient({
 ## Configuration Options
 
 ```typescript
-import { DakotaClient, Environment, AuthMode } from 'dakota-ts-sdk';
+import { DakotaClient, Environment, AuthMode } from '@dakota-xyz/ts-sdk';
 
 const client = new DakotaClient({
   // Required: Authentication (at least one)
