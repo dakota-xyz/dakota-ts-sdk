@@ -174,8 +174,12 @@ describe('Webhook Signature', () => {
       const timestamp = Math.floor(Date.now() / 1000).toString();
       const signature = await createSignature(payload, timestamp);
 
-      // Generate different key
-      const otherPrivateKey = ed25519.utils.randomPrivateKey();
+      // Use a different fixed key (not matching the signature key)
+      const otherPrivateKey = new Uint8Array([
+        0xc5, 0xaa, 0x8d, 0xf4, 0x3f, 0x9f, 0x83, 0x7b, 0xed, 0xb7, 0x44, 0x2f, 0x31, 0xdc, 0xb7,
+        0xb1, 0x66, 0xd3, 0x85, 0x35, 0x07, 0x6f, 0x09, 0x4b, 0x85, 0xce, 0x3a, 0x2e, 0x0b, 0x44,
+        0x58, 0xf7,
+      ]);
       const otherPublicKey = ed25519.getPublicKey(otherPrivateKey);
       const otherPublicKeyHex = Buffer.from(otherPublicKey).toString('hex');
 
