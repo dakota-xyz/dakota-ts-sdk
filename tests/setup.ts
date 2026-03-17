@@ -12,7 +12,7 @@ ed25519.etc.sha512Sync = (...m) => sha512(ed25519.etc.concatBytes(...m));
 ed25519.etc.sha512Async = async (...m) => sha512(ed25519.etc.concatBytes(...m));
 
 // Set up ed25519 to use Node.js crypto for random bytes (for CI environments without Web Crypto)
-ed25519.etc.randomBytes = (len: number) => new Uint8Array(randomBytes(len));
+ed25519.etc.randomBytes = (len = 32) => new Uint8Array(randomBytes(len));
 
 // Mock fetch globally
 const originalFetch = globalThis.fetch;
