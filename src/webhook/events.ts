@@ -10,6 +10,10 @@ export enum WebhookEventType {
   CustomerCreated = 'customer.created',
   CustomerUpdated = 'customer.updated',
   CustomerKybStatusChanged = 'customer.kyb_status_changed',
+  CustomerKybLinkCreated = 'customer.kyb_link.created',
+  CustomerKybLinkUpdated = 'customer.kyb_link.updated',
+  CustomerKybStatusCreated = 'customer.kyb_status.created',
+  CustomerKybStatusUpdated = 'customer.kyb_status.updated',
   CustomerKybApplicationSubmitted = 'customer.kyb_application.submitted',
 
   // Recipient events
@@ -22,6 +26,11 @@ export enum WebhookEventType {
   // Account events
   AccountCreated = 'account.created',
   AccountUpdated = 'account.updated',
+
+  // Auto Account events
+  AutoAccountCreated = 'auto_account.created',
+  AutoAccountUpdated = 'auto_account.updated',
+  AutoAccountDeleted = 'auto_account.deleted',
 
   // Transaction events
   TransactionCreated = 'transaction.created',
@@ -65,6 +74,27 @@ export interface WebhookEvent<T = unknown> {
   created_at: number;
   /** API version */
   api_version?: string;
+}
+
+// ---------------------------------------------------------------------------
+// Event Data Types
+// ---------------------------------------------------------------------------
+
+/**
+ * KYB Link event data.
+ */
+export interface KybLinkData {
+  customer_id: string;
+  url: string;
+  expires_at: number;
+}
+
+/**
+ * KYB Application Submitted event data.
+ */
+export interface KybApplicationSubmittedData {
+  customer_id: string;
+  type: string;
 }
 
 /**
