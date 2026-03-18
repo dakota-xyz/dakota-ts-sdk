@@ -174,16 +174,86 @@ To pay a worker, simply send USDC from your wallet (MetaMask, etc.) to their `us
 4. Worker receives USD in their bank (1-2 business days for ACH)
 ```
 
-### Step 7: Monitor Transactions (Optional)
+### Step 7: Track Transactions
+
+After sending USDC, Dakota detects the deposit (2-10 minutes) and creates a transaction.
+
+#### Option A: Polling (Simple)
 
 ```typescript
-// List all transactions
-for await (const tx of client.transactions.list({ customer_id: customerId })) {
-  console.log(`${tx.id}: ${tx.status} - ${tx.amount}`);
+// Poll for transactions on a specific worker's account
+async function getWorkerTransactions(accountId: string) {
+  const txs = await client.transactions.list({ account_id: accountId }).toArray();
+  return txs;
 }
 
-// Or listen for webhooks for real-time updates
+// Poll every 30 seconds
+setInterval(async () => {
+  for (const worker of workerAccounts) {
+    const txs = await getWorkerTransactions(worker.offrampAccountId);
+    // Update your database/UI
+    for (const tx of txs) {
+      console.log(`${worker.name}: ${tx.status} - $${tx.amount}`);
+    }
+  }
+}, 30000);
 ```
+
+#### Option B: Webhooks (Recommended for Production)
+
+```typescript
+import { WebhookHandler } from '@dakota-xyz/ts-sdk/webhook';
+
+const handler = new WebhookHandler({
+  publicKey: process.env.DAKOTA_WEBHOOK_PUBLIC_KEY!,
+});
+
+// New transaction detected (USDC received)
+handler.on('auto_transaction.created', async (event) => {
+  const tx = event.data;
+  await db.transactions.create({
+    dakota_tx_id: tx.id,
+    account_id: tx.account_id,
+    amount: tx.source_amount,
+    status: tx.status,
+  });
+});
+
+// Transaction status changed
+handler.on('auto_transaction.updated', async (event) => {
+  const tx = event.data;
+  await db.transactions.update({
+    where: { dakota_tx_id: tx.id },
+    data: { status: tx.status },
+  });
+});
+
+// Register endpoint
+app.post('/webhooks/dakota', express.raw({ type: 'application/json' }), handler.expressMiddleware());
+```
+
+Register your webhook URL:
+
+```typescript
+await client.webhooks.createTarget({
+  url: 'https://your-app.com/webhooks/dakota',
+  events: ['auto_transaction.*'],
+});
+```
+
+#### Transaction Status Flow
+
+```
+You send USDC ──▶ Dakota detects ──▶ pending ──▶ processing ──▶ completed
+                  (2-10 min)                                    (ACH sent)
+```
+
+| Status | Meaning |
+|--------|---------|
+| `pending` | Deposit detected, awaiting confirmation |
+| `processing` | USDC → USD conversion, ACH initiated |
+| `completed` | USD sent to worker's bank |
+| `failed` | Transaction failed |
 
 ## Complete Example Script
 
@@ -311,9 +381,35 @@ Setup complete! Send USDC to any address above to pay that worker.
 | Production | `ethereum-mainnet` | Ethereum mainnet |
 | Production | `polygon-mainnet` | Polygon mainnet |
 
+## Sandbox Testing
+
+To test the off-ramp flow in sandbox, you need to send real testnet USDC:
+
+### 1. Get Sepolia Testnet ETH (for gas)
+
+- Faucet: https://sepoliafaucet.com or https://www.alchemy.com/faucets/ethereum-sepolia
+
+### 2. Get Sepolia Testnet USDC
+
+- Circle Faucet: https://faucet.circle.com
+- Select "Ethereum Sepolia" and "USDC"
+
+### 3. Add USDC to MetaMask
+
+```
+Network: Sepolia Test Network (Chain ID: 11155111)
+USDC Contract: 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238
+Decimals: 6
+```
+
+### 4. Send USDC to Worker's Address
+
+Send testnet USDC from MetaMask to the worker's `crypto_address`. Dakota will detect the deposit within 2-10 minutes.
+
 ## Notes
 
 - Each worker gets a **permanent** USDC address - reuse it for multiple payments
 - ACH transfers typically take 1-2 business days
 - Wire transfers are faster but have higher fees
 - You can check transaction status via `client.transactions.list()` or webhooks
+- In sandbox, Dakota detects deposits within 2-10 minutes

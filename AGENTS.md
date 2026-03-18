@@ -564,3 +564,98 @@ try {
 | 401 | Unauthorized | No |
 | 403 | Forbidden | No |
 | 404 | Not Found | No |
+
+## Transaction Tracking Patterns
+
+When a user sends crypto to a Dakota off-ramp address, Dakota detects the deposit and creates a transaction. There are two ways to track transactions:
+
+### Pattern 1: Webhooks (Recommended)
+
+Dakota sends webhooks when transactions are created/updated. Set up a webhook endpoint:
+
+```typescript
+import { WebhookHandler } from '@dakota-xyz/ts-sdk/webhook';
+
+const handler = new WebhookHandler({
+  publicKey: process.env.DAKOTA_WEBHOOK_PUBLIC_KEY!,
+});
+
+// Transaction created (deposit detected)
+handler.on('auto_transaction.created', async (event) => {
+  const tx = event.data;
+  await db.transactions.create({
+    dakota_tx_id: tx.id,
+    account_id: tx.account_id,
+    amount: tx.source_amount,
+    status: tx.status, // 'pending'
+  });
+});
+
+// Transaction updated (status changed)
+handler.on('auto_transaction.updated', async (event) => {
+  const tx = event.data;
+  await db.transactions.update({
+    where: { dakota_tx_id: tx.id },
+    data: { status: tx.status }, // 'processing' -> 'completed'
+  });
+});
+
+// Express endpoint
+app.post('/webhooks/dakota', express.raw({ type: 'application/json' }), handler.expressMiddleware());
+```
+
+Register your webhook URL with Dakota:
+
+```typescript
+await client.webhooks.createTarget({
+  url: 'https://your-app.com/webhooks/dakota',
+  events: ['auto_transaction.*'],
+});
+```
+
+### Pattern 2: Polling
+
+Poll the API periodically to check for new/updated transactions:
+
+```typescript
+async function syncTransactions(accountId: string) {
+  const txs = await client.transactions.list({ account_id: accountId }).toArray();
+
+  for (const tx of txs) {
+    await db.transactions.upsert({
+      where: { dakota_tx_id: tx.id },
+      create: {
+        dakota_tx_id: tx.id,
+        account_id: tx.account_id,
+        amount: tx.amount,
+        status: tx.status,
+      },
+      update: { status: tx.status },
+    });
+  }
+}
+
+// Poll every 30 seconds
+setInterval(() => syncTransactions('acc_xxx'), 30000);
+```
+
+### Transaction Status Flow
+
+```
+pending → processing → completed
+                    → failed
+```
+
+| Status | Meaning |
+|--------|---------|
+| `pending` | Deposit detected, awaiting confirmation |
+| `processing` | Converting crypto → fiat, initiating bank transfer |
+| `completed` | Funds sent to bank account |
+| `failed` | Transaction failed |
+
+### Detection Timing
+
+After sending crypto to an off-ramp address:
+- Dakota detects deposit: **2-10 minutes** (blockchain monitoring)
+- Webhook/API shows transaction: Within 1 minute after detection
+- ACH to bank: 1-2 business days (simulated instantly in sandbox)
