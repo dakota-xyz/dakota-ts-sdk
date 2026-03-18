@@ -653,9 +653,32 @@ pending → processing → completed
 | `completed` | Funds sent to bank account |
 | `failed` | Transaction failed |
 
-### Detection Timing
+### Environment Differences
 
-After sending crypto to an off-ramp address:
-- Dakota detects deposit: **2-10 minutes** (blockchain monitoring)
-- Webhook/API shows transaction: Within 1 minute after detection
-- ACH to bank: 1-2 business days (simulated instantly in sandbox)
+| Environment | How Deposits Work |
+|-------------|-------------------|
+| **Production** | Dakota monitors blockchain, detects deposits in 2-10 minutes |
+| **Sandbox** | No blockchain monitoring. Use simulation API (see below) |
+
+### Sandbox: Simulating Transactions
+
+Sandbox does NOT monitor testnet blockchains. Use the simulation API instead:
+
+```typescript
+// For on-ramp accounts (USD → crypto): simulate ACH deposit
+await client.sandbox.simulateInbound({
+  type: 'ach_inbound',
+  account_id: onrampAccountId,
+  amount: '1000.00',
+  simulation_id: `sim_${Date.now()}`,
+});
+
+// For one-off transactions: simulate settlement
+await client.sandbox.simulateInbound({
+  type: 'ach_outbound_settled',
+  movement_id: transactionId,
+  simulation_id: `sim_${Date.now()}`,
+});
+```
+
+**Note:** Off-ramp account crypto deposit simulation is not yet available. Use one-off transactions for testing off-ramp flows in sandbox.

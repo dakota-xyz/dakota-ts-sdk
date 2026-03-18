@@ -381,35 +381,52 @@ Setup complete! Send USDC to any address above to pay that worker.
 | Production | `ethereum-mainnet` | Ethereum mainnet |
 | Production | `polygon-mainnet` | Polygon mainnet |
 
-## Sandbox Testing
+## Sandbox vs Production
 
-To test the off-ramp flow in sandbox, you need to send real testnet USDC:
+| Environment | Crypto Deposits |
+|-------------|-----------------|
+| **Production** | Dakota monitors blockchain and detects real crypto deposits (2-10 min) |
+| **Sandbox** | No blockchain monitoring - use simulation API or one-off transactions |
 
-### 1. Get Sepolia Testnet ETH (for gas)
+### Sandbox Limitation
 
-- Faucet: https://sepoliafaucet.com or https://www.alchemy.com/faucets/ethereum-sepolia
+**Important:** Sandbox does NOT monitor testnet blockchains. Sending testnet USDC to an off-ramp address will NOT trigger a transaction.
 
-### 2. Get Sepolia Testnet USDC
+### Sandbox Workaround: One-Off Transactions
 
-- Circle Faucet: https://faucet.circle.com
-- Select "Ethereum Sepolia" and "USDC"
+For testing the off-ramp flow in sandbox, use one-off transactions instead of permanent off-ramp accounts:
 
-### 3. Add USDC to MetaMask
+```typescript
+// 1. Create a one-off transaction (instead of using off-ramp account)
+const tx = await client.transactions.create({
+  customer_id: customerId,
+  amount: '100.00',
+  source_asset: 'USDC',
+  source_network_id: 'ethereum-sepolia',
+  destination_id: bankDestinationId,  // Worker's bank destination
+  destination_asset: 'USD',
+  destination_payment_rail: 'ach',
+});
 
+console.log('Send USDC to:', tx.crypto_address);
+console.log('Transaction ID:', tx.id);
+
+// 2. Simulate the ACH settlement
+await client.sandbox.simulateInbound({
+  type: 'ach_outbound_settled',
+  movement_id: tx.id,
+  simulation_id: `sim_${Date.now()}`,
+});
+
+// 3. Check the transaction status
+const updated = await client.transactions.get(tx.id);
+console.log('Status:', updated.status); // 'completed'
 ```
-Network: Sepolia Test Network (Chain ID: 11155111)
-USDC Contract: 0x1c7D4B196Cb0C7B01d743Fbc6116a902379C7238
-Decimals: 6
-```
-
-### 4. Send USDC to Worker's Address
-
-Send testnet USDC from MetaMask to the worker's `crypto_address`. Dakota will detect the deposit within 2-10 minutes.
 
 ## Notes
 
-- Each worker gets a **permanent** USDC address - reuse it for multiple payments
-- ACH transfers typically take 1-2 business days
+- In **production**, each worker gets a permanent USDC address - reuse it for multiple payments
+- In **sandbox**, use one-off transactions for testing (off-ramp account deposits are not simulated)
+- ACH transfers typically take 1-2 business days (instant in sandbox simulation)
 - Wire transfers are faster but have higher fees
-- You can check transaction status via `client.transactions.list()` or webhooks
-- In sandbox, Dakota detects deposits within 2-10 minutes
+- Track transactions via `client.transactions.list()` or webhooks
