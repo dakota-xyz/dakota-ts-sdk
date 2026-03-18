@@ -31,3 +31,4 @@ npm-debug.log*
 
 # Local reports (not for git)
 E2E_RESULTS.md
+NEOBANK_SANDBOX_TESTING.md

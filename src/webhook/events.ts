@@ -4,60 +4,117 @@
 
 /**
  * Known webhook event types.
+ *
+ * These match the canonical EventType enum from the Dakota Platform API.
+ * Use wildcards with the handler for flexible matching (e.g., 'customer.*').
  */
 export enum WebhookEventType {
+  // ─────────────────────────────────────────────────────────────────────────────
+  // User events
+  // ─────────────────────────────────────────────────────────────────────────────
+  UserCreated = 'user.created',
+  UserUpdated = 'user.updated',
+  UserDeleted = 'user.deleted',
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // API Key events
+  // ─────────────────────────────────────────────────────────────────────────────
+  ApiKeyCreated = 'api_key.created',
+  ApiKeyDeleted = 'api_key.deleted',
+
+  // ─────────────────────────────────────────────────────────────────────────────
   // Customer events
+  // ─────────────────────────────────────────────────────────────────────────────
   CustomerCreated = 'customer.created',
   CustomerUpdated = 'customer.updated',
-  CustomerKybStatusChanged = 'customer.kyb_status_changed',
   CustomerKybLinkCreated = 'customer.kyb_link.created',
   CustomerKybLinkUpdated = 'customer.kyb_link.updated',
   CustomerKybStatusCreated = 'customer.kyb_status.created',
   CustomerKybStatusUpdated = 'customer.kyb_status.updated',
   CustomerKybApplicationSubmitted = 'customer.kyb_application.submitted',
 
-  // Recipient events
-  RecipientCreated = 'recipient.created',
-  RecipientUpdated = 'recipient.updated',
-
-  // Destination events
-  DestinationCreated = 'destination.created',
-
-  // Account events
-  AccountCreated = 'account.created',
-  AccountUpdated = 'account.updated',
-
-  // Auto Account events
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Auto Account events (off-ramp/on-ramp account lifecycle)
+  // ─────────────────────────────────────────────────────────────────────────────
   AutoAccountCreated = 'auto_account.created',
   AutoAccountUpdated = 'auto_account.updated',
   AutoAccountDeleted = 'auto_account.deleted',
 
+  // ─────────────────────────────────────────────────────────────────────────────
   // Transaction events
-  TransactionCreated = 'transaction.created',
-  TransactionUpdated = 'transaction.updated',
-  TransactionCompleted = 'transaction.completed',
-  TransactionFailed = 'transaction.failed',
-  TransactionCancelled = 'transaction.cancelled',
+  // ─────────────────────────────────────────────────────────────────────────────
+  /** Auto transaction created (from off-ramp/on-ramp accounts) */
+  TransactionAutoCreated = 'transaction.auto.created',
+  /** Auto transaction updated */
+  TransactionAutoUpdated = 'transaction.auto.updated',
+  /** One-off transaction created */
+  TransactionOneOffCreated = 'transaction.one_off.created',
+  /** One-off transaction updated */
+  TransactionOneOffUpdated = 'transaction.one_off.updated',
 
-  // One-off transaction events
-  OneOffTransactionCreated = 'one_off_transaction.created',
-  OneOffTransactionUpdated = 'one_off_transaction.updated',
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Recipient events
+  // ─────────────────────────────────────────────────────────────────────────────
+  RecipientCreated = 'recipient.created',
+  RecipientUpdated = 'recipient.updated',
+  RecipientDeleted = 'recipient.deleted',
 
-  // Auto transaction events
-  AutoTransactionCreated = 'auto_transaction.created',
-  AutoTransactionUpdated = 'auto_transaction.updated',
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Destination events
+  // ─────────────────────────────────────────────────────────────────────────────
+  DestinationCreated = 'destination.created',
+  DestinationDeleted = 'destination.deleted',
 
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Webhook Target events
+  // ─────────────────────────────────────────────────────────────────────────────
+  TargetCreated = 'target.created',
+  TargetUpdated = 'target.updated',
+  TargetDeleted = 'target.deleted',
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Exception events (compliance/operational)
+  // ─────────────────────────────────────────────────────────────────────────────
+  ExceptionCreated = 'exception.created',
+  ExceptionCleared = 'exception.cleared',
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // BVNK Onboarding events (provider-specific)
+  // ─────────────────────────────────────────────────────────────────────────────
+  BvnkOnboardingCreated = 'bvnk.onboarding.created',
+  BvnkOnboardingUpdated = 'bvnk.onboarding.updated',
+
+  // ─────────────────────────────────────────────────────────────────────────────
   // Wallet events
+  // ─────────────────────────────────────────────────────────────────────────────
   WalletCreated = 'wallet.created',
+  WalletUpdated = 'wallet.updated',
+  WalletSignerGroupCreated = 'wallet.signer_group.created',
+  WalletSignerGroupUpdated = 'wallet.signer_group.updated',
+  WalletPolicyCreated = 'wallet.policy.created',
+  WalletPolicyUpdated = 'wallet.policy.updated',
   WalletTransactionCreated = 'wallet.transaction.created',
   WalletTransactionUpdated = 'wallet.transaction.updated',
+  WalletDeposit = 'wallet.deposit',
 
-  // Application events
-  ApplicationCreated = 'application.created',
-  ApplicationUpdated = 'application.updated',
-  ApplicationSubmitted = 'application.submitted',
-  ApplicationApproved = 'application.approved',
-  ApplicationRejected = 'application.rejected',
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Legacy/Deprecated event types (kept for backwards compatibility)
+  // These may still be emitted but prefer the canonical types above.
+  // ─────────────────────────────────────────────────────────────────────────────
+  /** @deprecated Use TransactionAutoCreated or TransactionOneOffCreated */
+  TransactionCreated = 'transaction.created',
+  /** @deprecated Use TransactionAutoUpdated or TransactionOneOffUpdated */
+  TransactionUpdated = 'transaction.updated',
+  /** @deprecated Check transaction status in the updated event */
+  TransactionCompleted = 'transaction.completed',
+  /** @deprecated Check transaction status in the updated event */
+  TransactionFailed = 'transaction.failed',
+  /** @deprecated Check transaction status in the updated event */
+  TransactionCancelled = 'transaction.cancelled',
+  /** @deprecated Use AutoAccountCreated */
+  AccountCreated = 'account.created',
+  /** @deprecated Use AutoAccountUpdated */
+  AccountUpdated = 'account.updated',
 }
 
 /**

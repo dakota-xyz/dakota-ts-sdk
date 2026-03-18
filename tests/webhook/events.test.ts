@@ -123,9 +123,24 @@ describe('Webhook Events', () => {
       expect(WebhookEventType.WalletCreated).toBe('wallet.created');
     });
 
-    it('has application events', () => {
-      expect(WebhookEventType.ApplicationApproved).toBe('application.approved');
-      expect(WebhookEventType.ApplicationRejected).toBe('application.rejected');
+    it('has transaction events', () => {
+      expect(WebhookEventType.TransactionAutoCreated).toBe('transaction.auto.created');
+      expect(WebhookEventType.TransactionAutoUpdated).toBe('transaction.auto.updated');
+      expect(WebhookEventType.TransactionOneOffCreated).toBe('transaction.one_off.created');
+      expect(WebhookEventType.TransactionOneOffUpdated).toBe('transaction.one_off.updated');
+    });
+
+    it('has user and api key events', () => {
+      expect(WebhookEventType.UserCreated).toBe('user.created');
+      expect(WebhookEventType.UserUpdated).toBe('user.updated');
+      expect(WebhookEventType.UserDeleted).toBe('user.deleted');
+      expect(WebhookEventType.ApiKeyCreated).toBe('api_key.created');
+      expect(WebhookEventType.ApiKeyDeleted).toBe('api_key.deleted');
+    });
+
+    it('has exception events', () => {
+      expect(WebhookEventType.ExceptionCreated).toBe('exception.created');
+      expect(WebhookEventType.ExceptionCleared).toBe('exception.cleared');
     });
   });
 });
