@@ -219,9 +219,7 @@ export type ExpectedMonthlyDeposit =
 export type IndividualRole = components['schemas']['IndividualRequest']['roles'][number];
 
 /** Individual title options */
-export type IndividualTitle = NonNullable<
-  components['schemas']['IndividualRequest']['title']
->;
+export type IndividualTitle = NonNullable<components['schemas']['IndividualRequest']['title']>;
 
 /** Employment status options */
 export type EmploymentStatus = NonNullable<

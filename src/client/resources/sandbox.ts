@@ -160,9 +160,7 @@ export class SandboxResource extends BaseResource {
    * });
    * ```
    */
-  async simulateOnboarding(
-    data: SimulateOnboardingRequest,
-  ): Promise<SimulateOnboardingResponse> {
+  async simulateOnboarding(data: SimulateOnboardingRequest): Promise<SimulateOnboardingResponse> {
     return this.transport.request<SimulateOnboardingResponse>({
       method: 'POST',
       path: '/sandbox/simulate/onboarding',
@@ -213,7 +211,7 @@ export class SandboxResource extends BaseResource {
    */
   async advanceSimulation(
     simulationId: string,
-    data?: AdvanceSimulationRequest,
+    data?: AdvanceSimulationRequest
   ): Promise<AdvanceSimulationResult> {
     return this.transport.request<AdvanceSimulationResult>({
       method: 'POST',
