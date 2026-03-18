@@ -10,6 +10,7 @@ export enum WebhookEventType {
   CustomerCreated = 'customer.created',
   CustomerUpdated = 'customer.updated',
   CustomerKybStatusChanged = 'customer.kyb_status_changed',
+  CustomerKybApplicationSubmitted = 'customer.kyb_application.submitted',
 
   // Recipient events
   RecipientCreated = 'recipient.created',
