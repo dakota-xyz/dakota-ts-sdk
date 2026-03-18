@@ -1,5 +1,9 @@
 # Dakota TypeScript SDK
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![npm version](https://img.shields.io/github/package-json/v/dakota-xyz/dakota-ts-sdk)](https://github.com/dakota-xyz/dakota-ts-sdk/packages)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue.svg)](https://www.typescriptlang.org/)
+
 Official TypeScript SDK for the [Dakota Platform](https://dakota.xyz) - infrastructure for stablecoin payments, on/off-ramps, and non-custodial wallets.
 
 ## What is Dakota?
@@ -597,6 +601,15 @@ npm run typecheck # Type check only
 - [API Reference](https://docs.dakota.xyz/api-reference)
 - [Common Flows](https://docs.dakota.xyz/documentation/common-flows)
 
+## Contributing
+
+We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details on:
+
+- Reporting bugs and suggesting features
+- Development setup and workflow
+- Code style and commit conventions
+- Pull request process
+
 ## License
 
-MIT
+This project is licensed under the [MIT License](LICENSE).
