@@ -2,13 +2,7 @@
 
 ## Install
 
-This package is hosted on GitHub Packages. Configure npm first:
-
 ```bash
-# Add to .npmrc in project root
-echo "@dakota-xyz:registry=https://npm.pkg.github.com" >> .npmrc
-
-# Install
 npm install @dakota-xyz/ts-sdk
 ```
 

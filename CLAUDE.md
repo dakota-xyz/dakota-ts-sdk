@@ -33,7 +33,7 @@ src/
 │       ├── events.ts        # Events API
 │       ├── applications.ts  # Applications/KYB API
 │       ├── policies.ts      # Policies API
-│       ├── signer-groups.ts # Signer Groups API
+│       ├── signer-groups.ts # Signer Groups API (includes Signers)
 │       ├── api-keys.ts      # API Keys API
 │       ├── users.ts         # Users API
 │       ├── webhooks.ts      # Webhooks API
@@ -67,8 +67,13 @@ client.{resource}.update(id, data)     // Updates item (not all resources)
 client.{resource}.delete(id)           // Deletes item (not all resources)
 ```
 
-**Resources WITHOUT update():** policies, signerGroups, destinations, apiKeys
-**Resources WITHOUT delete():** customers, recipients, destinations, accounts, transactions
+**Resources WITHOUT update():** policies, signerGroups, destinations, apiKeys, autoTransactions, signers
+**Resources WITHOUT delete():** customers, recipients, destinations, accounts, transactions, autoTransactions
+**Read-only resources:** autoTransactions (list + get only), info (getCountries + getNetworks only)
+
+### Additional Resources
+- `client.autoTransactions` - List and get automated transactions (created from accounts)
+- `client.signers` - Manage individual signers (list, getByPublicKey, delete)
 
 ### For Environment Questions
 - Default: Sandbox (`https://api.platform.sandbox.dakota.xyz`)
