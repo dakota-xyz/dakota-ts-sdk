@@ -1,7 +1,7 @@
 # Dakota TypeScript SDK
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![npm version](https://img.shields.io/github/package-json/v/dakota-xyz/dakota-ts-sdk)](https://github.com/dakota-xyz/dakota-ts-sdk/packages)
+[![npm version](https://img.shields.io/npm/v/@dakota-xyz/ts-sdk)](https://www.npmjs.com/package/@dakota-xyz/ts-sdk)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.3-blue.svg)](https://www.typescriptlang.org/)
 
 Official TypeScript SDK for the [Dakota Platform](https://dakota.xyz) - infrastructure for stablecoin payments, on/off-ramps, and non-custodial wallets.
@@ -17,14 +17,6 @@ Dakota provides APIs to:
 
 ## Install
 
-This package is hosted on **GitHub Packages**. First, configure npm to use the GitHub registry for `@dakota-xyz` packages:
-
-**1. Create or update `.npmrc` in your project root:**
-```
-@dakota-xyz:registry=https://npm.pkg.github.com
-```
-
-**2. Install the package:**
 ```bash
 npm install @dakota-xyz/ts-sdk
 # or

@@ -1,6 +1,6 @@
 {
   "name": "@dakota-xyz/ts-sdk",
-  "version": "1.0.12",
+  "version": "1.0.13",
   "description": "Official TypeScript SDK for Dakota Platform - stablecoin payments infrastructure",
   "author": "Dakota <support@dakota.xyz>",
   "license": "MIT",
@@ -86,7 +86,7 @@
     "url": "https://github.com/dakota-xyz/ts-sdk.git"
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com",
+    "registry": "https://registry.npmjs.org",
     "access": "public"
   },
   "bugs": {
