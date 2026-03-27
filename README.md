@@ -329,10 +329,10 @@ const client = new DakotaClient({
 
 ## Idempotency Keys
 
-Dakota requires idempotency keys (UUID format) for all `POST`, `PUT`, and `PATCH` requests to ensure safe retries. By default, the SDK auto-generates keys for you, but you can provide your own for deterministic API calls:
+Dakota requires idempotency keys (**must be valid UUIDs**) for all `POST`, `PUT`, and `PATCH` requests to ensure safe retries. By default, the SDK auto-generates UUID keys for you, but you can provide your own for deterministic API calls:
 
 ```typescript
-import { v4 as uuid } from 'uuid';
+import { v4 as uuid, v5 as uuidv5 } from 'uuid';
 
 // Auto-generated idempotency key (default behavior)
 const customer = await client.customers.create({
@@ -340,15 +340,17 @@ const customer = await client.customers.create({
   customer_type: 'business',
 });
 
-// Custom idempotency key for deterministic retries
-const customerId = 'acme-corp-123';
+// Custom UUID idempotency key
 const customer = await client.customers.create(
   { name: 'Acme Corp', customer_type: 'business' },
-  { idempotencyKey: uuid() } // or your own deterministic key
+  { idempotencyKey: uuid() }
 );
 
-// Use deterministic keys for replay safety
-const txKey = `invoice-${invoiceId}-payment`;
+// Deterministic UUID from business key (recommended for replay safety)
+const NAMESPACE = '6ba7b810-9dad-11d1-80b4-00c04fd430c8'; // Your app's namespace
+const invoiceId = 'INV-12345';
+const txKey = uuidv5(`invoice-${invoiceId}-payment`, NAMESPACE); // Always same UUID for same invoice
+
 const tx = await client.transactions.create(
   {
     customer_id: customerId,
@@ -371,9 +373,11 @@ const txRetry = await client.transactions.create(
 
 ### When to Use Custom Idempotency Keys
 
-- **Retry safety**: Use deterministic keys based on your business logic (e.g., `invoice-{id}-payment`)
+- **Retry safety**: Use deterministic UUIDs derived from business keys (e.g., `uuidv5('invoice-123', NAMESPACE)`)
 - **Distributed systems**: When requests may be retried across different processes
 - **Exactly-once semantics**: When you need to guarantee no duplicate side effects
+
+> **Note**: Idempotency keys must be valid UUIDs. Use `uuid` v5 to generate deterministic UUIDs from your business identifiers.
 
 ### Disable Auto-Generated Keys
 
