@@ -10,6 +10,7 @@ import type {
   WebhookTargetUpdateRequest,
   WebhookEvent,
   ListParams,
+  RequestOptions,
 } from '../types.js';
 
 /**
@@ -22,11 +23,12 @@ export class WebhooksResource extends BaseResource {
    * @param data - Webhook target creation data
    * @returns Created webhook target
    */
-  async createTarget(data: WebhookTargetCreateRequest): Promise<WebhookTarget> {
+  async createTarget(data: WebhookTargetCreateRequest, options?: RequestOptions): Promise<WebhookTarget> {
     return this.transport.request<WebhookTarget>({
       method: 'POST',
       path: '/webhooks/targets',
       body: data,
+      idempotencyKey: options?.idempotencyKey,
     });
   }
 
@@ -60,11 +62,12 @@ export class WebhooksResource extends BaseResource {
    * @param data - Update data
    * @returns Updated webhook target
    */
-  async updateTarget(targetId: string, data: WebhookTargetUpdateRequest): Promise<WebhookTarget> {
+  async updateTarget(targetId: string, data: WebhookTargetUpdateRequest, options?: RequestOptions): Promise<WebhookTarget> {
     return this.transport.request<WebhookTarget>({
       method: 'PATCH',
       path: `/webhooks/targets/${targetId}`,
       body: data,
+      idempotencyKey: options?.idempotencyKey,
     });
   }
 
@@ -108,10 +111,11 @@ export class WebhooksResource extends BaseResource {
    *
    * @param eventId - Webhook event ID
    */
-  async replayEvent(eventId: string): Promise<void> {
+  async replayEvent(eventId: string, options?: RequestOptions): Promise<void> {
     await this.transport.request<void>({
       method: 'POST',
       path: `/webhooks/events/${eventId}/replay`,
+      idempotencyKey: options?.idempotencyKey,
     });
   }
 }

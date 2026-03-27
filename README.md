@@ -327,6 +327,63 @@ const client = new DakotaClient({
 });
 ```
 
+## Idempotency Keys
+
+Dakota requires idempotency keys (UUID format) for all `POST`, `PUT`, and `PATCH` requests to ensure safe retries. By default, the SDK auto-generates keys for you, but you can provide your own for deterministic API calls:
+
+```typescript
+import { v4 as uuid } from 'uuid';
+
+// Auto-generated idempotency key (default behavior)
+const customer = await client.customers.create({
+  name: 'Acme Corp',
+  customer_type: 'business',
+});
+
+// Custom idempotency key for deterministic retries
+const customerId = 'acme-corp-123';
+const customer = await client.customers.create(
+  { name: 'Acme Corp', customer_type: 'business' },
+  { idempotencyKey: uuid() } // or your own deterministic key
+);
+
+// Use deterministic keys for replay safety
+const txKey = `invoice-${invoiceId}-payment`;
+const tx = await client.transactions.create(
+  {
+    customer_id: customerId,
+    amount: '1000.00',
+    source_asset: 'USDC',
+    source_network_id: 'ethereum-mainnet',
+    destination_id: destinationId,
+    destination_asset: 'USD',
+    destination_payment_rail: 'ach',
+  },
+  { idempotencyKey: txKey }
+);
+
+// Retrying with the same key returns the original response
+const txRetry = await client.transactions.create(
+  { /* same data */ },
+  { idempotencyKey: txKey } // Returns cached response, no duplicate created
+);
+```
+
+### When to Use Custom Idempotency Keys
+
+- **Retry safety**: Use deterministic keys based on your business logic (e.g., `invoice-{id}-payment`)
+- **Distributed systems**: When requests may be retried across different processes
+- **Exactly-once semantics**: When you need to guarantee no duplicate side effects
+
+### Disable Auto-Generated Keys
+
+```typescript
+const client = new DakotaClient({
+  apiKey: 'your_api_key',
+  automaticIdempotency: false, // You must provide keys manually
+});
+```
+
 ## Supported Networks
 
 | Network | Production | Sandbox |

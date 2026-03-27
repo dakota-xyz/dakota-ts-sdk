@@ -9,6 +9,7 @@ import type {
   WalletBalance,
   WalletTransactionRequest,
   WalletTransaction,
+  RequestOptions,
 } from '../types.js';
 
 /**
@@ -33,11 +34,12 @@ export class WalletsResource extends BaseResource {
    * console.log(wallet.address);
    * ```
    */
-  async create(data: WalletCreateRequest): Promise<Wallet> {
+  async create(data: WalletCreateRequest, options?: RequestOptions): Promise<Wallet> {
     return this.transport.request<Wallet>({
       method: 'POST',
       path: '/wallets',
       body: data,
+      idempotencyKey: options?.idempotencyKey,
     });
   }
 
@@ -82,12 +84,14 @@ export class WalletsResource extends BaseResource {
    */
   async createTransaction(
     walletId: string,
-    data: WalletTransactionRequest
+    data: WalletTransactionRequest,
+    options?: RequestOptions
   ): Promise<WalletTransaction> {
     return this.transport.request<WalletTransaction>({
       method: 'POST',
       path: `/wallets/${walletId}/transactions`,
       body: data,
+      idempotencyKey: options?.idempotencyKey,
     });
   }
 }

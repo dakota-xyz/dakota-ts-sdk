@@ -4,7 +4,7 @@
 
 import { BaseResource } from './base.js';
 import { PaginatedIterator } from '../pagination.js';
-import type { User, UserCreateRequest, UserUpdateRequest, ListParams } from '../types.js';
+import type { User, UserCreateRequest, UserUpdateRequest, ListParams, RequestOptions } from '../types.js';
 
 /**
  * Users API resource.
@@ -16,11 +16,12 @@ export class UsersResource extends BaseResource {
    * @param data - User creation data
    * @returns Created user
    */
-  async create(data: UserCreateRequest): Promise<User> {
+  async create(data: UserCreateRequest, options?: RequestOptions): Promise<User> {
     return this.transport.request<User>({
       method: 'POST',
       path: '/users',
       body: data,
+      idempotencyKey: options?.idempotencyKey,
     });
   }
 
@@ -54,11 +55,12 @@ export class UsersResource extends BaseResource {
    * @param data - Update data
    * @returns Updated user
    */
-  async update(userId: string, data: UserUpdateRequest): Promise<User> {
+  async update(userId: string, data: UserUpdateRequest, options?: RequestOptions): Promise<User> {
     return this.transport.request<User>({
       method: 'PATCH',
       path: `/users/${userId}`,
       body: data,
+      idempotencyKey: options?.idempotencyKey,
     });
   }
 

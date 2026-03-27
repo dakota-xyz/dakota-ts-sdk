@@ -1,6 +1,6 @@
 {
   "name": "@dakota-xyz/ts-sdk",
-  "version": "1.0.15",
+  "version": "1.0.16",
   "description": "Official TypeScript SDK for Dakota Platform - stablecoin payments infrastructure",
   "author": "Dakota <support@dakota.xyz>",
   "license": "MIT",

@@ -10,6 +10,7 @@ import type {
   Signer,
   SignerCreateRequest,
   ListParams,
+  RequestOptions,
 } from '../types.js';
 
 /**
@@ -22,11 +23,12 @@ export class SignerGroupsResource extends BaseResource {
    * @param data - Signer group creation data
    * @returns Created signer group
    */
-  async create(data: SignerGroupCreateRequest): Promise<SignerGroup> {
+  async create(data: SignerGroupCreateRequest, options?: RequestOptions): Promise<SignerGroup> {
     return this.transport.request<SignerGroup>({
       method: 'POST',
       path: '/signer-groups',
       body: data,
+      idempotencyKey: options?.idempotencyKey,
     });
   }
 
@@ -60,11 +62,12 @@ export class SignerGroupsResource extends BaseResource {
    * @param data - Signer creation data
    * @returns Created signer
    */
-  async addSigner(signerGroupId: string, data: SignerCreateRequest): Promise<Signer> {
+  async addSigner(signerGroupId: string, data: SignerCreateRequest, options?: RequestOptions): Promise<Signer> {
     return this.transport.request<Signer>({
       method: 'POST',
       path: `/signer-groups/${signerGroupId}/signers`,
       body: data,
+      idempotencyKey: options?.idempotencyKey,
     });
   }
 
@@ -87,10 +90,11 @@ export class SignerGroupsResource extends BaseResource {
    * @param walletId - Wallet ID
    * @param signerGroupId - Signer group ID
    */
-  async attachToWallet(walletId: string, signerGroupId: string): Promise<void> {
+  async attachToWallet(walletId: string, signerGroupId: string, options?: RequestOptions): Promise<void> {
     await this.transport.request<void>({
       method: 'PUT',
       path: `/wallets/${walletId}/signer-groups/${signerGroupId}`,
+      idempotencyKey: options?.idempotencyKey,
     });
   }
 

@@ -9,6 +9,7 @@ import type {
   CustomerCreateRequest,
   CustomerCreateResponse,
   CustomerListParams,
+  RequestOptions,
 } from '../types.js';
 
 /**
@@ -22,6 +23,7 @@ export class CustomersResource extends BaseResource {
    * Returns a URL where the customer can complete verification.
    *
    * @param data - Customer creation data
+   * @param options - Request options (e.g., custom idempotency key)
    * @returns Created customer with KYB onboarding URL
    *
    * @example
@@ -31,14 +33,21 @@ export class CustomersResource extends BaseResource {
    *   customerType: 'business',
    *   externalId: 'your-internal-id',
    * });
+   *
+   * // With custom idempotency key
+   * const customer = await client.customers.create(
+   *   { name: 'Acme Corp', customerType: 'business' },
+   *   { idempotencyKey: 'create-acme-corp-001' }
+   * );
    * console.log(customer.applicationUrl); // KYB onboarding URL
    * ```
    */
-  async create(data: CustomerCreateRequest): Promise<CustomerCreateResponse> {
+  async create(data: CustomerCreateRequest, options?: RequestOptions): Promise<CustomerCreateResponse> {
     return this.transport.request<CustomerCreateResponse>({
       method: 'POST',
       path: '/customers',
       body: data,
+      idempotencyKey: options?.idempotencyKey,
     });
   }
 

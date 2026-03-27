@@ -663,6 +663,39 @@ export interface SimulationInspection {
 export type SandboxScenario = components['schemas']['SandboxScenario'];
 
 // ============================================================================
+// Request Options
+// ============================================================================
+
+/**
+ * Options for API requests.
+ *
+ * Use this to pass custom idempotency keys for deterministic API calls.
+ *
+ * @example
+ * ```typescript
+ * // Use a custom idempotency key for replay safety
+ * const tx = await client.transactions.create(
+ *   { customer_id: '...', amount: '100.00', ... },
+ *   { idempotencyKey: 'my-unique-key-123' }
+ * );
+ * ```
+ */
+export interface RequestOptions {
+  /**
+   * Custom idempotency key (UUID format).
+   *
+   * If provided, this key will be used instead of auto-generating one.
+   * The same key with the same request body will return the cached response.
+   *
+   * Requirements:
+   * - Must be a valid UUID
+   * - Stable per logical operation
+   * - Not reused across different business intents
+   */
+  idempotencyKey?: string;
+}
+
+// ============================================================================
 // Pagination Types
 // ============================================================================
 

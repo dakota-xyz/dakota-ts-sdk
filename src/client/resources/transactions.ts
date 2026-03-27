@@ -10,6 +10,7 @@ import type {
   AutoTransaction,
   TransactionListParams,
   ListParams,
+  RequestOptions,
 } from '../types.js';
 
 /**
@@ -22,6 +23,7 @@ export class TransactionsResource extends BaseResource {
    * One-off transactions allow single transfers without setting up accounts.
    *
    * @param data - Transaction creation data
+   * @param options - Request options (e.g., custom idempotency key)
    * @returns Created transaction
    *
    * @example
@@ -37,15 +39,22 @@ export class TransactionsResource extends BaseResource {
    *   payment_reference: 'Invoice #12345',
    * });
    *
+   * // With custom idempotency key
+   * const tx = await client.transactions.create(
+   *   { customer_id: customerId, amount: '1000.00', ... },
+   *   { idempotencyKey: 'invoice-12345-payment' }
+   * );
+   *
    * console.log(tx.crypto_address); // Send USDC here
    * console.log(tx.status); // Transaction status
    * ```
    */
-  async create(data: OneOffTransactionRequest): Promise<OneOffTransaction> {
+  async create(data: OneOffTransactionRequest, options?: RequestOptions): Promise<OneOffTransaction> {
     return this.transport.request<OneOffTransaction>({
       method: 'POST',
       path: '/transactions',
       body: data,
+      idempotencyKey: options?.idempotencyKey,
     });
   }
 
@@ -98,6 +107,7 @@ export class TransactionsResource extends BaseResource {
    * Only pending transactions can be cancelled.
    *
    * @param transactionId - Transaction ID
+   * @param options - Request options (e.g., custom idempotency key)
    * @returns Cancelled transaction
    *
    * @example
@@ -106,10 +116,11 @@ export class TransactionsResource extends BaseResource {
    * console.log(tx.status); // 'cancelled'
    * ```
    */
-  async cancel(transactionId: string): Promise<OneOffTransaction> {
+  async cancel(transactionId: string, options?: RequestOptions): Promise<OneOffTransaction> {
     return this.transport.request<OneOffTransaction>({
       method: 'POST',
       path: `/transactions/${transactionId}/cancellations`,
+      idempotencyKey: options?.idempotencyKey,
     });
   }
 }

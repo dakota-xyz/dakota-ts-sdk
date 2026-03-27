@@ -19,6 +19,7 @@ import type {
   SimulationInspection,
   SandboxScenario,
   ListParams,
+  RequestOptions,
 } from '../types.js';
 
 /**
@@ -112,11 +113,12 @@ export class SandboxResource extends BaseResource {
    * });
    * ```
    */
-  async simulateInbound(data: SimulateInboundRequest): Promise<SimulationResponse> {
+  async simulateInbound(data: SimulateInboundRequest, options?: RequestOptions): Promise<SimulationResponse> {
     return this.transport.request<SimulationResponse>({
       method: 'POST',
       path: '/sandbox/simulate/inbound',
       body: data,
+      idempotencyKey: options?.idempotencyKey,
     });
   }
 
@@ -160,11 +162,12 @@ export class SandboxResource extends BaseResource {
    * });
    * ```
    */
-  async simulateOnboarding(data: SimulateOnboardingRequest): Promise<SimulateOnboardingResponse> {
+  async simulateOnboarding(data: SimulateOnboardingRequest, options?: RequestOptions): Promise<SimulateOnboardingResponse> {
     return this.transport.request<SimulateOnboardingResponse>({
       method: 'POST',
       path: '/sandbox/simulate/onboarding',
       body: data,
+      idempotencyKey: options?.idempotencyKey,
     });
   }
 
@@ -211,12 +214,14 @@ export class SandboxResource extends BaseResource {
    */
   async advanceSimulation(
     simulationId: string,
-    data?: AdvanceSimulationRequest
+    data?: AdvanceSimulationRequest,
+    options?: RequestOptions
   ): Promise<AdvanceSimulationResult> {
     return this.transport.request<AdvanceSimulationResult>({
       method: 'POST',
       path: `/sandbox/simulations/${simulationId}/advance`,
       body: data,
+      idempotencyKey: options?.idempotencyKey,
     });
   }
 

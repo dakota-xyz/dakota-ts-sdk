@@ -4,7 +4,7 @@
 
 import { BaseResource } from './base.js';
 import { PaginatedIterator } from '../pagination.js';
-import type { Destination, DestinationRequest, ListParams } from '../types.js';
+import type { Destination, DestinationRequest, ListParams, RequestOptions } from '../types.js';
 
 /**
  * Destinations API resource.
@@ -39,11 +39,12 @@ export class DestinationsResource extends BaseResource {
    * });
    * ```
    */
-  async create(recipientId: string, data: DestinationRequest): Promise<Destination> {
+  async create(recipientId: string, data: DestinationRequest, options?: RequestOptions): Promise<Destination> {
     return this.transport.request<Destination>({
       method: 'POST',
       path: `/recipients/${recipientId}/destinations`,
       body: data,
+      idempotencyKey: options?.idempotencyKey,
     });
   }
 

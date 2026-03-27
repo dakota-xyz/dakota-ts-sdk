@@ -10,6 +10,7 @@ import type {
   PolicyRule,
   PolicyRuleCreateRequest,
   ListParams,
+  RequestOptions,
 } from '../types.js';
 
 /**
@@ -22,11 +23,12 @@ export class PoliciesResource extends BaseResource {
    * @param data - Policy creation data
    * @returns Created policy
    */
-  async create(data: PolicyCreateRequest): Promise<Policy> {
+  async create(data: PolicyCreateRequest, options?: RequestOptions): Promise<Policy> {
     return this.transport.request<Policy>({
       method: 'POST',
       path: '/policies',
       body: data,
+      idempotencyKey: options?.idempotencyKey,
     });
   }
 
@@ -72,11 +74,12 @@ export class PoliciesResource extends BaseResource {
    * @param data - Rule creation data
    * @returns Created rule
    */
-  async addRule(policyId: string, data: PolicyRuleCreateRequest): Promise<PolicyRule> {
+  async addRule(policyId: string, data: PolicyRuleCreateRequest, options?: RequestOptions): Promise<PolicyRule> {
     return this.transport.request<PolicyRule>({
       method: 'POST',
       path: `/policies/${policyId}/rules`,
       body: data,
+      idempotencyKey: options?.idempotencyKey,
     });
   }
 
@@ -91,12 +94,14 @@ export class PoliciesResource extends BaseResource {
   async updateRule(
     policyId: string,
     ruleId: string,
-    data: Partial<PolicyRuleCreateRequest>
+    data: Partial<PolicyRuleCreateRequest>,
+    options?: RequestOptions
   ): Promise<PolicyRule> {
     return this.transport.request<PolicyRule>({
       method: 'PATCH',
       path: `/policies/${policyId}/rules/${ruleId}`,
       body: data,
+      idempotencyKey: options?.idempotencyKey,
     });
   }
 
@@ -119,10 +124,11 @@ export class PoliciesResource extends BaseResource {
    * @param policyId - Policy ID
    * @param walletId - Wallet ID
    */
-  async attachToWallet(policyId: string, walletId: string): Promise<void> {
+  async attachToWallet(policyId: string, walletId: string, options?: RequestOptions): Promise<void> {
     await this.transport.request<void>({
       method: 'PUT',
       path: `/policies/${policyId}/wallets/${walletId}`,
+      idempotencyKey: options?.idempotencyKey,
     });
   }
 

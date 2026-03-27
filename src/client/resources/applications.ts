@@ -10,6 +10,7 @@ import type {
   AssociatedIndividual,
   AssociatedIndividualRequest,
   ListParams,
+  RequestOptions,
 } from '../types.js';
 
 /**
@@ -46,11 +47,12 @@ export class ApplicationsResource extends BaseResource {
    * @param data - Submission data
    * @returns Submitted application
    */
-  async submit(applicationId: string, data?: ApplicationSubmissionRequest): Promise<Application> {
+  async submit(applicationId: string, data?: ApplicationSubmissionRequest, options?: RequestOptions): Promise<Application> {
     return this.transport.request<Application>({
       method: 'POST',
       path: `/applications/${applicationId}/submissions`,
       body: data ?? {},
+      idempotencyKey: options?.idempotencyKey,
     });
   }
 
@@ -80,12 +82,14 @@ export class ApplicationsResource extends BaseResource {
    */
   async addIndividual(
     applicationId: string,
-    data: AssociatedIndividualRequest
+    data: AssociatedIndividualRequest,
+    options?: RequestOptions
   ): Promise<AssociatedIndividual> {
     return this.transport.request<AssociatedIndividual>({
       method: 'POST',
       path: `/applications/${applicationId}/associated-individuals`,
       body: data,
+      idempotencyKey: options?.idempotencyKey,
     });
   }
 
@@ -114,12 +118,14 @@ export class ApplicationsResource extends BaseResource {
   async updateIndividual(
     applicationId: string,
     individualId: string,
-    data: Partial<AssociatedIndividualRequest>
+    data: Partial<AssociatedIndividualRequest>,
+    options?: RequestOptions
   ): Promise<AssociatedIndividual> {
     return this.transport.request<AssociatedIndividual>({
       method: 'PATCH',
       path: `/applications/${applicationId}/associated-individuals/${individualId}`,
       body: data,
+      idempotencyKey: options?.idempotencyKey,
     });
   }
 
@@ -145,12 +151,14 @@ export class ApplicationsResource extends BaseResource {
    */
   async updateBusinessDetails(
     applicationId: string,
-    data: Record<string, unknown>
+    data: Record<string, unknown>,
+    options?: RequestOptions
   ): Promise<Application> {
     return this.transport.request<Application>({
       method: 'PATCH',
       path: `/applications/${applicationId}/business-details`,
       body: data,
+      idempotencyKey: options?.idempotencyKey,
     });
   }
 
@@ -163,12 +171,14 @@ export class ApplicationsResource extends BaseResource {
    */
   async getDocumentUploadUrl(
     applicationId: string,
-    data: { document_type: string; file_name: string }
+    data: { document_type: string; file_name: string },
+    options?: RequestOptions
   ): Promise<{ upload_url: string; document_id: string }> {
     return this.transport.request<{ upload_url: string; document_id: string }>({
       method: 'POST',
       path: `/applications/${applicationId}/document-uploads`,
       body: data,
+      idempotencyKey: options?.idempotencyKey,
     });
   }
 }

@@ -4,7 +4,7 @@
 
 import { BaseResource } from './base.js';
 import { PaginatedIterator } from '../pagination.js';
-import type { Account, AccountCreateRequest, AccountUpdateRequest, ListParams } from '../types.js';
+import type { Account, AccountCreateRequest, AccountUpdateRequest, ListParams, RequestOptions } from '../types.js';
 
 /** Account list parameters */
 export interface AccountListParams extends ListParams {
@@ -54,11 +54,12 @@ export class AccountsResource extends BaseResource {
    * // Returns: { bank_account: { bank_name, aba_routing_number, account_number } } - customer sends USD here
    * ```
    */
-  async create(data: AccountCreateRequest): Promise<Account> {
+  async create(data: AccountCreateRequest, options?: RequestOptions): Promise<Account> {
     return this.transport.request<Account>({
       method: 'POST',
       path: '/accounts',
       body: data,
+      idempotencyKey: options?.idempotencyKey,
     });
   }
 
@@ -115,11 +116,12 @@ export class AccountsResource extends BaseResource {
    * });
    * ```
    */
-  async update(accountId: string, data: AccountUpdateRequest): Promise<Account> {
+  async update(accountId: string, data: AccountUpdateRequest, options?: RequestOptions): Promise<Account> {
     return this.transport.request<Account>({
       method: 'PATCH',
       path: `/accounts/${accountId}`,
       body: data,
+      idempotencyKey: options?.idempotencyKey,
     });
   }
 }
