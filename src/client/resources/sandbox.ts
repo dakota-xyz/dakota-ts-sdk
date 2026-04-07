@@ -128,9 +128,10 @@ export class SandboxResource extends BaseResource {
    * Drives KYB, KYC, or applicant account status through a sandbox transition
    * without waiting for real compliance review.
    *
-   * **Important:** For full activation, you typically need TWO calls:
-   * 1. `kyb_approve` - Approves the KYB application
-   * 2. `applicant_activate` - Activates the applicant (triggers provisioning)
+   * **Important:** Use `kyb_approve` to fully approve any customer type (individual or
+   * business). This triggers the complete onboarding flow including endorsement and
+   * recipient creation. The `kyc_*` types only update the individual applicant's KYC
+   * application status without triggering the full onboarding flow.
    *
    * @param data - Simulation request data
    * @returns Simulation response with previous and new state

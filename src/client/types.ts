@@ -482,10 +482,11 @@ export interface SimulateOnboardingResponse {
 /**
  * Onboarding simulation types.
  *
- * - `kyb_approve` - Approve a KYB application
+ * - `kyb_approve` - Fully approve any customer (individual or business). Triggers the complete
+ *   onboarding flow including endorsement and recipient creation.
  * - `kyb_reject` - Reject a KYB application
  * - `kyb_info_request` - Request additional information for KYB
- * - `kyc_approve` - Approve a KYC check
+ * - `kyc_approve` - Approve an individual applicant's KYC application status only (no endorsement/recipient)
  * - `kyc_reject` - Reject a KYC check
  * - `kyc_info_request` - Request additional information for KYC
  * - `applicant_activate` - Activate an applicant (triggers provisioning)

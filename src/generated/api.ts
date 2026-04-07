@@ -198,7 +198,34 @@ export type paths = {
          */
         readonly put: operations["updateRecipient"];
         readonly post?: never;
-        readonly delete?: never;
+        /**
+         * Delete a recipient
+         * @description Soft-deletes a recipient and all of its destinations. Blocked if the recipient has any active auto accounts or non-terminal one-off transactions.
+         */
+        readonly delete: operations["deleteRecipient"];
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/recipients/{recipient_id}/destinations/{destination_id}": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                readonly recipient_id: components["schemas"]["KSUID"];
+                readonly destination_id: components["schemas"]["KSUID"];
+            };
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        readonly post?: never;
+        /**
+         * Delete a destination
+         * @description Soft-deletes a destination. Blocked if the destination has any active auto accounts or non-terminal one-off transactions.
+         */
+        readonly delete: operations["deleteDestination"];
         readonly options?: never;
         readonly head?: never;
         readonly patch?: never;
@@ -296,7 +323,11 @@ export type paths = {
         readonly get: operations["getAccount"];
         readonly put?: never;
         readonly post?: never;
-        readonly delete?: never;
+        /**
+         * Delete an account
+         * @description Soft-deletes an auto account. The account must be owned by the requesting client.
+         */
+        readonly delete: operations["deleteAccount"];
         readonly options?: never;
         readonly head?: never;
         /**
@@ -455,9 +486,17 @@ export type paths = {
         };
         /**
          * Get an onboarding application
-         * @description Retrieves a specific application including its status, entities (business/individuals), validation state,
-         *     attestations, and EDD data if applicable. The validation object shows whether the application is ready
-         *     to submit and what requirements are missing.
+         * @description Retrieves a specific application. By default returns lightweight status metadata only.
+         *     Use the `include` query parameter to request additional sections.
+         *
+         *     **Include values:**
+         *     - `entities` — business/individual applicant data
+         *     - `validation` — computed validation state (shows what's missing before submit)
+         *     - `edd` — enhanced due diligence data (if applicable)
+         *     - `attestations` — attestation records
+         *     - `all` — all of the above
+         *
+         *     Multiple values can be combined as a comma-separated list (e.g. `?include=entities,validation`).
          *
          *     **Authentication:** Accepts Application Token (X-Application-Token header).
          *     Application tokens are scoped to a single application for use in public-facing flows.
@@ -1050,6 +1089,26 @@ export type paths = {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/api-keys/admin": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Create an API key for a client (Admin only)
+         * @description Create an API key for a specified client. Requires admin access token.
+         */
+        readonly post: operations["createApiKeyForClient"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/api-keys/{api_key_id}": {
         readonly parameters: {
             readonly query?: never;
@@ -1345,7 +1404,7 @@ export type paths = {
          *
          *     | type | KYB status set | Application status set | webhook emitted |
          *     |---|---|---|---|
-         *     | `kyb_approve` | approved | — | `kyb.approved` |
+         *     | `kyb_approve` | approved | approved | `kyb.approved` + endorsement + recipient created |
          *     | `kyb_reject` | rejected | — | `kyb.rejected` |
          *     | `kyb_info_request` | requires_info | — | `kyb.info_requested` |
          *     | `kyc_approve` | — | approved | (application updated) |
@@ -1353,6 +1412,11 @@ export type paths = {
          *     | `kyc_info_request` | — | request_for_information | (application updated) |
          *     | `applicant_activate` | approved | approved | `kyb.approved` + endorsement + recipient created |
          *     | `applicant_suspend` | frozen | declined | `kyb.frozen` |
+         *
+         *     **Approving customers (individual or business):** Use `kyb_approve` to fully approve
+         *     any customer type. This triggers the complete onboarding flow including endorsement
+         *     and recipient creation. The `kyc_*` types only update the individual applicant's
+         *     KYC application status without triggering the full onboarding flow.
          *
          *     **Note:** `applicant_activate` does NOT auto-create payment accounts, wallets, or
          *     account numbers. Create those separately via the account creation API after activation.
@@ -1436,6 +1500,86 @@ export type paths = {
          *     Available in sandbox mode only.
          */
         readonly post: operations["advanceSimulation"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/self-serve/credits/purchase": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Create Stripe Checkout session for credit purchase
+         * @description Creates a Stripe Checkout session for a valid prepaid credit tier for the authenticated self-serve client.
+         */
+        readonly post: operations["createSelfServeCreditsPurchase"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/self-serve/credits/balance": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Get prepaid credit balance
+         * @description Returns the current prepaid credit balance for the authenticated self-serve client.
+         */
+        readonly get: operations["getSelfServeCreditsBalance"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/self-serve/credits/ledger": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * List prepaid credit ledger entries
+         * @description Returns paginated credit ledger entries for the authenticated self-serve client.
+         */
+        readonly get: operations["listSelfServeCreditsLedger"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/self-serve/credits/tiers": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * List available credit purchase tiers
+         * @description Returns the available prepaid credit tiers with transfer capacity calculated for the authenticated self-serve client.
+         */
+        readonly get: operations["listSelfServeCreditTiers"];
+        readonly put?: never;
+        readonly post?: never;
         readonly delete?: never;
         readonly options?: never;
         readonly head?: never;
@@ -1608,6 +1752,73 @@ export type components = {
              */
             readonly decimals: number;
         };
+        readonly SelfServeCreditsBalanceResponse: {
+            /**
+             * Format: int64
+             * @example 45000
+             */
+            readonly balance_cents: number;
+            /**
+             * Format: int64
+             * @example 9000000
+             */
+            readonly transfer_capacity_cents: number;
+        };
+        readonly SelfServeCreditsLedgerEntry: {
+            /** @example 34o8dS2h9c7n1V8qLpY2Zx6TwUa */
+            readonly id: string;
+            /** @enum {string} */
+            readonly entry_type: "purchase" | "deduction" | "refund";
+            /**
+             * Format: int64
+             * @example -5000
+             */
+            readonly amount_cents: number;
+            /**
+             * Format: int64
+             * @example 45000
+             */
+            readonly balance_after_cents: number;
+            readonly transaction_id?: string | null;
+            /** @example Transfer fee for transaction txn_123 */
+            readonly description: string;
+            /** Format: date-time */
+            readonly created_at: string;
+        };
+        readonly SelfServeCreditsLedgerResponse: {
+            readonly entries: readonly components["schemas"]["SelfServeCreditsLedgerEntry"][];
+            /** @example false */
+            readonly has_more: boolean;
+        };
+        readonly SelfServeCreditTier: {
+            /**
+             * Format: int64
+             * @example 10000
+             */
+            readonly price_cents: number;
+            /**
+             * Format: int64
+             * @example 2000000
+             */
+            readonly transfer_capacity_cents: number;
+        };
+        readonly SelfServeCreditTiersResponse: {
+            readonly tiers: readonly components["schemas"]["SelfServeCreditTier"][];
+        };
+        readonly SelfServeCreditsPurchaseRequest: {
+            /**
+             * Format: int64
+             * @example 10000
+             */
+            readonly tier_price_cents: number;
+        };
+        readonly SelfServeCreditsPurchaseResponse: {
+            /**
+             * Format: uri
+             * @example https://checkout.stripe.com/c/pay/cs_test_123
+             */
+            readonly checkout_url: string;
+        };
         /** @description User object representing a user in the system, including all clients they can access. */
         readonly ClientUser: {
             readonly id: components["schemas"]["KSUID"];
@@ -1636,7 +1847,7 @@ export type components = {
             readonly created_at: number;
         };
         /**
-         * @description Role that can be assigned to a client user
+         * @description Role that can be assigned to a client user. Available roles: `admin` (full access except issuances) and `viewer` (read-only access).
          * @example admin
          * @enum {string}
          */
@@ -1762,7 +1973,7 @@ export type components = {
          * @example transaction.auto.updated
          * @enum {string}
          */
-        readonly EventType: "user.created" | "user.updated" | "user.deleted" | "api_key.created" | "api_key.deleted" | "customer.created" | "customer.updated" | "customer.kyb_link.created" | "customer.kyb_link.updated" | "customer.kyb_status.created" | "customer.kyb_status.updated" | "auto_account.created" | "auto_account.updated" | "auto_account.deleted" | "transaction.auto.created" | "transaction.auto.updated" | "transaction.one_off.created" | "transaction.one_off.updated" | "recipient.created" | "recipient.updated" | "recipient.deleted" | "destination.created" | "destination.deleted" | "target.created" | "target.updated" | "target.deleted" | "exception.created" | "exception.cleared" | "bvnk.onboarding.created" | "bvnk.onboarding.updated" | "wallet.created" | "wallet.updated" | "wallet.signer_group.created" | "wallet.signer_group.updated" | "wallet.policy.created" | "wallet.policy.updated" | "wallet.transaction.created" | "wallet.transaction.updated" | "wallet.deposit";
+        readonly EventType: "user.created" | "user.updated" | "user.deleted" | "api_key.created" | "api_key.deleted" | "customer.created" | "customer.updated" | "customer.kyb_link.created" | "customer.kyb_link.updated" | "customer.kyb_status.created" | "customer.kyb_status.updated" | "customer.kyb_application.submitted" | "auto_account.created" | "auto_account.updated" | "auto_account.deleted" | "transaction.auto.created" | "transaction.auto.updated" | "transaction.one_off.created" | "transaction.one_off.updated" | "recipient.created" | "recipient.updated" | "recipient.deleted" | "destination.created" | "destination.deleted" | "target.created" | "target.updated" | "target.deleted" | "exception.created" | "exception.cleared" | "bvnk.onboarding.created" | "bvnk.onboarding.updated" | "wallet.created" | "wallet.updated" | "wallet.signer_group.created" | "wallet.signer_group.updated" | "wallet.policy.created" | "wallet.policy.updated" | "wallet.transaction.created" | "wallet.transaction.updated" | "wallet.deposit";
         /** @description Request metadata for the original operation that emitted the event, when available. */
         readonly EventRequest: {
             /**
@@ -1816,6 +2027,10 @@ export type components = {
          * @enum {string}
          */
         readonly NetworkId: "ethereum-mainnet" | "ethereum-sepolia" | "ethereum-goerli" | "ethereum-holesky" | "solana-mainnet" | "solana-devnet" | "solana-testnet" | "base-mainnet" | "base-sepolia" | "arbitrum-mainnet" | "arbitrum-sepolia" | "optimism-mainnet" | "optimism-sepolia" | "polygon-mainnet" | "polygon-amoy";
+        readonly CreateApiKeyForClientRequest: {
+            /** @description Client ID to create the API key for */
+            readonly client_id: components["schemas"]["KSUID"];
+        };
         readonly ApiKeyResponse: {
             readonly id: components["schemas"]["KSUID"];
             /**
@@ -2006,7 +2221,7 @@ export type components = {
          * @example pending
          * @enum {string}
          */
-        readonly KybStatus: "active" | "pending" | "partner_review" | "rejected" | "frozen";
+        readonly KybStatus: "active" | "pending" | "partner_review" | "rejected" | "frozen" | "auto_declined";
         readonly ProviderKybStatus: {
             /**
              * @description ID of the verification provider or service used for a specific check.
@@ -2018,7 +2233,7 @@ export type components = {
              * @example approved
              * @enum {string}
              */
-            readonly status: "not_started" | "in_review" | "approved" | "rejected" | "requires_info" | "frozen";
+            readonly status: "not_started" | "in_review" | "approved" | "rejected" | "requires_info" | "auto_declined" | "frozen";
             /** @description Array of endorsements associated with this provider status. */
             readonly endorsements?: readonly string[];
         };
@@ -2063,7 +2278,7 @@ export type components = {
          * @example persona
          * @enum {string}
          */
-        readonly KybLinkType: "persona" | "tos";
+        readonly KybLinkType: "persona" | "tos" | "sumsub";
         /**
          * KYB Link Status
          * @description Current status of the KYB verification link.
@@ -2662,9 +2877,14 @@ export type components = {
              */
             readonly destination_type: "fiat_iban";
         };
-        /** @description A unified transaction object representing money movements in the Dakota platform. */
+        /** @description A unified transaction object representing money movements in the Dakota platform. Used for auto-account transactions. */
         readonly Transaction: {
             readonly id: components["schemas"]["KSUID"];
+            /**
+             * @description Discriminator field. Always "auto_account" for auto-account transactions. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            readonly resource_type: "auto_account";
             readonly type: components["schemas"]["TransactionType"];
             readonly status: components["schemas"]["TransactionStatus"];
             /**
@@ -2995,9 +3215,14 @@ export type components = {
              */
             readonly payment_reference?: string;
         };
-        /** @description A one-off transaction response */
+        /** @description A one-off transaction response. Used for single on/off-ramp transactions. */
         readonly OneOffTransaction: {
             readonly id: components["schemas"]["KSUID"];
+            /**
+             * @description Discriminator field. Always "one_off" for one-off transactions. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            readonly resource_type: "one_off";
             readonly customer_id: components["schemas"]["KSUID"];
             /**
              * @description Temporary address where funds should be sent
@@ -3142,6 +3367,11 @@ export type components = {
         /** @description Transaction details representing a transfer of funds from a crypto wallet. */
         readonly WalletTransaction: {
             readonly id: components["schemas"]["KSUID"];
+            /**
+             * @description Discriminator field. Always "wallet" for wallet transactions. (enum property replaced by openapi-typescript)
+             * @enum {string}
+             */
+            readonly resource_type: "wallet";
             readonly wallet_id: components["schemas"]["KSUID"];
             readonly network_id?: components["schemas"]["NetworkId"];
             /** @description The source address */
@@ -4366,6 +4596,11 @@ export type components = {
              */
             readonly source_of_wealth?: readonly ("investments" | "employment" | "court_settlement" | "lottery_winnings" | "retirement_income" | "savings" | "sale_of_assets" | "family_funds" | "gambling_winnings" | "gift" | "inheritance" | "insurance_claim" | "loan" | "redundancy_severance" | "benefits")[];
             /**
+             * @description Social Security Number (only present for US persons, format XXX-XX-XXXX)
+             * @example 123-45-6789
+             */
+            readonly ssn?: string;
+            /**
              * @description Decision on this individual entity (if made)
              * @example approved
              * @enum {string|null}
@@ -4728,13 +4963,13 @@ export type components = {
              */
             readonly application_decision?: "approved" | "declined" | "withdrawn" | null;
             /** @description The people/businesses being onboarded */
-            readonly entities: components["schemas"]["ApplicationEntities"];
+            readonly entities?: components["schemas"]["ApplicationEntities"];
             /** @description Enhanced Due Diligence data (if provided) */
             readonly edd?: components["schemas"]["EDDResponse"];
             /** @description Attestations submitted for this application */
             readonly attestations?: components["schemas"]["AttestationData"];
             /** @description Validation state computed at retrieval time */
-            readonly validation: components["schemas"]["ApplicationValidation"];
+            readonly validation?: components["schemas"]["ApplicationValidation"];
             /** @description Risk rating (only present for superadmin users) */
             readonly risk_rating?: components["schemas"]["RiskRating"];
         };
@@ -4843,11 +5078,6 @@ export type components = {
              *     ]
              */
             readonly top_customer_countries?: readonly string[];
-            /**
-             * @description Whether the business screens customers against sanctions lists
-             * @example true
-             */
-            readonly screens_customers_for_sanctions?: boolean;
             /**
              * @description Whether the business issues tokens
              * @example false
@@ -5941,15 +6171,16 @@ export interface operations {
                     /**
                      * @example {
                      *       "id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi",
+                     *       "resource_type": "wallet",
                      *       "wallet_id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi",
                      *       "network_id": "ethereum-mainnet",
-                     *       "from": "string",
-                     *       "to": "string",
+                     *       "from": "0x1234567890abcdef1234567890abcdef12345678",
+                     *       "to": "0xabcdef1234567890abcdef1234567890abcdef12",
                      *       "transaction_hash": "0x165cd37b4c644c2921454429e7f9358d18a45e14",
                      *       "transaction_type": "transfer",
                      *       "amount": "100.56",
                      *       "asset": "USD",
-                     *       "status": "timed_out"
+                     *       "status": "completed"
                      *     }
                      */
                     readonly "application/json": components["schemas"]["WalletTransaction"];
@@ -6150,6 +6381,7 @@ export interface operations {
                      *       "data": [
                      *         {
                      *           "id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi",
+                     *           "resource_type": "one_off",
                      *           "customer_id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi",
                      *           "crypto_address": "0x1234567890abcdef1234567890abcdef12345678",
                      *           "send_amount": "1.24",
@@ -6159,7 +6391,6 @@ export interface operations {
                      *           "source_asset": "USDC",
                      *           "destination_id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi",
                      *           "destination_asset": "USD",
-                     *           "failure_reason": "string",
                      *           "receipt": {
                      *             "imad": "string",
                      *             "omad": "string",
@@ -6374,6 +6605,7 @@ export interface operations {
                     /**
                      * @example {
                      *       "id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi",
+                     *       "resource_type": "one_off",
                      *       "customer_id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi",
                      *       "crypto_address": "0x1234567890abcdef1234567890abcdef12345678",
                      *       "send_amount": "1.24",
@@ -6383,7 +6615,6 @@ export interface operations {
                      *       "source_asset": "USDC",
                      *       "destination_id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi",
                      *       "destination_asset": "USD",
-                     *       "failure_reason": "string",
                      *       "receipt": {
                      *         "imad": "string",
                      *         "omad": "string",
@@ -6591,6 +6822,7 @@ export interface operations {
                     /**
                      * @example {
                      *       "id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi",
+                     *       "resource_type": "one_off",
                      *       "customer_id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi",
                      *       "crypto_address": "0x1234567890abcdef1234567890abcdef12345678",
                      *       "send_amount": "1.24",
@@ -6600,7 +6832,6 @@ export interface operations {
                      *       "source_asset": "USDC",
                      *       "destination_id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi",
                      *       "destination_asset": "USD",
-                     *       "failure_reason": "string",
                      *       "receipt": {
                      *         "imad": "string",
                      *         "omad": "string",
@@ -7130,6 +7361,237 @@ export interface operations {
                      *       "status": 404,
                      *       "detail": "Not found",
                      *       "instance": "https://api.platform.dakota.xyz/recipients/example-id",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    readonly deleteRecipient: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                readonly recipient_id: components["schemas"]["KSUID"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Recipient deleted successfully. */
+            readonly 204: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid request */
+            readonly 400: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#invalid-request",
+                     *       "title": "Invalid request",
+                     *       "status": 400,
+                     *       "detail": "Invalid request",
+                     *       "instance": "https://api.platform.dakota.xyz/recipients/example-id",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            readonly 401: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#authentication-error",
+                     *       "title": "Unauthorized",
+                     *       "status": 401,
+                     *       "detail": "Unauthorized",
+                     *       "instance": "https://api.platform.dakota.xyz/recipients/example-id",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            readonly 403: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#forbidden",
+                     *       "title": "Forbidden",
+                     *       "status": 403,
+                     *       "detail": "Forbidden",
+                     *       "instance": "https://api.platform.dakota.xyz/recipients/example-id",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#not-found",
+                     *       "title": "Not found",
+                     *       "status": 404,
+                     *       "detail": "Not found",
+                     *       "instance": "https://api.platform.dakota.xyz/recipients/example-id",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            readonly 409: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#conflict",
+                     *       "title": "Conflict",
+                     *       "status": 409,
+                     *       "detail": "Recipient has active accounts or pending transactions",
+                     *       "instance": "https://api.platform.dakota.xyz/recipients/example-id",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    readonly deleteDestination: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                readonly recipient_id: components["schemas"]["KSUID"];
+                readonly destination_id: components["schemas"]["KSUID"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Destination deleted successfully. */
+            readonly 204: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid request */
+            readonly 400: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#invalid-request",
+                     *       "title": "Invalid request",
+                     *       "status": 400,
+                     *       "detail": "Invalid request",
+                     *       "instance": "https://api.platform.dakota.xyz/recipients/example-id/destinations/example-id",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            readonly 401: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#authentication-error",
+                     *       "title": "Unauthorized",
+                     *       "status": 401,
+                     *       "detail": "Unauthorized",
+                     *       "instance": "https://api.platform.dakota.xyz/recipients/example-id/destinations/example-id",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            readonly 403: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#forbidden",
+                     *       "title": "Forbidden",
+                     *       "status": 403,
+                     *       "detail": "Forbidden",
+                     *       "instance": "https://api.platform.dakota.xyz/recipients/example-id/destinations/example-id",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#not-found",
+                     *       "title": "Not found",
+                     *       "status": 404,
+                     *       "detail": "Not found",
+                     *       "instance": "https://api.platform.dakota.xyz/recipients/example-id/destinations/example-id",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            readonly 409: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#conflict",
+                     *       "title": "Conflict",
+                     *       "status": 409,
+                     *       "detail": "Destination has active accounts or pending transactions",
+                     *       "instance": "https://api.platform.dakota.xyz/recipients/example-id/destinations/example-id",
                      *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
                      *     }
                      */
@@ -8260,6 +8722,178 @@ export interface operations {
                      *       "title": "Not found",
                      *       "status": 404,
                      *       "detail": "Not found",
+                     *       "instance": "https://api.platform.dakota.xyz/accounts/example-id",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    readonly deleteAccount: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                readonly account_id: components["schemas"]["KSUID"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Account deleted successfully. */
+            readonly 204: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid request */
+            readonly 400: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#invalid-request",
+                     *       "title": "Invalid request",
+                     *       "status": 400,
+                     *       "detail": "Invalid request",
+                     *       "instance": "https://api.platform.dakota.xyz/accounts/example-id",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            readonly 401: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#authentication-error",
+                     *       "title": "Unauthorized",
+                     *       "status": 401,
+                     *       "detail": "Unauthorized",
+                     *       "instance": "https://api.platform.dakota.xyz/accounts/example-id",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            readonly 403: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#forbidden",
+                     *       "title": "Forbidden",
+                     *       "status": 403,
+                     *       "detail": "Forbidden",
+                     *       "instance": "https://api.platform.dakota.xyz/accounts/example-id",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#not-found",
+                     *       "title": "Not found",
+                     *       "status": 404,
+                     *       "detail": "Not found",
+                     *       "instance": "https://api.platform.dakota.xyz/accounts/example-id",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict */
+            readonly 409: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#conflict",
+                     *       "title": "Conflict",
+                     *       "status": 409,
+                     *       "detail": "Conflict",
+                     *       "instance": "https://api.platform.dakota.xyz/accounts/example-id",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not implemented */
+            readonly 501: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#not-implemented",
+                     *       "title": "Not implemented",
+                     *       "status": 501,
+                     *       "detail": "Not implemented",
+                     *       "instance": "https://api.platform.dakota.xyz/accounts/example-id",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Provider error */
+            readonly 502: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#provider-error",
+                     *       "title": "Provider error",
+                     *       "status": 502,
+                     *       "detail": "Provider error",
+                     *       "instance": "https://api.platform.dakota.xyz/accounts/example-id",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service unavailable */
+            readonly 503: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#internal-error",
+                     *       "title": "Service unavailable",
+                     *       "status": 503,
+                     *       "detail": "Service unavailable",
                      *       "instance": "https://api.platform.dakota.xyz/accounts/example-id",
                      *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
                      *     }
@@ -9546,7 +10180,6 @@ export interface operations {
                      *           "GB",
                      *           "CA"
                      *         ],
-                     *         "screens_customers_for_sanctions": true,
                      *         "is_token_issuer": false,
                      *         "will_conduct_token_sale": false,
                      *         "token_sale_amount_usd": 1000000,
@@ -9690,7 +10323,6 @@ export interface operations {
                  *         "GB",
                  *         "CA"
                  *       ],
-                 *       "screens_customers_for_sanctions": true,
                  *       "is_token_issuer": false,
                  *       "will_conduct_token_sale": false,
                  *       "token_sale_amount_usd": 1000000,
@@ -9728,7 +10360,6 @@ export interface operations {
                      *           "GB",
                      *           "CA"
                      *         ],
-                     *         "screens_customers_for_sanctions": true,
                      *         "is_token_issuer": false,
                      *         "will_conduct_token_sale": false,
                      *         "token_sale_amount_usd": 1000000,
@@ -10117,7 +10748,10 @@ export interface operations {
     };
     readonly getApplication: {
         readonly parameters: {
-            readonly query?: never;
+            readonly query?: {
+                /** @description Comma-separated list of sections to include in the response (entities, validation, edd, attestations, all) */
+                readonly include?: string;
+            };
             readonly header?: never;
             readonly path: {
                 /** @description The unique identifier for the application */
@@ -10405,7 +11039,6 @@ export interface operations {
                      *           "GB",
                      *           "CA"
                      *         ],
-                     *         "screens_customers_for_sanctions": true,
                      *         "is_token_issuer": false,
                      *         "will_conduct_token_sale": false,
                      *         "token_sale_amount_usd": 1000000,
@@ -10510,9 +11143,8 @@ export interface operations {
                      *           "details": {
                      *             "ready": false,
                      *             "missing_fields": [
-                     *               "legal_structure",
-                     *               "date_of_incorporation",
-                     *               "business_description"
+                     *               "email_address",
+                     *               "date_of_birth"
                      *             ]
                      *           },
                      *           "documents": {
@@ -10526,11 +11158,12 @@ export interface operations {
                      *             ],
                      *             "missing_documents": [
                      *               {
-                     *                 "purpose": "business_formation",
+                     *                 "purpose": "individual_identity",
                      *                 "accepted_types": [
-                     *                   "articles_of_incorporation"
+                     *                   "passport",
+                     *                   "drivers_license_front"
                      *                 ],
-                     *                 "description": "Articles of Incorporation or equivalent formation document"
+                     *                 "description": "Government-issued photo ID"
                      *               }
                      *             ],
                      *             "ready": false
@@ -10544,9 +11177,8 @@ export interface operations {
                      *             "details": {
                      *               "ready": false,
                      *               "missing_fields": [
-                     *                 "legal_structure",
-                     *                 "date_of_incorporation",
-                     *                 "business_description"
+                     *                 "email_address",
+                     *                 "date_of_birth"
                      *               ]
                      *             },
                      *             "documents": {
@@ -10560,11 +11192,12 @@ export interface operations {
                      *               ],
                      *               "missing_documents": [
                      *                 {
-                     *                   "purpose": "business_formation",
+                     *                   "purpose": "individual_identity",
                      *                   "accepted_types": [
-                     *                     "articles_of_incorporation"
+                     *                     "passport",
+                     *                     "drivers_license_front"
                      *                   ],
-                     *                   "description": "Articles of Incorporation or equivalent formation document"
+                     *                   "description": "Government-issued photo ID"
                      *                 }
                      *               ],
                      *               "ready": false
@@ -11764,7 +12397,6 @@ export interface operations {
                      *           "GB",
                      *           "CA"
                      *         ],
-                     *         "screens_customers_for_sanctions": true,
                      *         "is_token_issuer": false,
                      *         "will_conduct_token_sale": false,
                      *         "token_sale_amount_usd": 1000000,
@@ -11869,9 +12501,8 @@ export interface operations {
                      *           "details": {
                      *             "ready": false,
                      *             "missing_fields": [
-                     *               "legal_structure",
-                     *               "date_of_incorporation",
-                     *               "business_description"
+                     *               "email_address",
+                     *               "date_of_birth"
                      *             ]
                      *           },
                      *           "documents": {
@@ -11885,11 +12516,12 @@ export interface operations {
                      *             ],
                      *             "missing_documents": [
                      *               {
-                     *                 "purpose": "business_formation",
+                     *                 "purpose": "individual_identity",
                      *                 "accepted_types": [
-                     *                   "articles_of_incorporation"
+                     *                   "passport",
+                     *                   "drivers_license_front"
                      *                 ],
-                     *                 "description": "Articles of Incorporation or equivalent formation document"
+                     *                 "description": "Government-issued photo ID"
                      *               }
                      *             ],
                      *             "ready": false
@@ -11903,9 +12535,8 @@ export interface operations {
                      *             "details": {
                      *               "ready": false,
                      *               "missing_fields": [
-                     *                 "legal_structure",
-                     *                 "date_of_incorporation",
-                     *                 "business_description"
+                     *                 "email_address",
+                     *                 "date_of_birth"
                      *               ]
                      *             },
                      *             "documents": {
@@ -11919,11 +12550,12 @@ export interface operations {
                      *               ],
                      *               "missing_documents": [
                      *                 {
-                     *                   "purpose": "business_formation",
+                     *                   "purpose": "individual_identity",
                      *                   "accepted_types": [
-                     *                     "articles_of_incorporation"
+                     *                     "passport",
+                     *                     "drivers_license_front"
                      *                   ],
-                     *                   "description": "Articles of Incorporation or equivalent formation document"
+                     *                   "description": "Government-issued photo ID"
                      *                 }
                      *               ],
                      *               "ready": false
@@ -16357,6 +16989,120 @@ export interface operations {
             };
         };
     };
+    readonly createApiKeyForClient: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header: {
+                /** @description Unique key to ensure request idempotency. If the same key is used within a certain time window, the original response will be returned instead of executing the request again. */
+                readonly "x-idempotency-key": components["parameters"]["IdempotencyKeyHeader"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                /**
+                 * @example {
+                 *       "client_id": "2iNhTbFZGo1bqoTTVOQKVgAfGHH"
+                 *     }
+                 */
+                readonly "application/json": components["schemas"]["CreateApiKeyForClientRequest"];
+            };
+        };
+        readonly responses: {
+            /** @description API key created successfully */
+            readonly 201: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "id": "2iNhTbFZGo1bqoTTVOQKVgAfGHH",
+                     *       "key": "dk_live_4KLkSmzQbL6Xs8xnUjssdGHX7PfhHpAb"
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["ApiKeyResponse"];
+                };
+            };
+            /** @description Invalid request */
+            readonly 400: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#invalid-request",
+                     *       "title": "Invalid request",
+                     *       "status": 400,
+                     *       "detail": "Invalid client_id format",
+                     *       "instance": "https://api.platform.dakota.xyz/api-keys/admin",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            readonly 401: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#unauthorized",
+                     *       "title": "Unauthorized",
+                     *       "status": 401,
+                     *       "detail": "Unauthorized",
+                     *       "instance": "https://api.platform.dakota.xyz/api-keys/admin",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden - admin access required */
+            readonly 403: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#forbidden",
+                     *       "title": "Forbidden",
+                     *       "status": 403,
+                     *       "detail": "This endpoint requires admin access token",
+                     *       "instance": "https://api.platform.dakota.xyz/api-keys/admin",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service unavailable - endpoint only available in sandbox environment */
+            readonly 503: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#service-unavailable",
+                     *       "title": "Service Unavailable",
+                     *       "status": 503,
+                     *       "detail": "This endpoint is only available in sandbox environment",
+                     *       "instance": "https://api.platform.dakota.xyz/api-keys/admin",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     readonly deleteApiKey: {
         readonly parameters: {
             readonly query?: never;
@@ -18611,6 +19357,371 @@ export interface operations {
                      */
                     readonly "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
+            };
+        };
+    };
+    readonly createSelfServeCreditsPurchase: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                /**
+                 * @example {
+                 *       "tier_price_cents": 10000
+                 *     }
+                 */
+                readonly "application/json": components["schemas"]["SelfServeCreditsPurchaseRequest"];
+            };
+        };
+        readonly responses: {
+            /** @description Stripe Checkout session created */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "checkout_url": "https://checkout.stripe.com/c/pay/cs_test_a1b2c3"
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["SelfServeCreditsPurchaseResponse"];
+                };
+            };
+            /** @description Invalid request */
+            readonly 400: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#invalid-request",
+                     *       "title": "Invalid Request",
+                     *       "status": 400,
+                     *       "detail": "tier_price_cents must be a valid credit tier"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            readonly 401: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#authentication-error",
+                     *       "title": "Authentication Required",
+                     *       "status": 401,
+                     *       "detail": "Missing or invalid authentication credentials."
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Credit management is only available for self-serve customers */
+            readonly 403: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#forbidden",
+                     *       "title": "Forbidden",
+                     *       "status": 403,
+                     *       "detail": "Credit management is only available for self-serve customers."
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Stripe checkout is not configured */
+            readonly 503: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#service-unavailable",
+                     *       "title": "Service Unavailable",
+                     *       "status": 503,
+                     *       "detail": "Stripe checkout is not configured"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unexpected error */
+            readonly default: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    readonly getSelfServeCreditsBalance: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Current credit balance */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "balance_cents": 45000,
+                     *       "transfer_capacity_cents": 9000000
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["SelfServeCreditsBalanceResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            readonly 401: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#authentication-error",
+                     *       "title": "Authentication Required",
+                     *       "status": 401,
+                     *       "detail": "Missing or invalid authentication credentials."
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Credit management is only available for self-serve customers */
+            readonly 403: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#forbidden",
+                     *       "title": "Forbidden",
+                     *       "status": 403,
+                     *       "detail": "Credit management is only available for self-serve customers."
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unexpected error */
+            readonly default: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    readonly listSelfServeCreditsLedger: {
+        readonly parameters: {
+            readonly query?: {
+                /** @description Return entries created before this timestamp. */
+                readonly cursor?: string;
+                /** @description Maximum number of entries to return. */
+                readonly limit?: number;
+                /** @description Optional ledger entry type filter. */
+                readonly type?: "purchase" | "deduction" | "refund";
+            };
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Paginated credit ledger entries */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "entries": [
+                     *         {
+                     *           "id": "2WCn7YQ2QqA4oQ7wYpQyQ1QZKp1",
+                     *           "entry_type": "purchase",
+                     *           "amount_cents": 10000,
+                     *           "balance_after_cents": 10000,
+                     *           "transaction_id": null,
+                     *           "description": "Purchased 10000 cents of credits",
+                     *           "created_at": "2026-03-19T10:15:00Z"
+                     *         },
+                     *         {
+                     *           "id": "2WCn7d4W2KzGdYJZmkQ8q2rKQm8",
+                     *           "entry_type": "deduction",
+                     *           "amount_cents": -250,
+                     *           "balance_after_cents": 9750,
+                     *           "transaction_id": "2WCn7kNcM6Yd3D2d4nY1Ld4Z1mV",
+                     *           "description": "Transfer fee for transaction 2WCn7kNcM6Yd3D2d4nY1Ld4Z1mV",
+                     *           "created_at": "2026-03-19T10:16:00Z"
+                     *         }
+                     *       ],
+                     *       "has_more": false
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["SelfServeCreditsLedgerResponse"];
+                };
+            };
+            /** @description Invalid request */
+            readonly 400: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#invalid-request",
+                     *       "title": "Invalid Request",
+                     *       "status": 400,
+                     *       "detail": "type must be one of purchase, deduction, refund"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            readonly 401: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#authentication-error",
+                     *       "title": "Authentication Required",
+                     *       "status": 401,
+                     *       "detail": "Missing or invalid authentication credentials."
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Credit management is only available for self-serve customers */
+            readonly 403: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#forbidden",
+                     *       "title": "Forbidden",
+                     *       "status": 403,
+                     *       "detail": "Credit management is only available for self-serve customers."
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unexpected error */
+            readonly default: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    readonly listSelfServeCreditTiers: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Available credit tiers */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "tiers": [
+                     *         {
+                     *           "price_cents": 5000,
+                     *           "transfer_capacity_cents": 1000000
+                     *         },
+                     *         {
+                     *           "price_cents": 10000,
+                     *           "transfer_capacity_cents": 2000000
+                     *         },
+                     *         {
+                     *           "price_cents": 25000,
+                     *           "transfer_capacity_cents": 5000000
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["SelfServeCreditTiersResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            readonly 401: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#authentication-error",
+                     *       "title": "Authentication Required",
+                     *       "status": 401,
+                     *       "detail": "Missing or invalid authentication credentials."
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Credit management is only available for self-serve customers */
+            readonly 403: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#forbidden",
+                     *       "title": "Forbidden",
+                     *       "status": 403,
+                     *       "detail": "Credit management is only available for self-serve customers."
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unexpected error */
+            readonly default: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
