@@ -113,7 +113,10 @@ export class SandboxResource extends BaseResource {
    * });
    * ```
    */
-  async simulateInbound(data: SimulateInboundRequest, options?: RequestOptions): Promise<SimulationResponse> {
+  async simulateInbound(
+    data: SimulateInboundRequest,
+    options?: RequestOptions
+  ): Promise<SimulationResponse> {
     return this.transport.request<SimulationResponse>({
       method: 'POST',
       path: '/sandbox/simulate/inbound',
@@ -163,7 +166,10 @@ export class SandboxResource extends BaseResource {
    * });
    * ```
    */
-  async simulateOnboarding(data: SimulateOnboardingRequest, options?: RequestOptions): Promise<SimulateOnboardingResponse> {
+  async simulateOnboarding(
+    data: SimulateOnboardingRequest,
+    options?: RequestOptions
+  ): Promise<SimulateOnboardingResponse> {
     return this.transport.request<SimulateOnboardingResponse>({
       method: 'POST',
       path: '/sandbox/simulate/onboarding',

@@ -107,7 +107,6 @@ describe('DakotaClient', () => {
       const client = new DakotaClient({ apiKey: 'test_key' });
       expect(client.events).toBeDefined();
       expect(typeof client.events.list).toBe('function');
-      expect(typeof client.events.get).toBe('function');
     });
 
     it('exposes applications resource', () => {
@@ -136,7 +135,8 @@ describe('DakotaClient', () => {
     it('exposes signers resource', () => {
       const client = new DakotaClient({ apiKey: 'test_key' });
       expect(client.signers).toBeDefined();
-      expect(typeof client.signers.list).toBe('function');
+      expect(typeof client.signers.create).toBe('function');
+      expect(typeof client.signers.delete).toBe('function');
     });
 
     it('exposes apiKeys resource', () => {
@@ -152,7 +152,6 @@ describe('DakotaClient', () => {
       expect(client.users).toBeDefined();
       expect(typeof client.users.create).toBe('function');
       expect(typeof client.users.list).toBe('function');
-      expect(typeof client.users.get).toBe('function');
       expect(typeof client.users.update).toBe('function');
     });
 

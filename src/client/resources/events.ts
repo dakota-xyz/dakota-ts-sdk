@@ -33,22 +33,4 @@ export class EventsResource extends BaseResource {
   list(params?: EventListParams): PaginatedIterator<Event> {
     return this.paginate<Event>('/events', params);
   }
-
-  /**
-   * Get an event by ID.
-   *
-   * @param eventId - Event ID
-   * @returns Event record
-   *
-   * @example
-   * ```typescript
-   * const event = await client.events.get(eventId);
-   * ```
-   */
-  async get(eventId: string): Promise<Event> {
-    return this.transport.request<Event>({
-      method: 'GET',
-      path: `/events/${eventId}`,
-    });
-  }
 }

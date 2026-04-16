@@ -4,7 +4,13 @@
 
 import { BaseResource } from './base.js';
 import { PaginatedIterator } from '../pagination.js';
-import type { Recipient, RecipientRequest, RecipientUpdateRequest, ListParams, RequestOptions } from '../types.js';
+import type {
+  Recipient,
+  RecipientRequest,
+  RecipientUpdateRequest,
+  ListParams,
+  RequestOptions,
+} from '../types.js';
 
 /**
  * Recipients API resource.
@@ -26,7 +32,11 @@ export class RecipientsResource extends BaseResource {
    * });
    * ```
    */
-  async create(customerId: string, data: RecipientRequest, options?: RequestOptions): Promise<Recipient> {
+  async create(
+    customerId: string,
+    data: RecipientRequest,
+    options?: RequestOptions
+  ): Promise<Recipient> {
     return this.transport.request<Recipient>({
       method: 'POST',
       path: `/customers/${customerId}/recipients`,
@@ -85,12 +95,33 @@ export class RecipientsResource extends BaseResource {
    * });
    * ```
    */
-  async update(recipientId: string, data: RecipientUpdateRequest, options?: RequestOptions): Promise<Recipient> {
+  async update(
+    recipientId: string,
+    data: RecipientUpdateRequest,
+    options?: RequestOptions
+  ): Promise<Recipient> {
     return this.transport.request<Recipient>({
       method: 'PUT',
       path: `/recipients/${recipientId}`,
       body: data,
       idempotencyKey: options?.idempotencyKey,
+    });
+  }
+
+  /**
+   * Delete a recipient.
+   *
+   * @param recipientId - Recipient ID
+   *
+   * @example
+   * ```typescript
+   * await client.recipients.delete(recipientId);
+   * ```
+   */
+  async delete(recipientId: string): Promise<void> {
+    await this.transport.request<void>({
+      method: 'DELETE',
+      path: `/recipients/${recipientId}`,
     });
   }
 }

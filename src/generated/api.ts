@@ -28,6 +28,26 @@ export type paths = {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/customers/{customer_id}/sub-client": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        /**
+         * Update sub-client association for a customer
+         * @description Associates or disassociates a customer with a sub-client. Set `sub_client_id` to associate, or set it to `null` to disassociate.
+         */
+        readonly patch: operations["updateCustomerSubClient"];
+        readonly trace?: never;
+    };
     readonly "/customers/{customer_id}": {
         readonly parameters: {
             readonly query?: never;
@@ -40,6 +60,26 @@ export type paths = {
          * @description Retrieves a single customer by `customer_id` for the authenticated client.
          */
         readonly get: operations["getCustomer"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/customers/sub-client-summary": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Get sub-client summary
+         * @description Returns a list of all sub-clients for the authenticated client, along with the count of customers associated with each.
+         */
+        readonly get: operations["getSubClientSummary"];
         readonly put?: never;
         readonly post?: never;
         readonly delete?: never;
@@ -2142,6 +2182,8 @@ export type components = {
              * @example external_customer_123
              */
             readonly external_id?: string;
+            /** @description ID of an existing customer to associate this new customer with as a sub-client. The referenced customer must belong to the same client. */
+            readonly sub_client_id?: components["schemas"]["KSUID"];
         };
         /** @description Response returned when a customer creation process is successfully initiated. */
         readonly CustomerCreateResponse: {
@@ -2215,6 +2257,18 @@ export type components = {
              * @example 1234567890
              */
             readonly deleted_at?: number;
+            /** @description ID of the sub-client this customer is associated with, if any. */
+            readonly sub_client_id?: components["schemas"]["KSUID"];
+            /**
+             * @description Name of the sub-client this customer is associated with, if any.
+             * @example Partner Corp
+             */
+            readonly sub_client_name?: string;
+            /**
+             * @description Whether this customer is acting as a sub-client (has other customers associated with it).
+             * @default false
+             */
+            readonly is_sub_client: boolean;
         };
         /**
          * @description Overall status of the KYB verification process (e.g., pending, active, restricted).
@@ -2222,6 +2276,28 @@ export type components = {
          * @enum {string}
          */
         readonly KybStatus: "active" | "pending" | "partner_review" | "rejected" | "frozen" | "auto_declined";
+        /** @description Request to update the sub-client association for a customer. Set sub_client_id to associate with a sub-client, or null to disassociate. */
+        readonly UpdateCustomerSubClientRequest: {
+            /**
+             * @description ID of the sub-client to associate with, or null to disassociate.
+             * @example 1NFHrqBHb3cTfLVkFSGmHZqdDPi
+             */
+            readonly sub_client_id?: string | null;
+        };
+        /** @description Summary of a sub-client including the count of customers associated with it. */
+        readonly SubClientSummary: {
+            readonly sub_client_id: components["schemas"]["KSUID"];
+            /**
+             * @description Name of the customer acting as a sub-client.
+             * @example Partner Corp
+             */
+            readonly sub_client_name: string;
+            /**
+             * @description Number of customers associated with this sub-client.
+             * @example 15
+             */
+            readonly customer_count: number;
+        };
         readonly ProviderKybStatus: {
             /**
              * @description ID of the verification provider or service used for a specific check.
@@ -2278,7 +2354,7 @@ export type components = {
          * @example persona
          * @enum {string}
          */
-        readonly KybLinkType: "persona" | "tos" | "sumsub";
+        readonly KybLinkType: "persona" | "tos";
         /**
          * KYB Link Status
          * @description Current status of the KYB verification link.
@@ -2312,11 +2388,11 @@ export type components = {
         readonly Family: "evm" | "solana";
         /**
          * Payment Capability
-         * @description Type of payment rail capability supported.
+         * @description Type of payment rail capability supported. For onramp accounts, `us_bank_account` indicates the account accepts both ACH and Wire (Fedwire) deposits interchangeably.
          * @example ach
          * @enum {string}
          */
-        readonly PaymentCapability: "ach" | "fedwire" | "swift" | "sepa";
+        readonly PaymentCapability: "ach" | "fedwire" | "swift" | "sepa" | "us_bank_account";
         /**
          * Transaction Status
          * @description Current status of a transaction.
@@ -3214,6 +3290,12 @@ export type components = {
              * @example Invoice payment for services
              */
             readonly payment_reference?: string;
+            /**
+             * Format: int32
+             * @description Developer fee in basis points (1 bp = 0.01%). Overrides the default client fee for this transaction.
+             * @example 50
+             */
+            readonly developer_fee_bps?: number;
         };
         /** @description A one-off transaction response. Used for single on/off-ramp transactions. */
         readonly OneOffTransaction: {
@@ -5408,6 +5490,10 @@ export interface operations {
                 readonly search?: string;
                 /** @description Filter customers by KYB status */
                 readonly kyb_status?: components["schemas"]["KybStatus"];
+                /** @description Filter customers by sub-client association. Returns only customers associated with the specified sub-client. */
+                readonly sub_client_id?: components["schemas"]["KSUID"];
+                /** @description When set to true, returns only customers that are acting as sub-clients (have other customers associated with them). */
+                readonly is_sub_client?: boolean;
             };
             readonly header?: never;
             readonly path?: never;
@@ -5656,6 +5742,85 @@ export interface operations {
             };
         };
     };
+    readonly updateCustomerSubClient: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                /** @description Unique identifier (ksuid) of the customer record */
+                readonly customer_id: components["schemas"]["KSUID"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                /**
+                 * @example {
+                 *       "sub_client_id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi"
+                 *     }
+                 */
+                readonly "application/json": components["schemas"]["UpdateCustomerSubClientRequest"];
+            };
+        };
+        readonly responses: {
+            /** @description Sub-client association updated successfully */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi",
+                     *       "name": "John Doe",
+                     *       "customer_type": "individual",
+                     *       "kyb_status": "pending",
+                     *       "is_sub_client": false,
+                     *       "sub_client_id": "2ABCrqBHb3cTfLVkFSGmHZqdXYZ",
+                     *       "sub_client_name": "Partner Corp",
+                     *       "created_at": 1700000000,
+                     *       "updated_at": 1700000000
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["Customer"];
+                };
+            };
+            /** @description Invalid request */
+            readonly 400: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "about:blank",
+                     *       "title": "Bad Request",
+                     *       "status": 400,
+                     *       "detail": "sub_client_id must reference a customer belonging to the same client"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Customer not found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "about:blank",
+                     *       "title": "Not Found",
+                     *       "status": 404,
+                     *       "detail": "Customer not found: 1NFHrqBHb3cTfLVkFSGmHZqdDPi"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     readonly getCustomer: {
         readonly parameters: {
             readonly query?: never;
@@ -5795,6 +5960,39 @@ export interface operations {
                     readonly [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    readonly getSubClientSummary: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Sub-client summary retrieved successfully */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "sub_client_id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi",
+                     *           "sub_client_name": "Partner Corp",
+                     *           "customer_count": 15
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    readonly "application/json": {
+                        readonly data: readonly components["schemas"]["SubClientSummary"][];
+                    };
+                };
             };
         };
     };

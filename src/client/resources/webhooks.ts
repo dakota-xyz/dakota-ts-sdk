@@ -9,6 +9,9 @@ import type {
   WebhookTargetCreateRequest,
   WebhookTargetUpdateRequest,
   WebhookEvent,
+  WebhookReplayResponse,
+  WebhookHistoryListParams,
+  WebhookHistoryResponse,
   ListParams,
   RequestOptions,
 } from '../types.js';
@@ -23,7 +26,10 @@ export class WebhooksResource extends BaseResource {
    * @param data - Webhook target creation data
    * @returns Created webhook target
    */
-  async createTarget(data: WebhookTargetCreateRequest, options?: RequestOptions): Promise<WebhookTarget> {
+  async createTarget(
+    data: WebhookTargetCreateRequest,
+    options?: RequestOptions
+  ): Promise<WebhookTarget> {
     return this.transport.request<WebhookTarget>({
       method: 'POST',
       path: '/webhooks/targets',
@@ -62,7 +68,11 @@ export class WebhooksResource extends BaseResource {
    * @param data - Update data
    * @returns Updated webhook target
    */
-  async updateTarget(targetId: string, data: WebhookTargetUpdateRequest, options?: RequestOptions): Promise<WebhookTarget> {
+  async updateTarget(
+    targetId: string,
+    data: WebhookTargetUpdateRequest,
+    options?: RequestOptions
+  ): Promise<WebhookTarget> {
     return this.transport.request<WebhookTarget>({
       method: 'PATCH',
       path: `/webhooks/targets/${targetId}`,
@@ -84,13 +94,42 @@ export class WebhooksResource extends BaseResource {
   }
 
   /**
-   * List webhook events.
+   * List webhook delivery history.
    *
-   * @param params - Pagination parameters
-   * @returns Async iterator of webhook events
+   * Note: This endpoint uses cursor-based pagination (`cursor`/`has_more`) instead
+   * of the standard `starting_after`/`has_more_after` format. Because of this,
+   * it returns the raw response rather than a `PaginatedIterator`. Use the `cursor`
+   * field from the response to fetch subsequent pages.
+   *
+   * @param params - Webhook history query parameters
+   * @returns Webhook history response with `data`, `has_more`, and `cursor`
+   *
+   * @example
+   * ```typescript
+   * let cursor: string | undefined;
+   * do {
+   *   const page = await client.webhooks.listEvents({ limit: 50, cursor });
+   *   for (const event of page.data) {
+   *     console.log(event);
+   *   }
+   *   cursor = page.cursor ?? undefined;
+   * } while (page.has_more);
+   * ```
    */
-  listEvents(params?: ListParams): PaginatedIterator<WebhookEvent> {
-    return this.paginate<WebhookEvent>('/webhooks', params);
+  async listEvents(params?: WebhookHistoryListParams): Promise<WebhookHistoryResponse> {
+    const query: Record<string, string | number | boolean | undefined> = {};
+    if (params) {
+      for (const [key, value] of Object.entries(params)) {
+        if (value !== undefined) {
+          query[key] = value as string | number | boolean;
+        }
+      }
+    }
+    return this.transport.request<WebhookHistoryResponse>({
+      method: 'GET',
+      path: '/webhooks',
+      query,
+    });
   }
 
   /**
@@ -109,10 +148,14 @@ export class WebhooksResource extends BaseResource {
   /**
    * Replay a webhook event.
    *
+   * Re-queues the webhook for delivery to all configured targets.
+   *
    * @param eventId - Webhook event ID
+   * @param options - Request options
+   * @returns Replay response with `webhook_id`, `status`, and `replayed_to_count`
    */
-  async replayEvent(eventId: string, options?: RequestOptions): Promise<void> {
-    await this.transport.request<void>({
+  async replayEvent(eventId: string, options?: RequestOptions): Promise<WebhookReplayResponse> {
+    return this.transport.request<WebhookReplayResponse>({
       method: 'POST',
       path: `/webhooks/events/${eventId}/replay`,
       idempotencyKey: options?.idempotencyKey,

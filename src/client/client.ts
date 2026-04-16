@@ -22,6 +22,7 @@ import {
   WebhooksResource,
   InfoResource,
   SandboxResource,
+  SelfServeResource,
 } from './resources/index.js';
 
 /**
@@ -89,6 +90,8 @@ export class DakotaClient {
   readonly info: InfoResource;
   /** Sandbox API - testing simulations (sandbox only) */
   readonly sandbox: SandboxResource;
+  /** Self-Serve Credits API - manage prepaid transfer credits */
+  readonly selfServe: SelfServeResource;
 
   /**
    * Create a new Dakota client.
@@ -144,6 +147,7 @@ export class DakotaClient {
     this.webhooks = new WebhooksResource(this.transport);
     this.info = new InfoResource(this.transport);
     this.sandbox = new SandboxResource(this.transport);
+    this.selfServe = new SelfServeResource(this.transport);
   }
 
   /**

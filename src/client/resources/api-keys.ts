@@ -4,7 +4,14 @@
 
 import { BaseResource } from './base.js';
 import { PaginatedIterator } from '../pagination.js';
-import type { ApiKey, ApiKeyCreateRequest, ListParams, RequestOptions } from '../types.js';
+import type {
+  ApiKey,
+  ApiKeyResponse,
+  ApiKeyCreateRequest,
+  CreateApiKeyForClientRequest,
+  ListParams,
+  RequestOptions,
+} from '../types.js';
 
 /**
  * API Keys API resource.
@@ -16,8 +23,8 @@ export class ApiKeysResource extends BaseResource {
    * @param data - API key creation data
    * @returns Created API key (includes secret, only shown once)
    */
-  async create(data: ApiKeyCreateRequest, options?: RequestOptions): Promise<ApiKey & { secret: string }> {
-    return this.transport.request<ApiKey & { secret: string }>({
+  async create(data: ApiKeyCreateRequest, options?: RequestOptions): Promise<ApiKeyResponse> {
+    return this.transport.request<ApiKeyResponse>({
       method: 'POST',
       path: '/api-keys',
       body: data,
@@ -44,6 +51,39 @@ export class ApiKeysResource extends BaseResource {
     await this.transport.request<void>({
       method: 'DELETE',
       path: `/api-keys/${apiKeyId}`,
+    });
+  }
+
+  /**
+   * Delete all API keys.
+   *
+   * Intended for incident response only.
+   */
+  async deleteAll(): Promise<void> {
+    await this.transport.request<void>({
+      method: 'DELETE',
+      path: '/api-keys',
+    });
+  }
+
+  /**
+   * Create an API key for a specific client (admin only).
+   *
+   * Requires admin access token.
+   *
+   * @param data - Request data containing `client_id`
+   * @param options - Request options
+   * @returns Created API key response (includes key, only shown once)
+   */
+  async createForClient(
+    data: CreateApiKeyForClientRequest,
+    options?: RequestOptions
+  ): Promise<ApiKeyResponse> {
+    return this.transport.request<ApiKeyResponse>({
+      method: 'POST',
+      path: '/api-keys/admin',
+      body: data,
+      idempotencyKey: options?.idempotencyKey,
     });
   }
 }

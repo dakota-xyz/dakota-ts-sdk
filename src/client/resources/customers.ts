@@ -10,6 +10,8 @@ import type {
   CustomerCreateResponse,
   CustomerListParams,
   RequestOptions,
+  SubClientSummary,
+  UpdateCustomerSubClientRequest,
 } from '../types.js';
 
 /**
@@ -42,7 +44,10 @@ export class CustomersResource extends BaseResource {
    * console.log(customer.applicationUrl); // KYB onboarding URL
    * ```
    */
-  async create(data: CustomerCreateRequest, options?: RequestOptions): Promise<CustomerCreateResponse> {
+  async create(
+    data: CustomerCreateRequest,
+    options?: RequestOptions
+  ): Promise<CustomerCreateResponse> {
     return this.transport.request<CustomerCreateResponse>({
       method: 'POST',
       path: '/customers',
@@ -94,5 +99,63 @@ export class CustomersResource extends BaseResource {
       method: 'GET',
       path: `/customers/${customerId}`,
     });
+  }
+
+  /**
+   * Update the sub-client association for a customer.
+   *
+   * Associates or disassociates a customer with a sub-client.
+   * Set `sub_client_id` to associate, or set it to `null` to disassociate.
+   *
+   * @param customerId - Customer ID (KSUID)
+   * @param data - Sub-client association data
+   * @param options - Request options (e.g., custom idempotency key)
+   * @returns Updated customer record
+   *
+   * @example
+   * ```typescript
+   * // Associate customer with a sub-client
+   * const customer = await client.customers.updateSubClient('cust_abc123', {
+   *   sub_client_id: 'cust_sub456',
+   * });
+   *
+   * // Disassociate customer from sub-client
+   * const customer = await client.customers.updateSubClient('cust_abc123', {
+   *   sub_client_id: null,
+   * });
+   * ```
+   */
+  async updateSubClient(
+    customerId: string,
+    data: UpdateCustomerSubClientRequest,
+    options?: RequestOptions
+  ): Promise<Customer> {
+    return this.transport.request<Customer>({
+      method: 'PATCH',
+      path: `/customers/${customerId}/sub-client`,
+      body: data,
+      idempotencyKey: options?.idempotencyKey,
+    });
+  }
+
+  /**
+   * Get a summary of all sub-clients and their associated customer counts.
+   *
+   * @returns Array of sub-client summaries
+   *
+   * @example
+   * ```typescript
+   * const summaries = await client.customers.getSubClientSummary();
+   * for (const summary of summaries) {
+   *   console.log(`${summary.sub_client_name}: ${summary.customer_count} customers`);
+   * }
+   * ```
+   */
+  async getSubClientSummary(): Promise<SubClientSummary[]> {
+    const response = await this.transport.request<{ data: SubClientSummary[] }>({
+      method: 'GET',
+      path: '/customers/sub-client-summary',
+    });
+    return response.data;
   }
 }

@@ -62,7 +62,11 @@ export class SignerGroupsResource extends BaseResource {
    * @param data - Signer creation data
    * @returns Created signer
    */
-  async addSigner(signerGroupId: string, data: SignerCreateRequest, options?: RequestOptions): Promise<Signer> {
+  async addSigner(
+    signerGroupId: string,
+    data: SignerCreateRequest,
+    options?: RequestOptions
+  ): Promise<Signer> {
     return this.transport.request<Signer>({
       method: 'POST',
       path: `/signer-groups/${signerGroupId}/signers`,
@@ -90,7 +94,11 @@ export class SignerGroupsResource extends BaseResource {
    * @param walletId - Wallet ID
    * @param signerGroupId - Signer group ID
    */
-  async attachToWallet(walletId: string, signerGroupId: string, options?: RequestOptions): Promise<void> {
+  async attachToWallet(
+    walletId: string,
+    signerGroupId: string,
+    options?: RequestOptions
+  ): Promise<void> {
     await this.transport.request<void>({
       method: 'PUT',
       path: `/wallets/${walletId}/signer-groups/${signerGroupId}`,
@@ -110,6 +118,17 @@ export class SignerGroupsResource extends BaseResource {
       path: `/wallets/${walletId}/signer-groups/${signerGroupId}`,
     });
   }
+
+  /**
+   * List signer groups attached to a wallet.
+   *
+   * @param walletId - Wallet ID
+   * @param params - Pagination parameters
+   * @returns Async iterator of signer groups
+   */
+  listForWallet(walletId: string, params?: ListParams): PaginatedIterator<SignerGroup> {
+    return this.paginate<SignerGroup>(`/wallets/${walletId}/signer-groups`, params);
+  }
 }
 
 /**
@@ -117,25 +136,18 @@ export class SignerGroupsResource extends BaseResource {
  */
 export class SignersResource extends BaseResource {
   /**
-   * List all signers.
+   * Create a new signer.
    *
-   * @param params - Pagination parameters
-   * @returns Async iterator of signers
+   * @param data - Signer creation data (name, public_key, key_type)
+   * @param options - Request options
+   * @returns Created signer
    */
-  list(params?: ListParams): PaginatedIterator<Signer> {
-    return this.paginate<Signer>('/signers', params);
-  }
-
-  /**
-   * Get a signer by public key.
-   *
-   * @param publicKey - Signer public key
-   * @returns Signer record
-   */
-  async getByPublicKey(publicKey: string): Promise<Signer> {
+  async create(data: SignerCreateRequest, options?: RequestOptions): Promise<Signer> {
     return this.transport.request<Signer>({
-      method: 'GET',
-      path: `/signers/${publicKey}`,
+      method: 'POST',
+      path: '/signers',
+      body: data,
+      idempotencyKey: options?.idempotencyKey,
     });
   }
 
