@@ -4,12 +4,24 @@
 
 import { BaseResource } from './base.js';
 import { PaginatedIterator } from '../pagination.js';
-import type { Account, AccountCreateRequest, AccountUpdateRequest, ListParams, RequestOptions } from '../types.js';
+import type {
+  Account,
+  AccountCreateRequest,
+  AccountUpdateRequest,
+  ListParams,
+  RequestOptions,
+} from '../types.js';
 
 /** Account list parameters */
 export interface AccountListParams extends ListParams {
+  /** Account type filter. Required by the API. */
+  account_type: 'onramp' | 'offramp' | 'swap';
   customer_id?: string;
-  account_type?: 'onramp' | 'offramp' | 'swap';
+  source_network_id?: string;
+  destination_network_id?: string;
+  destination_asset?: string;
+  crypto_destination_id?: string;
+  fiat_destination_id?: string;
 }
 
 /**
@@ -116,12 +128,33 @@ export class AccountsResource extends BaseResource {
    * });
    * ```
    */
-  async update(accountId: string, data: AccountUpdateRequest, options?: RequestOptions): Promise<Account> {
+  async update(
+    accountId: string,
+    data: AccountUpdateRequest,
+    options?: RequestOptions
+  ): Promise<Account> {
     return this.transport.request<Account>({
       method: 'PATCH',
       path: `/accounts/${accountId}`,
       body: data,
       idempotencyKey: options?.idempotencyKey,
+    });
+  }
+
+  /**
+   * Delete an account.
+   *
+   * @param accountId - Account ID
+   *
+   * @example
+   * ```typescript
+   * await client.accounts.delete(accountId);
+   * ```
+   */
+  async delete(accountId: string): Promise<void> {
+    await this.transport.request<void>({
+      method: 'DELETE',
+      path: `/accounts/${accountId}`,
     });
   }
 }

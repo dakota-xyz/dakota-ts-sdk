@@ -39,7 +39,11 @@ export class DestinationsResource extends BaseResource {
    * });
    * ```
    */
-  async create(recipientId: string, data: DestinationRequest, options?: RequestOptions): Promise<Destination> {
+  async create(
+    recipientId: string,
+    data: DestinationRequest,
+    options?: RequestOptions
+  ): Promise<Destination> {
     return this.transport.request<Destination>({
       method: 'POST',
       path: `/recipients/${recipientId}/destinations`,
@@ -68,5 +72,23 @@ export class DestinationsResource extends BaseResource {
       params,
       (item) => item.destination_id
     );
+  }
+
+  /**
+   * Delete a destination.
+   *
+   * @param recipientId - Recipient ID
+   * @param destinationId - Destination ID
+   *
+   * @example
+   * ```typescript
+   * await client.destinations.delete(recipientId, destinationId);
+   * ```
+   */
+  async delete(recipientId: string, destinationId: string): Promise<void> {
+    await this.transport.request<void>({
+      method: 'DELETE',
+      path: `/recipients/${recipientId}/destinations/${destinationId}`,
+    });
   }
 }

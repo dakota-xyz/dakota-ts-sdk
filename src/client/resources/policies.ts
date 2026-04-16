@@ -74,7 +74,11 @@ export class PoliciesResource extends BaseResource {
    * @param data - Rule creation data
    * @returns Created rule
    */
-  async addRule(policyId: string, data: PolicyRuleCreateRequest, options?: RequestOptions): Promise<PolicyRule> {
+  async addRule(
+    policyId: string,
+    data: PolicyRuleCreateRequest,
+    options?: RequestOptions
+  ): Promise<PolicyRule> {
     return this.transport.request<PolicyRule>({
       method: 'POST',
       path: `/policies/${policyId}/rules`,
@@ -124,7 +128,11 @@ export class PoliciesResource extends BaseResource {
    * @param policyId - Policy ID
    * @param walletId - Wallet ID
    */
-  async attachToWallet(policyId: string, walletId: string, options?: RequestOptions): Promise<void> {
+  async attachToWallet(
+    policyId: string,
+    walletId: string,
+    options?: RequestOptions
+  ): Promise<void> {
     await this.transport.request<void>({
       method: 'PUT',
       path: `/policies/${policyId}/wallets/${walletId}`,

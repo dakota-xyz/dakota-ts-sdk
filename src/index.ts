@@ -74,5 +74,6 @@ export {
   WebhooksResource,
   InfoResource,
   SandboxResource,
+  SelfServeResource,
   type AccountListParams,
 } from './client/resources/index.js';

@@ -49,7 +49,10 @@ export class TransactionsResource extends BaseResource {
    * console.log(tx.status); // Transaction status
    * ```
    */
-  async create(data: OneOffTransactionRequest, options?: RequestOptions): Promise<OneOffTransaction> {
+  async create(
+    data: OneOffTransactionRequest,
+    options?: RequestOptions
+  ): Promise<OneOffTransaction> {
     return this.transport.request<OneOffTransaction>({
       method: 'POST',
       path: '/transactions',

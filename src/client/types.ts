@@ -49,6 +49,13 @@ export type CustomerCreateResponse = components['schemas']['CustomerCreateRespon
 /** KYB status */
 export type KybStatus = Customer['kyb_status'];
 
+/** Request to update the sub-client association for a customer */
+export type UpdateCustomerSubClientRequest =
+  components['schemas']['UpdateCustomerSubClientRequest'];
+
+/** Summary of a sub-client including the count of associated customers */
+export type SubClientSummary = components['schemas']['SubClientSummary'];
+
 // ============================================================================
 // Recipient Types
 // ============================================================================
@@ -240,6 +247,55 @@ export type AssociatedIndividualRequest = components['schemas']['IndividualReque
  */
 export type ApplicationSubmissionRequest = Record<string, unknown>;
 
+/** Response after updating business details */
+export type BusinessDetailsResponse = components['schemas']['BusinessDetailsResponse'];
+
+/** Response after updating individual details */
+export type IndividualDetailsResponse = components['schemas']['IndividualDetailsResponse'];
+
+/** Attestation submission request */
+export type AttestationSubmitRequest = components['schemas']['AttestationSubmitRequest'];
+
+/** Attestation type */
+export type AttestationType = components['schemas']['AttestationType'];
+
+/** EDD (Enhanced Due Diligence) request */
+export type EDDRequest = components['schemas']['EDDRequest'];
+
+/** EDD response with application context */
+export type EDDWithApplicationID = components['schemas']['EDDWithApplicationID'];
+
+/** Application document upload request (base64-encoded content) */
+export type ApplicationDocumentUploadRequest =
+  components['schemas']['ApplicationDocumentUploadRequest'];
+
+/** Application document upload URL request (presigned URL) */
+export type ApplicationDocumentUploadUrlRequest =
+  components['schemas']['ApplicationDocumentUploadUrlRequest'];
+
+/** Document upload response (contains document_id) */
+export type DocumentUploadResponse = components['schemas']['DocumentUploadResponse'];
+
+/** Document upload URL response (contains upload_url and upload_id) */
+export type DocumentUploadUrlResponse = components['schemas']['DocumentUploadUrlResponse'];
+
+/** Uploaded document metadata (used in list responses) */
+export type UploadedDocumentMetadata = components['schemas']['UploadedDocumentMetadata'];
+
+/** Individual document upload request (base64-encoded content) */
+export type IndividualDocumentUploadRequest =
+  components['schemas']['IndividualDocumentUploadRequest'];
+
+/** Individual document upload URL request (presigned URL) */
+export type IndividualDocumentUploadUrlRequest =
+  components['schemas']['IndividualDocumentUploadUrlRequest'];
+
+/** Application document type */
+export type ApplicationDocumentType = components['schemas']['ApplicationDocumentType'];
+
+/** Individual document type */
+export type IndividualDocumentType = components['schemas']['IndividualDocumentType'];
+
 // ============================================================================
 // Policy Types
 // ============================================================================
@@ -313,6 +369,49 @@ export type WebhookTargetUpdateRequest = components['schemas']['WebhookTargetUpd
 
 /** Webhook event */
 export type WebhookEvent = components['schemas']['WebhookDelivery'];
+
+/** Webhook history list response (cursor-based pagination) */
+export type WebhookHistoryList = components['schemas']['WebhookHistoryList'];
+
+/** Webhook replay response */
+export type WebhookReplayResponse = components['schemas']['WebhookReplayResponse'];
+
+/** API key creation request for a specific client (admin only) */
+export type CreateApiKeyForClientRequest = components['schemas']['CreateApiKeyForClientRequest'];
+
+/**
+ * Webhook history list parameters.
+ *
+ * Uses cursor-based pagination (not starting_after/has_more_after).
+ */
+export interface WebhookHistoryListParams {
+  /** Filter by delivery status */
+  status?: 'delivered' | 'failed' | 'pending';
+  /** Filter by event type (e.g. `transaction.completed`) */
+  event_type?: string;
+  /** Filter to deliveries that originated from a sandbox simulation */
+  simulation_id?: string;
+  /** Return only records created at or after this timestamp (ISO 8601) */
+  from?: string;
+  /** Return only records created at or before this timestamp (ISO 8601) */
+  to?: string;
+  /** Maximum number of records to return per page (1-100, default 20) */
+  limit?: number;
+  /** Pagination cursor (event_id of the last item from the previous page) */
+  cursor?: string;
+}
+
+/**
+ * Webhook history response.
+ *
+ * Uses cursor-based pagination with `has_more` and `cursor` instead of the
+ * standard `meta.has_more_after` format.
+ */
+export interface WebhookHistoryResponse {
+  data: WebhookEvent[];
+  has_more: boolean;
+  cursor?: string | null;
+}
 
 // ============================================================================
 // Info Types
@@ -482,10 +581,11 @@ export interface SimulateOnboardingResponse {
 /**
  * Onboarding simulation types.
  *
- * - `kyb_approve` - Approve a KYB application
+ * - `kyb_approve` - Fully approve any customer (individual or business). Triggers the complete
+ *   onboarding flow including endorsement and recipient creation.
  * - `kyb_reject` - Reject a KYB application
  * - `kyb_info_request` - Request additional information for KYB
- * - `kyc_approve` - Approve a KYC check
+ * - `kyc_approve` - Approve an individual applicant's KYC application status only (no endorsement/recipient)
  * - `kyc_reject` - Reject a KYC check
  * - `kyc_info_request` - Request additional information for KYC
  * - `applicant_activate` - Activate an applicant (triggers provisioning)
@@ -663,6 +763,48 @@ export interface SimulationInspection {
 export type SandboxScenario = components['schemas']['SandboxScenario'];
 
 // ============================================================================
+// Self-Serve Credits Types
+// ============================================================================
+
+/** Self-serve credits purchase request */
+export type SelfServeCreditsPurchaseRequest =
+  components['schemas']['SelfServeCreditsPurchaseRequest'];
+
+/** Self-serve credits purchase response (contains checkout URL) */
+export type SelfServeCreditsPurchaseResponse =
+  components['schemas']['SelfServeCreditsPurchaseResponse'];
+
+/** Self-serve credits balance response */
+export type SelfServeCreditsBalanceResponse =
+  components['schemas']['SelfServeCreditsBalanceResponse'];
+
+/** Self-serve credits ledger entry */
+export type SelfServeCreditsLedgerEntry = components['schemas']['SelfServeCreditsLedgerEntry'];
+
+/** Self-serve credits ledger response */
+export type SelfServeCreditsLedgerResponse =
+  components['schemas']['SelfServeCreditsLedgerResponse'];
+
+/** Self-serve credit tier */
+export type SelfServeCreditTier = components['schemas']['SelfServeCreditTier'];
+
+/** Self-serve credit tiers response */
+export type SelfServeCreditTiersResponse = components['schemas']['SelfServeCreditTiersResponse'];
+
+/** Ledger entry type filter */
+export type SelfServeCreditsLedgerEntryType = SelfServeCreditsLedgerEntry['entry_type'];
+
+/** Parameters for listing self-serve credits ledger entries */
+export interface SelfServeCreditsLedgerParams {
+  /** Cursor for pagination (ISO 8601 datetime) */
+  cursor?: string;
+  /** Number of entries to return (1-100, default 20) */
+  limit?: number;
+  /** Filter by entry type */
+  type?: SelfServeCreditsLedgerEntryType;
+}
+
+// ============================================================================
 // Request Options
 // ============================================================================
 
@@ -715,13 +857,20 @@ export interface CustomerListParams extends ListParams {
   external_id?: string;
   search?: string;
   kyb_status?: KybStatus;
+  sub_client_id?: string;
+  is_sub_client?: boolean;
 }
 
 /** Transaction list parameters */
 export interface TransactionListParams extends ListParams {
+  /** Filter by resource family: one_off, wallet, auto_account */
+  transaction_type?: 'one_off' | 'wallet' | 'auto_account';
   customer_id?: string;
-  account_id?: string;
+  destination_id?: string;
   status?: TransactionStatus;
+  source_network_id?: string;
+  source_asset?: string;
+  destination_asset?: string;
 }
 
 /** Event list parameters */

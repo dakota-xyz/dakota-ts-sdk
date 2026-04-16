@@ -18,3 +18,4 @@ export { UsersResource } from './users.js';
 export { WebhooksResource } from './webhooks.js';
 export { InfoResource } from './info.js';
 export { SandboxResource } from './sandbox.js';
+export { SelfServeResource } from './self-serve.js';

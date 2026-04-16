@@ -68,12 +68,13 @@ client.{resource}.delete(id)           // Deletes item (not all resources)
 ```
 
 **Resources WITHOUT update():** policies, signerGroups, destinations, apiKeys, autoTransactions, signers
-**Resources WITHOUT delete():** customers, recipients, destinations, accounts, transactions, autoTransactions
+**Resources WITHOUT delete():** customers, transactions, autoTransactions
 **Read-only resources:** autoTransactions (list + get only), info (getCountries + getNetworks only)
 
 ### Additional Resources
 - `client.autoTransactions` - List and get automated transactions (created from accounts)
-- `client.signers` - Manage individual signers (list, getByPublicKey, delete)
+- `client.signers` - Manage individual signers (create, delete)
+- `client.selfServe` - Self-serve credits (purchaseCredits, getBalance, listLedger, listTiers)
 
 ### For Environment Questions
 - Default: Sandbox (`https://api.platform.sandbox.dakota.xyz`)

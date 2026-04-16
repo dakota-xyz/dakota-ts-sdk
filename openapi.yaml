@@ -243,6 +243,18 @@ paths:
           required: false
           schema:
             $ref: '#/components/schemas/KybStatus'
+        - name: sub_client_id
+          in: query
+          description: Filter customers by sub-client association. Returns only customers associated with the specified sub-client.
+          required: false
+          schema:
+            $ref: '#/components/schemas/KSUID'
+        - name: is_sub_client
+          in: query
+          description: When set to true, returns only customers that are acting as sub-clients (have other customers associated with them).
+          required: false
+          schema:
+            type: boolean
       responses:
         '200':
           description: List of all customer records
@@ -335,6 +347,67 @@ paths:
       externalDocs:
         description: Read full guide in docs
         url: https://docs.dakota.xyz/api-reference/customers/list-all-customer-records
+  /customers/{customer_id}/sub-client:
+    patch:
+      tags:
+        - Customers
+      summary: Update sub-client association for a customer
+      description: Associates or disassociates a customer with a sub-client. Set `sub_client_id` to associate, or set it to `null` to disassociate.
+      operationId: updateCustomerSubClient
+      parameters:
+        - name: customer_id
+          in: path
+          required: true
+          description: Unique identifier (ksuid) of the customer record
+          schema:
+            $ref: '#/components/schemas/KSUID'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateCustomerSubClientRequest'
+            example:
+              sub_client_id: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
+      responses:
+        '200':
+          description: Sub-client association updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Customer'
+              example:
+                id: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
+                name: John Doe
+                customer_type: individual
+                kyb_status: pending
+                is_sub_client: false
+                sub_client_id: 2ABCrqBHb3cTfLVkFSGmHZqdXYZ
+                sub_client_name: Partner Corp
+                created_at: 1700000000
+                updated_at: 1700000000
+        '400':
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: about:blank
+                title: Bad Request
+                status: 400
+                detail: sub_client_id must reference a customer belonging to the same client
+        '404':
+          description: Customer not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: about:blank
+                title: Not Found
+                status: 404
+                detail: 'Customer not found: 1NFHrqBHb3cTfLVkFSGmHZqdDPi'
   /customers/{customer_id}:
     get:
       tags:
@@ -439,6 +512,32 @@ paths:
       externalDocs:
         description: Read full guide in docs
         url: https://docs.dakota.xyz/api-reference/customers/retrieve-a-customer-record-by-id
+  /customers/sub-client-summary:
+    get:
+      tags:
+        - Customers
+      summary: Get sub-client summary
+      description: Returns a list of all sub-clients for the authenticated client, along with the count of customers associated with each.
+      operationId: getSubClientSummary
+      responses:
+        '200':
+          description: Sub-client summary retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SubClientSummary'
+              example:
+                data:
+                  - sub_client_id: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
+                    sub_client_name: Partner Corp
+                    customer_count: 15
   /wallets:
     post:
       tags:
@@ -719,15 +818,16 @@ paths:
                 $ref: '#/components/schemas/WalletTransaction'
               example:
                 id: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
+                resource_type: wallet
                 wallet_id: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
                 network_id: ethereum-mainnet
-                from: string
-                to: string
+                from: '0x1234567890abcdef1234567890abcdef12345678'
+                to: '0xabcdef1234567890abcdef1234567890abcdef12'
                 transaction_hash: '0x165cd37b4c644c2921454429e7f9358d18a45e14'
                 transaction_type: transfer
                 amount: '100.56'
                 asset: USD
-                status: timed_out
+                status: completed
         '400':
           description: Bad request - invalid input data
           content:
@@ -871,6 +971,7 @@ paths:
                 $ref: '#/components/schemas/OneOffTransaction'
               example:
                 id: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
+                resource_type: one_off
                 customer_id: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
                 crypto_address: '0x1234567890abcdef1234567890abcdef12345678'
                 send_amount: '1.24'
@@ -880,7 +981,6 @@ paths:
                 source_asset: USDC
                 destination_id: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
                 destination_asset: USD
-                failure_reason: string
                 receipt:
                   imad: string
                   omad: string
@@ -1079,6 +1179,7 @@ paths:
               example:
                 data:
                   - id: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
+                    resource_type: one_off
                     customer_id: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
                     crypto_address: '0x1234567890abcdef1234567890abcdef12345678'
                     send_amount: '1.24'
@@ -1088,7 +1189,6 @@ paths:
                     source_asset: USDC
                     destination_id: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
                     destination_asset: USD
-                    failure_reason: string
                     receipt:
                       imad: string
                       omad: string
@@ -1239,6 +1339,7 @@ paths:
                 $ref: '#/components/schemas/TransactionResource'
               example:
                 id: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
+                resource_type: one_off
                 customer_id: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
                 crypto_address: '0x1234567890abcdef1234567890abcdef12345678'
                 send_amount: '1.24'
@@ -1248,7 +1349,6 @@ paths:
                 source_asset: USDC
                 destination_id: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
                 destination_asset: USD
-                failure_reason: string
                 receipt:
                   imad: string
                   omad: string
@@ -1646,6 +1746,166 @@ paths:
       externalDocs:
         description: Read full guide in docs
         url: https://docs.dakota.xyz/api-reference/recipients/get-a-specific-recipient
+    delete:
+      tags:
+        - Recipients
+      summary: Delete a recipient
+      description: Soft-deletes a recipient and all of its destinations. Blocked if the recipient has any active auto accounts or non-terminal one-off transactions.
+      operationId: deleteRecipient
+      responses:
+        '204':
+          description: Recipient deleted successfully.
+        '400':
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#invalid-request
+                title: Invalid request
+                status: 400
+                detail: Invalid request
+                instance: https://api.platform.dakota.xyz/recipients/example-id
+                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#authentication-error
+                title: Unauthorized
+                status: 401
+                detail: Unauthorized
+                instance: https://api.platform.dakota.xyz/recipients/example-id
+                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#forbidden
+                title: Forbidden
+                status: 403
+                detail: Forbidden
+                instance: https://api.platform.dakota.xyz/recipients/example-id
+                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+        '404':
+          description: Not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#not-found
+                title: Not found
+                status: 404
+                detail: Not found
+                instance: https://api.platform.dakota.xyz/recipients/example-id
+                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#conflict
+                title: Conflict
+                status: 409
+                detail: Recipient has active accounts or pending transactions
+                instance: https://api.platform.dakota.xyz/recipients/example-id
+                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+  /recipients/{recipient_id}/destinations/{destination_id}:
+    parameters:
+      - name: recipient_id
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/KSUID'
+      - name: destination_id
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/KSUID'
+    delete:
+      tags:
+        - Recipients
+      summary: Delete a destination
+      description: Soft-deletes a destination. Blocked if the destination has any active auto accounts or non-terminal one-off transactions.
+      operationId: deleteDestination
+      responses:
+        '204':
+          description: Destination deleted successfully.
+        '400':
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#invalid-request
+                title: Invalid request
+                status: 400
+                detail: Invalid request
+                instance: https://api.platform.dakota.xyz/recipients/example-id/destinations/example-id
+                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#authentication-error
+                title: Unauthorized
+                status: 401
+                detail: Unauthorized
+                instance: https://api.platform.dakota.xyz/recipients/example-id/destinations/example-id
+                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#forbidden
+                title: Forbidden
+                status: 403
+                detail: Forbidden
+                instance: https://api.platform.dakota.xyz/recipients/example-id/destinations/example-id
+                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+        '404':
+          description: Not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#not-found
+                title: Not found
+                status: 404
+                detail: Not found
+                instance: https://api.platform.dakota.xyz/recipients/example-id/destinations/example-id
+                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#conflict
+                title: Conflict
+                status: 409
+                detail: Destination has active accounts or pending transactions
+                instance: https://api.platform.dakota.xyz/recipients/example-id/destinations/example-id
+                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
   /customers/{customer_id}/recipients:
     parameters:
       - name: customer_id
@@ -2725,6 +2985,119 @@ paths:
       externalDocs:
         description: Read full guide in docs
         url: https://docs.dakota.xyz/api-reference/accounts/get-an-account
+    delete:
+      tags:
+        - Accounts
+      summary: Delete an account
+      description: Soft-deletes an auto account. The account must be owned by the requesting client.
+      operationId: deleteAccount
+      responses:
+        '204':
+          description: Account deleted successfully.
+        '400':
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#invalid-request
+                title: Invalid request
+                status: 400
+                detail: Invalid request
+                instance: https://api.platform.dakota.xyz/accounts/example-id
+                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#authentication-error
+                title: Unauthorized
+                status: 401
+                detail: Unauthorized
+                instance: https://api.platform.dakota.xyz/accounts/example-id
+                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#forbidden
+                title: Forbidden
+                status: 403
+                detail: Forbidden
+                instance: https://api.platform.dakota.xyz/accounts/example-id
+                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+        '404':
+          description: Not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#not-found
+                title: Not found
+                status: 404
+                detail: Not found
+                instance: https://api.platform.dakota.xyz/accounts/example-id
+                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+        '409':
+          description: Conflict
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#conflict
+                title: Conflict
+                status: 409
+                detail: Conflict
+                instance: https://api.platform.dakota.xyz/accounts/example-id
+                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+        '501':
+          description: Not implemented
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#not-implemented
+                title: Not implemented
+                status: 501
+                detail: Not implemented
+                instance: https://api.platform.dakota.xyz/accounts/example-id
+                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+        '502':
+          description: Provider error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#provider-error
+                title: Provider error
+                status: 502
+                detail: Provider error
+                instance: https://api.platform.dakota.xyz/accounts/example-id
+                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+        '503':
+          description: Service unavailable
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#internal-error
+                title: Service unavailable
+                status: 503
+                detail: Service unavailable
+                instance: https://api.platform.dakota.xyz/accounts/example-id
+                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
   /auto-transactions/{auto_transaction_id}:
     get:
       tags:
@@ -3620,7 +3993,6 @@ paths:
                 - US
                 - GB
                 - CA
-              screens_customers_for_sanctions: true
               is_token_issuer: false
               will_conduct_token_sale: false
               token_sale_amount_usd: 1000000
@@ -3651,7 +4023,6 @@ paths:
                     - US
                     - GB
                     - CA
-                  screens_customers_for_sanctions: true
                   is_token_issuer: false
                   will_conduct_token_sale: false
                   token_sale_amount_usd: 1000000
@@ -3784,7 +4155,6 @@ paths:
                     - US
                     - GB
                     - CA
-                  screens_customers_for_sanctions: true
                   is_token_issuer: false
                   will_conduct_token_sale: false
                   token_sale_amount_usd: 1000000
@@ -4072,9 +4442,17 @@ paths:
         - Onboarding
       summary: Get an onboarding application
       description: |
-        Retrieves a specific application including its status, entities (business/individuals), validation state,
-        attestations, and EDD data if applicable. The validation object shows whether the application is ready
-        to submit and what requirements are missing.
+        Retrieves a specific application. By default returns lightweight status metadata only.
+        Use the `include` query parameter to request additional sections.
+
+        **Include values:**
+        - `entities` — business/individual applicant data
+        - `validation` — computed validation state (shows what's missing before submit)
+        - `edd` — enhanced due diligence data (if applicable)
+        - `attestations` — attestation records
+        - `all` — all of the above
+
+        Multiple values can be combined as a comma-separated list (e.g. `?include=entities,validation`).
 
         **Authentication:** Accepts Application Token (X-Application-Token header).
         Application tokens are scoped to a single application for use in public-facing flows.
@@ -4086,6 +4464,13 @@ paths:
           description: The unique identifier for the application
           schema:
             $ref: '#/components/schemas/KSUID'
+        - name: include
+          in: query
+          required: false
+          description: Comma-separated list of sections to include in the response (entities, validation, edd, attestations, all)
+          schema:
+            type: string
+            example: entities,validation
       security:
         - ApplicationTokenAuth: []
       responses:
@@ -4322,7 +4707,6 @@ paths:
                     - US
                     - GB
                     - CA
-                  screens_customers_for_sanctions: true
                   is_token_issuer: false
                   will_conduct_token_sale: false
                   token_sale_amount_usd: 1000000
@@ -4400,9 +4784,8 @@ paths:
                     details:
                       ready: false
                       missing_fields:
-                        - legal_structure
-                        - date_of_incorporation
-                        - business_description
+                        - email_address
+                        - date_of_birth
                     documents:
                       uploaded_documents:
                         - document_id: 2hCjxJzUAW6JVRkZqaF9E0KpM3a
@@ -4410,10 +4793,11 @@ paths:
                           status: uploaded
                           uploaded_at: '2025-01-15T10:30:00Z'
                       missing_documents:
-                        - purpose: business_formation
+                        - purpose: individual_identity
                           accepted_types:
-                            - articles_of_incorporation
-                          description: Articles of Incorporation or equivalent formation document
+                            - passport
+                            - drivers_license_front
+                          description: Government-issued photo ID
                       ready: false
                     individual_name: John Doe
                   associated_individuals:
@@ -4422,9 +4806,8 @@ paths:
                       details:
                         ready: false
                         missing_fields:
-                          - legal_structure
-                          - date_of_incorporation
-                          - business_description
+                          - email_address
+                          - date_of_birth
                       documents:
                         uploaded_documents:
                           - document_id: 2hCjxJzUAW6JVRkZqaF9E0KpM3a
@@ -4432,10 +4815,11 @@ paths:
                             status: uploaded
                             uploaded_at: '2025-01-15T10:30:00Z'
                         missing_documents:
-                          - purpose: business_formation
+                          - purpose: individual_identity
                             accepted_types:
-                              - articles_of_incorporation
-                            description: Articles of Incorporation or equivalent formation document
+                              - passport
+                              - drivers_license_front
+                            description: Government-issued photo ID
                         ready: false
                       individual_name: John Doe
                   edd:
@@ -5447,7 +5831,6 @@ paths:
                     - US
                     - GB
                     - CA
-                  screens_customers_for_sanctions: true
                   is_token_issuer: false
                   will_conduct_token_sale: false
                   token_sale_amount_usd: 1000000
@@ -5525,9 +5908,8 @@ paths:
                     details:
                       ready: false
                       missing_fields:
-                        - legal_structure
-                        - date_of_incorporation
-                        - business_description
+                        - email_address
+                        - date_of_birth
                     documents:
                       uploaded_documents:
                         - document_id: 2hCjxJzUAW6JVRkZqaF9E0KpM3a
@@ -5535,10 +5917,11 @@ paths:
                           status: uploaded
                           uploaded_at: '2025-01-15T10:30:00Z'
                       missing_documents:
-                        - purpose: business_formation
+                        - purpose: individual_identity
                           accepted_types:
-                            - articles_of_incorporation
-                          description: Articles of Incorporation or equivalent formation document
+                            - passport
+                            - drivers_license_front
+                          description: Government-issued photo ID
                       ready: false
                     individual_name: John Doe
                   associated_individuals:
@@ -5547,9 +5930,8 @@ paths:
                       details:
                         ready: false
                         missing_fields:
-                          - legal_structure
-                          - date_of_incorporation
-                          - business_description
+                          - email_address
+                          - date_of_birth
                       documents:
                         uploaded_documents:
                           - document_id: 2hCjxJzUAW6JVRkZqaF9E0KpM3a
@@ -5557,10 +5939,11 @@ paths:
                             status: uploaded
                             uploaded_at: '2025-01-15T10:30:00Z'
                         missing_documents:
-                          - purpose: business_formation
+                          - purpose: individual_identity
                             accepted_types:
-                              - articles_of_incorporation
-                            description: Articles of Incorporation or equivalent formation document
+                              - passport
+                              - drivers_license_front
+                            description: Government-issued photo ID
                         ready: false
                       individual_name: John Doe
                   edd:
@@ -8857,6 +9240,85 @@ paths:
       externalDocs:
         description: Read full guide in docs
         url: https://docs.dakota.xyz/api-reference/authentication/delete-all-api-keys
+  /api-keys/admin:
+    post:
+      tags:
+        - Authentication
+      summary: Create an API key for a client (Admin only)
+      description: Create an API key for a specified client. Requires admin access token.
+      operationId: createApiKeyForClient
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateApiKeyForClientRequest'
+            example:
+              client_id: 2iNhTbFZGo1bqoTTVOQKVgAfGHH
+      responses:
+        '201':
+          description: API key created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKeyResponse'
+              example:
+                id: 2iNhTbFZGo1bqoTTVOQKVgAfGHH
+                key: dk_live_4KLkSmzQbL6Xs8xnUjssdGHX7PfhHpAb
+        '400':
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#invalid-request
+                title: Invalid request
+                status: 400
+                detail: Invalid client_id format
+                instance: https://api.platform.dakota.xyz/api-keys/admin
+                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#unauthorized
+                title: Unauthorized
+                status: 401
+                detail: Unauthorized
+                instance: https://api.platform.dakota.xyz/api-keys/admin
+                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+        '403':
+          description: Forbidden - admin access required
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#forbidden
+                title: Forbidden
+                status: 403
+                detail: This endpoint requires admin access token
+                instance: https://api.platform.dakota.xyz/api-keys/admin
+                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+        '503':
+          description: Service unavailable - endpoint only available in sandbox environment
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#service-unavailable
+                title: Service Unavailable
+                status: 503
+                detail: This endpoint is only available in sandbox environment
+                instance: https://api.platform.dakota.xyz/api-keys/admin
+                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
   /api-keys/{api_key_id}:
     delete:
       tags:
@@ -10630,7 +11092,7 @@ paths:
 
         | type | KYB status set | Application status set | webhook emitted |
         |---|---|---|---|
-        | `kyb_approve` | approved | — | `kyb.approved` |
+        | `kyb_approve` | approved | approved | `kyb.approved` + endorsement + recipient created |
         | `kyb_reject` | rejected | — | `kyb.rejected` |
         | `kyb_info_request` | requires_info | — | `kyb.info_requested` |
         | `kyc_approve` | — | approved | (application updated) |
@@ -10638,6 +11100,11 @@ paths:
         | `kyc_info_request` | — | request_for_information | (application updated) |
         | `applicant_activate` | approved | approved | `kyb.approved` + endorsement + recipient created |
         | `applicant_suspend` | frozen | declined | `kyb.frozen` |
+
+        **Approving customers (individual or business):** Use `kyb_approve` to fully approve
+        any customer type. This triggers the complete onboarding flow including endorsement
+        and recipient creation. The `kyc_*` types only update the individual applicant's
+        KYC application status without triggering the full onboarding flow.
 
         **Note:** `applicant_activate` does NOT auto-create payment accounts, wallets, or
         account numbers. Create those separately via the account creation API after activation.
@@ -11035,6 +11502,257 @@ paths:
       externalDocs:
         description: Read full guide in docs
         url: https://docs.dakota.xyz/api-reference/sandbox/advance-a-paused-simulation
+  /self-serve/credits/purchase:
+    post:
+      tags:
+        - Self Serve
+      summary: Create Stripe Checkout session for credit purchase
+      description: Creates a Stripe Checkout session for a valid prepaid credit tier for the authenticated self-serve client.
+      operationId: createSelfServeCreditsPurchase
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SelfServeCreditsPurchaseRequest'
+            example:
+              tier_price_cents: 10000
+      responses:
+        '200':
+          description: Stripe Checkout session created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SelfServeCreditsPurchaseResponse'
+              example:
+                checkout_url: https://checkout.stripe.com/c/pay/cs_test_a1b2c3
+        '400':
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#invalid-request
+                title: Invalid Request
+                status: 400
+                detail: tier_price_cents must be a valid credit tier
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#authentication-error
+                title: Authentication Required
+                status: 401
+                detail: Missing or invalid authentication credentials.
+        '403':
+          description: Credit management is only available for self-serve customers
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#forbidden
+                title: Forbidden
+                status: 403
+                detail: Credit management is only available for self-serve customers.
+        '503':
+          description: Stripe checkout is not configured
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#service-unavailable
+                title: Service Unavailable
+                status: 503
+                detail: Stripe checkout is not configured
+        default:
+          description: Unexpected error
+  /self-serve/credits/balance:
+    get:
+      tags:
+        - Self Serve
+      summary: Get prepaid credit balance
+      description: Returns the current prepaid credit balance for the authenticated self-serve client.
+      operationId: getSelfServeCreditsBalance
+      responses:
+        '200':
+          description: Current credit balance
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SelfServeCreditsBalanceResponse'
+              example:
+                balance_cents: 45000
+                transfer_capacity_cents: 9000000
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#authentication-error
+                title: Authentication Required
+                status: 401
+                detail: Missing or invalid authentication credentials.
+        '403':
+          description: Credit management is only available for self-serve customers
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#forbidden
+                title: Forbidden
+                status: 403
+                detail: Credit management is only available for self-serve customers.
+        default:
+          description: Unexpected error
+  /self-serve/credits/ledger:
+    get:
+      tags:
+        - Self Serve
+      summary: List prepaid credit ledger entries
+      description: Returns paginated credit ledger entries for the authenticated self-serve client.
+      operationId: listSelfServeCreditsLedger
+      parameters:
+        - name: cursor
+          in: query
+          required: false
+          description: Return entries created before this timestamp.
+          schema:
+            type: string
+            format: date-time
+        - name: limit
+          in: query
+          required: false
+          description: Maximum number of entries to return.
+          schema:
+            type: integer
+            format: int32
+            minimum: 1
+            maximum: 100
+            default: 20
+        - name: type
+          in: query
+          required: false
+          description: Optional ledger entry type filter.
+          schema:
+            type: string
+            enum:
+              - purchase
+              - deduction
+              - refund
+      responses:
+        '200':
+          description: Paginated credit ledger entries
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SelfServeCreditsLedgerResponse'
+              example:
+                entries:
+                  - id: 2WCn7YQ2QqA4oQ7wYpQyQ1QZKp1
+                    entry_type: purchase
+                    amount_cents: 10000
+                    balance_after_cents: 10000
+                    transaction_id: null
+                    description: Purchased 10000 cents of credits
+                    created_at: '2026-03-19T10:15:00Z'
+                  - id: 2WCn7d4W2KzGdYJZmkQ8q2rKQm8
+                    entry_type: deduction
+                    amount_cents: -250
+                    balance_after_cents: 9750
+                    transaction_id: 2WCn7kNcM6Yd3D2d4nY1Ld4Z1mV
+                    description: Transfer fee for transaction 2WCn7kNcM6Yd3D2d4nY1Ld4Z1mV
+                    created_at: '2026-03-19T10:16:00Z'
+                has_more: false
+        '400':
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#invalid-request
+                title: Invalid Request
+                status: 400
+                detail: type must be one of purchase, deduction, refund
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#authentication-error
+                title: Authentication Required
+                status: 401
+                detail: Missing or invalid authentication credentials.
+        '403':
+          description: Credit management is only available for self-serve customers
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#forbidden
+                title: Forbidden
+                status: 403
+                detail: Credit management is only available for self-serve customers.
+        default:
+          description: Unexpected error
+  /self-serve/credits/tiers:
+    get:
+      tags:
+        - Self Serve
+      summary: List available credit purchase tiers
+      description: Returns the available prepaid credit tiers with transfer capacity calculated for the authenticated self-serve client.
+      operationId: listSelfServeCreditTiers
+      responses:
+        '200':
+          description: Available credit tiers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SelfServeCreditTiersResponse'
+              example:
+                tiers:
+                  - price_cents: 5000
+                    transfer_capacity_cents: 1000000
+                  - price_cents: 10000
+                    transfer_capacity_cents: 2000000
+                  - price_cents: 25000
+                    transfer_capacity_cents: 5000000
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#authentication-error
+                title: Authentication Required
+                status: 401
+                detail: Missing or invalid authentication credentials.
+        '403':
+          description: Credit management is only available for self-serve customers
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#forbidden
+                title: Forbidden
+                status: 403
+                detail: Credit management is only available for self-serve customers.
+        default:
+          description: Unexpected error
 components:
   parameters:
     IdempotencyKeyHeader:
@@ -11305,6 +12023,110 @@ components:
           type: integer
           description: The number of decimal places for this asset
           example: 6
+    SelfServeCreditsBalanceResponse:
+      type: object
+      required:
+        - balance_cents
+        - transfer_capacity_cents
+      properties:
+        balance_cents:
+          type: integer
+          format: int64
+          example: 45000
+        transfer_capacity_cents:
+          type: integer
+          format: int64
+          example: 9000000
+    SelfServeCreditsLedgerEntry:
+      type: object
+      required:
+        - id
+        - entry_type
+        - amount_cents
+        - balance_after_cents
+        - description
+        - created_at
+      properties:
+        id:
+          type: string
+          example: 34o8dS2h9c7n1V8qLpY2Zx6TwUa
+        entry_type:
+          type: string
+          enum:
+            - purchase
+            - deduction
+            - refund
+        amount_cents:
+          type: integer
+          format: int64
+          example: -5000
+        balance_after_cents:
+          type: integer
+          format: int64
+          example: 45000
+        transaction_id:
+          type: string
+          nullable: true
+        description:
+          type: string
+          example: Transfer fee for transaction txn_123
+        created_at:
+          type: string
+          format: date-time
+    SelfServeCreditsLedgerResponse:
+      type: object
+      required:
+        - entries
+        - has_more
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: '#/components/schemas/SelfServeCreditsLedgerEntry'
+        has_more:
+          type: boolean
+          example: false
+    SelfServeCreditTier:
+      type: object
+      required:
+        - price_cents
+        - transfer_capacity_cents
+      properties:
+        price_cents:
+          type: integer
+          format: int64
+          example: 10000
+        transfer_capacity_cents:
+          type: integer
+          format: int64
+          example: 2000000
+    SelfServeCreditTiersResponse:
+      type: object
+      required:
+        - tiers
+      properties:
+        tiers:
+          type: array
+          items:
+            $ref: '#/components/schemas/SelfServeCreditTier'
+    SelfServeCreditsPurchaseRequest:
+      type: object
+      required:
+        - tier_price_cents
+      properties:
+        tier_price_cents:
+          type: integer
+          format: int64
+          example: 10000
+    SelfServeCreditsPurchaseResponse:
+      type: object
+      required:
+        - checkout_url
+      properties:
+        checkout_url:
+          type: string
+          format: uri
+          example: https://checkout.stripe.com/c/pay/cs_test_123
     ClientUser:
       type: object
       description: User object representing a user in the system, including all clients they can access.
@@ -11341,7 +12163,7 @@ components:
           example: 1234567890
     ClientUserRole:
       type: string
-      description: Role that can be assigned to a client user
+      description: 'Role that can be assigned to a client user. Available roles: `admin` (full access except issuances) and `viewer` (read-only access).'
       enum:
         - admin
         - viewer
@@ -11498,6 +12320,7 @@ components:
         - customer.kyb_link.updated
         - customer.kyb_status.created
         - customer.kyb_status.updated
+        - customer.kyb_application.submitted
         - auto_account.created
         - auto_account.updated
         - auto_account.deleted
@@ -11615,6 +12438,15 @@ components:
         - polygon-amoy
       minLength: 1
       maxLength: 30
+    CreateApiKeyForClientRequest:
+      type: object
+      required:
+        - client_id
+      properties:
+        client_id:
+          allOf:
+            - $ref: '#/components/schemas/KSUID'
+          description: Client ID to create the API key for
     ApiKeyResponse:
       type: object
       required:
@@ -11753,6 +12585,9 @@ components:
           type: string
           description: Unique identifier for the customer in the client's system. This ID is used to track the customer in the client's database.
           example: external_customer_123
+        sub_client_id:
+          $ref: '#/components/schemas/KSUID'
+          description: ID of an existing customer to associate this new customer with as a sub-client. The referenced customer must belong to the same client.
       required:
         - name
         - customer_type
@@ -11854,6 +12689,17 @@ components:
           type: integer
           description: Timestamp of when the link was deleted
           example: 1234567890
+        sub_client_id:
+          $ref: '#/components/schemas/KSUID'
+          description: ID of the sub-client this customer is associated with, if any.
+        sub_client_name:
+          type: string
+          description: Name of the sub-client this customer is associated with, if any.
+          example: Partner Corp
+        is_sub_client:
+          type: boolean
+          description: Whether this customer is acting as a sub-client (has other customers associated with it).
+          default: false
     KybStatus:
       type: string
       description: Overall status of the KYB verification process (e.g., pending, active, restricted).
@@ -11864,6 +12710,37 @@ components:
         - partner_review
         - rejected
         - frozen
+        - auto_declined
+    UpdateCustomerSubClientRequest:
+      type: object
+      description: Request to update the sub-client association for a customer. Set sub_client_id to associate with a sub-client, or null to disassociate.
+      properties:
+        sub_client_id:
+          type: string
+          pattern: ^[0-9A-Za-z]{27}$
+          minLength: 27
+          maxLength: 27
+          description: ID of the sub-client to associate with, or null to disassociate.
+          nullable: true
+          example: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
+    SubClientSummary:
+      type: object
+      description: Summary of a sub-client including the count of customers associated with it.
+      required:
+        - sub_client_id
+        - sub_client_name
+        - customer_count
+      properties:
+        sub_client_id:
+          $ref: '#/components/schemas/KSUID'
+        sub_client_name:
+          type: string
+          description: Name of the customer acting as a sub-client.
+          example: Partner Corp
+        customer_count:
+          type: integer
+          description: Number of customers associated with this sub-client.
+          example: 15
     ProviderKybStatus:
       type: object
       required:
@@ -11884,6 +12761,7 @@ components:
             - approved
             - rejected
             - requires_info
+            - auto_declined
             - frozen
         endorsements:
           type: array
@@ -11985,12 +12863,13 @@ components:
     PaymentCapability:
       type: string
       title: Payment Capability
-      description: Type of payment rail capability supported.
+      description: Type of payment rail capability supported. For onramp accounts, `us_bank_account` indicates the account accepts both ACH and Wire (Fedwire) deposits interchangeably.
       enum:
         - ach
         - fedwire
         - swift
         - sepa
+        - us_bank_account
       example: ach
     TransactionStatus:
       type: string
@@ -12642,9 +13521,10 @@ components:
               $ref: '#/components/schemas/Capabilities'
     Transaction:
       type: object
-      description: A unified transaction object representing money movements in the Dakota platform.
+      description: A unified transaction object representing money movements in the Dakota platform. Used for auto-account transactions.
       required:
         - id
+        - resource_type
         - type
         - status
         - description
@@ -12657,6 +13537,11 @@ components:
       properties:
         id:
           $ref: '#/components/schemas/KSUID'
+        resource_type:
+          allOf:
+            - $ref: '#/components/schemas/TransactionResourceType'
+          description: Discriminator field. Always "auto_account" for auto-account transactions.
+          example: auto_account
         type:
           $ref: '#/components/schemas/TransactionType'
         status:
@@ -12703,6 +13588,12 @@ components:
         - $ref: '#/components/schemas/OneOffTransaction'
         - $ref: '#/components/schemas/WalletTransaction'
         - $ref: '#/components/schemas/Transaction'
+      discriminator:
+        propertyName: resource_type
+        mapping:
+          one_off: '#/components/schemas/OneOffTransaction'
+          wallet: '#/components/schemas/WalletTransaction'
+          auto_account: '#/components/schemas/Transaction'
     PaginatedCustomerTransactionResponse:
       allOf:
         - $ref: '#/components/schemas/PaginatedListResponse'
@@ -13155,11 +14046,19 @@ components:
           minLength: 1
           maxLength: 140
           example: Invoice payment for services
+        developer_fee_bps:
+          type: integer
+          format: int32
+          description: Developer fee in basis points (1 bp = 0.01%). Overrides the default client fee for this transaction.
+          example: 50
+          minimum: 0
+          maximum: 10000
     OneOffTransaction:
       type: object
-      description: A one-off transaction response
+      description: A one-off transaction response. Used for single on/off-ramp transactions.
       required:
         - id
+        - resource_type
         - customer_id
         - crypto_address
         - status
@@ -13172,6 +14071,11 @@ components:
       properties:
         id:
           $ref: '#/components/schemas/KSUID'
+        resource_type:
+          allOf:
+            - $ref: '#/components/schemas/TransactionResourceType'
+          description: Discriminator field. Always "one_off" for one-off transactions.
+          example: one_off
         customer_id:
           $ref: '#/components/schemas/KSUID'
         crypto_address:
@@ -13370,11 +14274,17 @@ components:
       description: Transaction details representing a transfer of funds from a crypto wallet.
       required:
         - id
+        - resource_type
         - wallet_id
         - status
       properties:
         id:
           $ref: '#/components/schemas/KSUID'
+        resource_type:
+          allOf:
+            - $ref: '#/components/schemas/TransactionResourceType'
+          description: Discriminator field. Always "wallet" for wallet transactions.
+          example: wallet
         wallet_id:
           $ref: '#/components/schemas/KSUID'
         network_id:
@@ -15108,6 +16018,11 @@ components:
           example:
             - employment
             - savings
+        ssn:
+          type: string
+          description: Social Security Number (only present for US persons, format XXX-XX-XXXX)
+          pattern: ^\d{3}-\d{2}-\d{4}$
+          example: 123-45-6789
         decision:
           type: string
           enum:
@@ -15570,8 +16485,6 @@ components:
         - application_status
         - application_created_at
         - application_updated_at
-        - entities
-        - validation
       properties:
         application_id:
           type: string
@@ -15758,10 +16671,6 @@ components:
             - US
             - GB
             - CA
-        screens_customers_for_sanctions:
-          type: boolean
-          description: Whether the business screens customers against sanctions lists
-          example: true
         is_token_issuer:
           type: boolean
           description: Whether the business issues tokens
@@ -16121,6 +17030,7 @@ x-tagGroups:
     tags:
       - Clients
       - Billing
+      - Credits
       - Inbound Webhooks
       - Checkbook
       - Internal
