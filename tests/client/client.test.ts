@@ -52,6 +52,7 @@ describe('DakotaClient', () => {
       expect(typeof client.customers.create).toBe('function');
       expect(typeof client.customers.list).toBe('function');
       expect(typeof client.customers.get).toBe('function');
+      expect(typeof client.customers.bulkImportFromSumsubTokens).toBe('function');
     });
 
     it('exposes recipients resource', () => {
@@ -174,6 +175,16 @@ describe('DakotaClient', () => {
       expect(client.sandbox).toBeDefined();
       expect(typeof client.sandbox.simulateInbound).toBe('function');
       expect(typeof client.sandbox.simulateOnboarding).toBe('function');
+    });
+
+    it('exposes selfServe resource', () => {
+      const client = new DakotaClient({ apiKey: 'test_key' });
+      expect(client.selfServe).toBeDefined();
+      expect(typeof client.selfServe.purchaseCredits).toBe('function');
+      expect(typeof client.selfServe.getBalance).toBe('function');
+      expect(typeof client.selfServe.listLedger).toBe('function');
+      expect(typeof client.selfServe.listTiers).toBe('function');
+      expect(typeof client.selfServe.getPricing).toBe('function');
     });
   });
 });
