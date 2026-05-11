@@ -417,6 +417,29 @@ export type paths = {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/customers/bulk-import-sumsub-tokens": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Bulk import customers from Sumsub share tokens
+         * @description Processes multiple Sumsub share tokens in a single request. For each token, the
+         *     system redeems it with Sumsub, extracts the applicant's name and identity data,
+         *     creates a customer and individual application, and imports documents.
+         *     Customer names are derived automatically from Sumsub data.
+         */
+        readonly post: operations["bulkImportFromSumsubTokens"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/applications/{application_id}/associated-individuals/{individual_id}": {
         readonly parameters: {
             readonly query?: never;
@@ -1442,16 +1465,16 @@ export type paths = {
          *
          *     **Type → effect mapping:**
          *
-         *     | type | KYB status set | Application status set | webhook emitted |
+         *     | type | KYB status set | Application status set | webhooks emitted |
          *     |---|---|---|---|
-         *     | `kyb_approve` | approved | approved | `kyb.approved` + endorsement + recipient created |
-         *     | `kyb_reject` | rejected | — | `kyb.rejected` |
-         *     | `kyb_info_request` | requires_info | — | `kyb.info_requested` |
-         *     | `kyc_approve` | — | approved | (application updated) |
-         *     | `kyc_reject` | — | declined | (application updated) |
-         *     | `kyc_info_request` | — | request_for_information | (application updated) |
-         *     | `applicant_activate` | approved | approved | `kyb.approved` + endorsement + recipient created |
-         *     | `applicant_suspend` | frozen | declined | `kyb.frozen` |
+         *     | `kyb_approve` | approved (via provisioning) | approved | 2× `customer.kyb_status.created` (one per provider, `kyb_status: approved`) + `recipient.created` |
+         *     | `kyb_reject` | — | declined | (none — application status only) |
+         *     | `kyb_info_request` | — | request_for_information | (none — application status only) |
+         *     | `kyc_approve` | — | approved | (none — application status only) |
+         *     | `kyc_reject` | — | declined | (none — application status only) |
+         *     | `kyc_info_request` | — | request_for_information | (none — application status only) |
+         *     | `applicant_activate` | approved (via provisioning) | approved | 2× `customer.kyb_status.created` (one per provider, `kyb_status: approved`) + `recipient.created` |
+         *     | `applicant_suspend` | — | declined | (none — application status only) |
          *
          *     **Approving customers (individual or business):** Use `kyb_approve` to fully approve
          *     any customer type. This triggers the complete onboarding flow including endorsement
@@ -1618,6 +1641,28 @@ export type paths = {
          * @description Returns the available prepaid credit tiers with transfer capacity calculated for the authenticated self-serve client.
          */
         readonly get: operations["listSelfServeCreditTiers"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/self-serve/credits/pricing": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Get the self-serve client's pricing config (fee schedule)
+         * @description Returns the caller's `ClientPricingConfig`. Self-serve clients only
+         *     (enterprise clients receive 403). Used by the dashboard's Fee
+         *     Schedule card to render the active fee structure.
+         */
+        readonly get: operations["getSelfServeCreditsPricing"];
         readonly put?: never;
         readonly post?: never;
         readonly delete?: never;
@@ -1810,6 +1855,13 @@ export type components = {
             /** @enum {string} */
             readonly entry_type: "purchase" | "deduction" | "refund";
             /**
+             * @description Sub-category that distinguishes transaction fees from compliance
+             *     fees and similar for refunds. `unknown` indicates a legacy row
+             *     written before this column existed.
+             * @enum {string}
+             */
+            readonly category: "transaction_fee" | "compliance_fee" | "transaction_refund" | "compliance_refund" | "purchase" | "adjustment" | "unknown";
+            /**
              * Format: int64
              * @example -5000
              */
@@ -1820,6 +1872,11 @@ export type components = {
              */
             readonly balance_after_cents: number;
             readonly transaction_id?: string | null;
+            /**
+             * @description Stripe PaymentIntent ID (pi_...) for purchase entries — paste into the Stripe dashboard search to look up the underlying payment.
+             * @example pi_3M5xY42eZvKYlo2C0xRm6WVe
+             */
+            readonly stripe_payment_intent_id?: string | null;
             /** @example Transfer fee for transaction txn_123 */
             readonly description: string;
             /** Format: date-time */
@@ -1880,6 +1937,12 @@ export type components = {
             readonly role: components["schemas"]["ClientUserRole"];
             /** @description Whether the client has SWIFT payments enabled. */
             readonly swift_enabled?: boolean;
+            readonly client_id?: components["schemas"]["KSUID"];
+            /**
+             * @description Display name of the active client for this request.
+             * @example Acme Corp
+             */
+            readonly client_name?: string;
             /**
              * @description Timestamp of when the user was created.
              * @example 1234567890
@@ -1892,6 +1955,66 @@ export type components = {
          * @enum {string}
          */
         readonly ClientUserRole: "admin" | "viewer";
+        readonly ClientPricingConfig: {
+            /**
+             * @description Monthly minimum fee in cents
+             * @example 10000
+             */
+            readonly monthlyMinimumCents: number;
+            /**
+             * @description Transfer fee in basis points (0-10000, representing 0% to 100%)
+             * @example 25
+             */
+            readonly transferFeeBps: number;
+            /**
+             * @description Per-ACH transaction fee in cents
+             * @example 100
+             */
+            readonly achFeeCents: number;
+            /**
+             * @description Per-wire transaction fee in cents
+             * @example 2500
+             */
+            readonly wireFeeCents: number;
+            /**
+             * @description Per-SWIFT transaction fee in cents
+             * @example 150
+             */
+            readonly sepaFeeCents: number;
+            /**
+             * @description Per-Swift-transfer banking fee in USD cents.
+             * @example 4000
+             */
+            readonly swiftFeeCents: number;
+            /**
+             * @description Per-individual-application-submission compliance fee in USD cents.
+             * @example 500
+             */
+            readonly kycFeeCents: number;
+            /**
+             * @description Per-business-application-submission compliance fee in USD cents.
+             * @example 2500
+             */
+            readonly kybFeeCents: number;
+            /**
+             * Format: date-time
+             * @description When this pricing takes effect
+             * @example 2024-01-01T00:00:00Z
+             */
+            readonly effectiveFrom: string;
+            /**
+             * Format: date-time
+             * @description When this pricing configuration was created
+             * @example 2024-01-01T00:00:00Z
+             */
+            readonly createdAt: string;
+            /**
+             * Format: date-time
+             * @description When this pricing configuration was last updated
+             * @example 2024-01-01T00:00:00Z
+             */
+            readonly updatedAt: string;
+        };
         /** @description Request body for creating a new client user */
         readonly CreateClientUserRequest: {
             /**
@@ -2158,6 +2281,15 @@ export type components = {
              */
             readonly country: string;
         };
+        /**
+         * Destination Address
+         * @description Address format for fiat destinations with Lead Bank wire transfer character limits (max 35 characters per address line).
+         */
+        readonly FiatUSDestinationAddress: components["schemas"]["Address"] & {
+            readonly street1?: string;
+            readonly street2?: string;
+            readonly street3?: string;
+        };
         readonly Country: {
             /** @example CA */
             readonly code: string;
@@ -2225,6 +2357,31 @@ export type components = {
              */
             readonly customer_type: "individual" | "business";
             readonly kyb_status: components["schemas"]["KybStatus"];
+            /**
+             * @description Provider-agnostic effective KYC/B status for this customer,
+             *     derived server-side for display convenience. Returns the same
+             *     answer for both Sumsub-verified and Persona-verified customers
+             *     without the client having to know which provider did the work.
+             *
+             *     **Derivation order (most authoritative first):**
+             *     1. The customer's onboarding application `decision`, if set
+             *        (`approved` → `approved`; `declined`/`auto_declined` →
+             *        `rejected`; `withdrawn` → `expired`).
+             *     2. The most-recently-updated non-deleted persona `kyb_link`'s
+             *        status (legacy customers from before the orchestration
+             *        layer — Persona's `created` maps to `not_started`,
+             *        `completed` to `approved`, `needs_review` to `in_review`).
+             *     3. `pending` if the customer has an open onboarding
+             *        application but no decision yet (Sumsub in-flight).
+             *     4. `not_started` otherwise.
+             *
+             *     **Advisory, not authoritative.** This field is provided for
+             *     badge rendering and operator UIs. The derivation rules may
+             *     evolve as new verification providers are added. For
+             *     compliance-critical decisions, consult `decision`,
+             *     `kyb_links`, and `provider_statuses` directly.
+             */
+            readonly kyc_status: components["schemas"]["KybLinkStatus"];
             /** @description KYB Links for different providers used in the KYB process. */
             readonly kyb_links?: readonly components["schemas"]["KybLink"][];
             /** @description Detailed status information from different verification providers used in the KYB process. */
@@ -2351,6 +2508,13 @@ export type components = {
         /**
          * KYB Link Type
          * @description Type of link provided by a verification provider for KYB verification.
+         *
+         *     **Deprecated values:**
+         *     - `tos` — the Bridge TOS flow has been deprecated. The dashboard no
+         *       longer surfaces TOS state, but legacy customer records may still
+         *       carry `link_type: 'tos'` entries on the wire. New integrations
+         *       should ignore these entries; the value is retained in the enum
+         *       to keep responses for legacy data schema-valid.
          * @example persona
          * @enum {string}
          */
@@ -2392,13 +2556,13 @@ export type components = {
          * @example ach
          * @enum {string}
          */
-        readonly PaymentCapability: "ach" | "fedwire" | "swift" | "sepa" | "us_bank_account";
+        readonly PaymentCapability: "ach" | "fedwire" | "swift" | "us_bank_account";
         /**
          * Transaction Status
          * @description Current status of a transaction.
          * @enum {string}
          */
-        readonly TransactionStatus: "timed_out" | "not_started" | "in_progress" | "awaiting_confirmation" | "pending" | "processing" | "completed" | "invalid" | "failed" | "canceled" | "reversed" | "rejected" | "broadcasted" | "pending_return" | "returned";
+        readonly TransactionStatus: "timed_out" | "not_started" | "in_progress" | "awaiting_confirmation" | "pending" | "processing" | "completed" | "invalid" | "failed" | "canceled" | "reversed" | "rejected" | "broadcasted" | "pending_return" | "returned" | "pending_reversal";
         /**
          * Transaction Type
          * @description Type of transaction.
@@ -2649,13 +2813,13 @@ export type components = {
             readonly account_type: "checking" | "savings";
             /** @example John Doe */
             readonly account_holder_name: string;
-            readonly account_holder_address?: components["schemas"]["Address"];
+            readonly account_holder_address?: components["schemas"]["FiatUSDestinationAddress"];
             /** @example 1234567890 */
             readonly account_holder_phone?: string;
             /** @example Bank of America */
             readonly bank_name: string;
             /** @description Address of the bank. Optional for US domestic transfers. */
-            readonly bank_address?: components["schemas"]["Address"];
+            readonly bank_address?: components["schemas"]["FiatUSDestinationAddress"];
             /** @example 1234567890 */
             readonly bank_phone?: string;
         } & {
@@ -2673,7 +2837,7 @@ export type components = {
         };
         /**
          * IBAN Fiat Destination Request
-         * @description Request for creating or updating an IBAN bank account destination (for SWIFT and SEPA transfers).
+         * @description Request for creating or updating an IBAN bank account destination (for SWIFT and SWIFT transfers).
          */
         readonly FiatIBANDestinationRequest: Omit<components["schemas"]["DestinationRequest"], "destination_type"> & {
             /**
@@ -2694,7 +2858,7 @@ export type components = {
              */
             readonly iban: string;
             /**
-             * @description BIC/SWIFT code for the international bank account (optional for SEPA, required for SWIFT).
+             * @description BIC/SWIFT code for the international bank account (optional for required for SWIFT).
              * @example DEUTDEFFXXX
              */
             readonly bic?: string;
@@ -2899,7 +3063,7 @@ export type components = {
         };
         /**
          * IBAN Fiat Destination Response
-         * @description Response for an IBAN bank account destination (for SWIFT and SEPA transfers).
+         * @description Response for an IBAN bank account destination (for SWIFT and SWIFT transfers).
          */
         readonly FiatIBANDestinationResponse: Omit<components["schemas"]["DestinationResponse"], "destination_type"> & {
             /**
@@ -2918,7 +3082,7 @@ export type components = {
              */
             readonly iban: string;
             /**
-             * @description BIC/SWIFT code for the international bank account (optional for SEPA, required for SWIFT).
+             * @description BIC/SWIFT code for the international bank account (optional for required for SWIFT).
              * @example DEUTDEFFXXX
              */
             readonly bic?: string;
@@ -2994,6 +3158,7 @@ export type components = {
              * @example 1234567890
              */
             readonly completedAt?: number | null;
+            readonly sender_details?: components["schemas"]["SenderDetails"];
         };
         readonly TransactionResource: components["schemas"]["OneOffTransaction"] | components["schemas"]["WalletTransaction"] | components["schemas"]["Transaction"];
         readonly PaginatedCustomerTransactionResponse: components["schemas"]["PaginatedListResponse"] & {
@@ -3157,6 +3322,64 @@ export type components = {
             /** @description List of event types this target cares about (ignored if global is true) */
             readonly event_types?: readonly components["schemas"]["EventType"][];
         };
+        /** @description Originating sender details for onramp/offramp/swap transactions. Populated when source-side metadata is available (e.g., from inbound wire/ACH source data). */
+        readonly SenderDetails: {
+            /**
+             * @description Type of the originating sender (e.g., "fiat_account", "crypto_wallet").
+             * @example fiat_account
+             */
+            readonly sender_type?: string;
+            /**
+             * @description Name on the originating account.
+             * @example John Doe
+             */
+            readonly sender_account_holder_name?: string;
+            /**
+             * @description Bank name of the originating account.
+             * @example Chase Bank
+             */
+            readonly sender_bank_name?: string;
+            /**
+             * @description ACH routing number of the originating bank account.
+             * @example 021000021
+             */
+            readonly sender_routing_number?: string;
+            /**
+             * @description Account number of the originating bank account.
+             * @example 1234567890
+             */
+            readonly sender_account_number?: string;
+            /**
+             * @description Wire routing number of the originating bank account.
+             * @example 021000021
+             */
+            readonly sender_wire_routing_number?: string;
+            /**
+             * @description Type of the originating bank account (e.g., "checking", "savings").
+             * @example checking
+             */
+            readonly sender_account_type?: string;
+            /**
+             * @description IBAN of the originating account.
+             * @example GB82WEST12345698765432
+             */
+            readonly sender_iban?: string;
+            /**
+             * @description BIC/SWIFT code of the originating bank.
+             * @example BARCGB22XXX
+             */
+            readonly sender_bic?: string;
+            /**
+             * @description Blockchain wallet address of the originating sender (offramp/swap).
+             * @example 0x1234567890abcdef1234567890abcdef12345678
+             */
+            readonly sender_wallet_address?: string;
+            /**
+             * @description Network identifier of the originating wallet (e.g., "ethereum-mainnet").
+             * @example ethereum-mainnet
+             */
+            readonly sender_network?: string;
+        };
         /** @description A transaction relating to an auto account */
         readonly AutoAccountTransaction: {
             readonly id: components["schemas"]["KSUID"];
@@ -3184,6 +3407,7 @@ export type components = {
             readonly completed_at?: number;
             readonly receipt?: components["schemas"]["TransactionReceipt"];
             readonly crypto_details?: components["schemas"]["TransactionCryptoDetails"];
+            readonly sender_details?: components["schemas"]["SenderDetails"];
             /**
              * @description Provider identifier
              * @example dakota
@@ -3199,6 +3423,36 @@ export type components = {
              * @example processing
              */
             readonly provider_status: string;
+            /**
+             * @description NACHA/Fedwire return code (e.g., R01) when the transaction was returned by the receiving bank.
+             * @example R01
+             */
+            readonly return_code?: string;
+            /**
+             * @description Human-readable return reason provided by the receiving bank.
+             * @example Insufficient Funds
+             */
+            readonly return_reason?: string;
+            /**
+             * @description Unix timestamp when the return was initiated.
+             * @example 1234567890
+             */
+            readonly return_initiated_at?: number;
+            /**
+             * @description Unix timestamp deadline for return processing.
+             * @example 1234567890
+             */
+            readonly return_deadline?: number;
+            /**
+             * @description Lead Bank ACH reversal reason when the originator reverses the transaction (e.g., duplicate, receiver_incorrect).
+             * @example duplicate
+             */
+            readonly reversal_reason?: string;
+            /**
+             * @description Unix timestamp when the reversal was initiated.
+             * @example 1234567890
+             */
+            readonly reversal_initiated_at?: number;
         };
         /** @description Detailed representation of an amount with its asset and optional metadata */
         readonly AmountDetails: {
@@ -3286,7 +3540,7 @@ export type components = {
             /** @description Optional preferred payment rail for bank transfers. If not specified, the system will automatically select the most appropriate rail based on the destination's supported methods. */
             readonly destination_payment_rail?: components["schemas"]["PaymentCapability"];
             /**
-             * @description Optional payment reference message for bank transfers. Length limits: ACH (1-10 chars), Wire (1-140 chars), SEPA (6-140 chars), SWIFT (1-140 chars, max 4 lines of 35 chars each)
+             * @description Optional payment reference message for bank transfers. Length limits: ACH (1-10 chars), Wire (1-140 chars) (6-140 chars), SWIFT (1-140 chars, max 4 lines of 35 chars each)
              * @example Invoice payment for services
              */
             readonly payment_reference?: string;
@@ -3351,7 +3605,7 @@ export type components = {
             readonly completed_at?: number;
             /** @description The payment rail that was selected for this transaction */
             readonly destination_payment_rail?: components["schemas"]["PaymentCapability"];
-            /** @description Payment reference message for bank transfers (e.g. wire message, SWIFT or SEPA reference) */
+            /** @description Payment reference message for bank transfers (e.g. wire message, SWIFT reference) */
             readonly payment_reference?: string | null;
             /**
              * @description Name of the destination bank
@@ -3383,13 +3637,48 @@ export type components = {
              * @example BARCGB22XXX
              */
             readonly destination_bic?: string;
+            /**
+             * @description NACHA/Fedwire return code (e.g., R01) when the transaction was returned by the receiving bank.
+             * @example R01
+             */
+            readonly return_code?: string;
+            /**
+             * @description Human-readable return reason provided by the receiving bank.
+             * @example Insufficient Funds
+             */
+            readonly return_reason?: string;
+            /**
+             * @description Unix timestamp when the return was initiated.
+             * @example 1234567890
+             */
+            readonly return_initiated_at?: number;
+            /**
+             * @description Unix timestamp deadline for return processing.
+             * @example 1234567890
+             */
+            readonly return_deadline?: number;
+            /**
+             * @description Lead Bank ACH reversal reason when the originator reverses the transaction (e.g., duplicate, receiver_incorrect).
+             * @example duplicate
+             */
+            readonly reversal_reason?: string;
+            /**
+             * @description Unix timestamp when the reversal was initiated.
+             * @example 1234567890
+             */
+            readonly reversal_initiated_at?: number;
+            /**
+             * @description Display name of the customer associated with this transaction.
+             * @example Acme Corp
+             */
+            readonly customer_name?: string;
         };
         /**
          * @description Status of a one-off transaction
          * @example pending
          * @enum {string}
          */
-        readonly OneOffTransactionStatus: "pending" | "processing" | "completed" | "failed" | "cancelled" | "reversed" | "pending_return" | "returned";
+        readonly OneOffTransactionStatus: "pending" | "processing" | "completed" | "failed" | "cancelled" | "reversed" | "pending_return" | "returned" | "pending_reversal";
         readonly PaginatedOneOffTransactionResponse: components["schemas"]["PaginatedListResponse"] & {
             readonly data?: readonly components["schemas"]["OneOffTransaction"][];
         };
@@ -3500,7 +3789,13 @@ export type components = {
              * @example Marc
              */
             readonly name: string;
-            /** @description The signer public key */
+            /**
+             * @description The signer public key. For KEY_TYPE_ES256 this must be a
+             *     base64-encoded X.509 SubjectPublicKeyInfo (PKIX) for an ECDSA
+             *     P-256 key. Both PEM-wrapped (with BEGIN/END PUBLIC KEY headers)
+             *     and raw DER encodings are accepted. For KEY_TYPE_WEBAUTHN this
+             *     must be a base64-encoded COSE public key.
+             */
             readonly public_key: string;
             /**
              * @description Type of the key
@@ -3515,7 +3810,13 @@ export type components = {
              * @example Marc
              */
             readonly name: string;
-            /** @description The signer public key */
+            /**
+             * @description The signer public key. For KEY_TYPE_ES256 this must be a
+             *     base64-encoded X.509 SubjectPublicKeyInfo (PKIX) for an ECDSA
+             *     P-256 key. Both PEM-wrapped (with BEGIN/END PUBLIC KEY headers)
+             *     and raw DER encodings are accepted. For KEY_TYPE_WEBAUTHN this
+             *     must be a base64-encoded COSE public key.
+             */
             readonly public_key: string;
             /**
              * @description Type of the key
@@ -3537,6 +3838,11 @@ export type components = {
              */
             readonly id: string;
             readonly client_id?: components["schemas"]["KSUID"];
+            /**
+             * @description ID of the signer group that governs mutations of this policy. Members of this group must endorse any add_policy_rule, update_policy_rule, remove_policy_rule, or delete_policy intent.
+             * @example grp_2N4YkKpKu7M3mKpGYmF8kcJ8oZT
+             */
+            readonly signer_group_id?: string | null;
             /**
              * Format: int32
              * @description Version number of the policy (incremented on rule changes)
@@ -5044,6 +5350,17 @@ export type components = {
              * @enum {string|null}
              */
             readonly application_decision?: "approved" | "declined" | "withdrawn" | null;
+            /**
+             * @description How the decision was reached: 'manual' for operator-driven decisions, 'auto' for automated approvals, 'override' reserved for future escalation. Null if no decision has been made.
+             * @example manual
+             * @enum {string|null}
+             */
+            readonly decision_method?: "manual" | "auto" | "override" | null;
+            /**
+             * @description Version identifier of the rule set that produced an automated decision. Null for manual decisions or when no decision has been made.
+             * @example v1.2
+             */
+            readonly decision_rule_version?: string | null;
             /** @description The people/businesses being onboarded */
             readonly entities?: components["schemas"]["ApplicationEntities"];
             /** @description Enhanced Due Diligence data (if provided) */
@@ -5270,6 +5587,32 @@ export type components = {
              */
             readonly applicant_id: string;
         };
+        /** @description Error response when a self-serve client lacks the credits required to perform an action. */
+        readonly InsufficientCreditsError: {
+            /**
+             * @description Stable machine-readable error code.
+             * @example insufficient_credits
+             * @enum {string}
+             */
+            readonly error: "insufficient_credits";
+            /**
+             * @description Human-readable explanation including the required and current amounts.
+             * @example Insufficient credits to submit this application. Required 2500 cents, balance 500 cents.
+             */
+            readonly message: string;
+            /**
+             * Format: int64
+             * @description Amount of credits required to perform this action, in USD cents.
+             * @example 2500
+             */
+            readonly required_cents: number;
+            /**
+             * Format: int64
+             * @description Caller's current credit balance, in USD cents.
+             * @example 500
+             */
+            readonly balance_cents: number;
+        };
         /** @description Error response when application cannot be submitted because applicants are not ready */
         readonly ApplicationNotReadyError: {
             /**
@@ -5468,6 +5811,36 @@ export type components = {
         readonly EndingBeforeParam: components["schemas"]["KSUID"];
         /** @description A limit on the number of objects to be returned. Limit can range between 1 and 100, and the default is 20. */
         readonly LimitParam: number;
+        /**
+         * @description Sandbox-only. Sets the HTTP status code returned when the sandbox injects an error at the configured step (see `X-Sandbox-Error-Step`). Must be a valid HTTP status code in the range 100-599; values outside that range are ignored. Status codes >= 400 cause the request to short-circuit immediately with a structured error response.
+         *     Effective only on `https://api.platform.sandbox.dakota.xyz`. Ignored in production.
+         */
+        readonly SandboxErrorStatusHeader: number;
+        /**
+         * @description Sandbox-only. Sets the human-readable `message` field of the injected sandbox error response. Truncated values longer than 500 characters are ignored.
+         *     Effective only on `https://api.platform.sandbox.dakota.xyz`. Ignored in production.
+         */
+        readonly SandboxErrorMessageHeader: string;
+        /**
+         * @description Sandbox-only. Names the pipeline step at which the injected error fires. Pair with `X-Sandbox-Error-Status` and (optionally) `X-Sandbox-Error-Message` to drive a deterministic failure mode at a known point in the request lifecycle. Values longer than 100 characters are ignored.
+         *     Effective only on `https://api.platform.sandbox.dakota.xyz`. Ignored in production.
+         */
+        readonly SandboxErrorStepHeader: "transaction_processing" | "compliance_check" | "account_validation" | "provider_call" | "kyb_submission" | "kyb_approval" | "network_call";
+        /**
+         * @description Sandbox-only. Applies a preset failure or behavior mode for the request, selecting a coherent combination of error step, status, and message. The full set of scenarios is also exposed dynamically via `GET /sandbox/scenarios` along with descriptions and per-rail applicability.
+         *     Effective only on `https://api.platform.sandbox.dakota.xyz`. Ignored in production.
+         */
+        readonly SandboxScenarioHeader: "happy_path" | "delayed_settlement" | "insufficient_funds" | "compliance_block" | "invalid_account" | "provider_maintenance" | "network_congestion" | "kyb_manual_review" | "kyb_rejected" | "kyb_expired" | "network_timeout" | "intermittent_errors" | "account_frozen" | "document_expired" | "invalid_swift";
+        /**
+         * @description Sandbox-only. When `true`, asynchronous simulation flows complete immediately rather than progressing through their normal timed states. Useful for fast end-to-end test runs that do not need to exercise intermediate webhook events. Accepts `true`/`false` (also `1`/`0`, `yes`/`no`); other values are treated as `false`.
+         *     Effective only on `https://api.platform.sandbox.dakota.xyz`. Ignored in production.
+         */
+        readonly SandboxInstantCompletionHeader: boolean;
+        /**
+         * @description Sandbox-only. When `true`, prevents the default 5-second KYB auto-approval that the sandbox applies to newly created customers. Use this header (typically with `X-Sandbox-Scenario: kyb_manual_review` or `kyb_rejected`) to keep an application in `pending` so integrators can exercise manual-review and rejection flows. Accepts `true`/`false` (also `1`/`0`, `yes`/`no`); other values are treated as `false`.
+         *     Effective only on `https://api.platform.sandbox.dakota.xyz`. Ignored in production.
+         */
+        readonly SandboxSkipAutoApprovalHeader: boolean;
     };
     requestBodies: never;
     headers: never;
@@ -5488,12 +5861,29 @@ export interface operations {
                 readonly external_id?: string;
                 /** @description Search customers by name, email, or customer ID (case-insensitive) */
                 readonly search?: string;
-                /** @description Filter customers by KYB status */
+                /** @description Filter customers by KYB status (single value). */
                 readonly kyb_status?: components["schemas"]["KybStatus"];
+                /** @description Filter customers by one or more KYB statuses. Comma-separated list (e.g. `active,frozen`). */
+                readonly kyb_statuses?: string;
+                /**
+                 * @description Filter customers by one or more effective KYC/B link statuses.
+                 *     Comma-separated list (e.g. `pending,in_review`). Values mirror
+                 *     the `KybLinkStatus` enum (`not_started`, `pending`, `in_review`,
+                 *     `approved`, `expired`, `rejected`).
+                 */
+                readonly kyc_statuses?: string;
                 /** @description Filter customers by sub-client association. Returns only customers associated with the specified sub-client. */
                 readonly sub_client_id?: components["schemas"]["KSUID"];
                 /** @description When set to true, returns only customers that are acting as sub-clients (have other customers associated with them). */
                 readonly is_sub_client?: boolean;
+                /** @description Field to sort customers by. Defaults to `name`. */
+                readonly sort_by?: "created_at" | "customer_type" | "id" | "kyb_status" | "kyc_status" | "name";
+                /** @description Sort direction. Defaults to `asc`. */
+                readonly sort_dir?: "asc" | "desc";
+                /** @description Filter customers created at or after this ISO 8601 datetime (e.g. 2024-01-01T00:00:00Z). */
+                readonly created_at_from?: string;
+                /** @description Filter customers created at or before this ISO 8601 datetime (e.g. 2024-12-31T23:59:59Z). */
+                readonly created_at_to?: string;
             };
             readonly header?: never;
             readonly path?: never;
@@ -5516,6 +5906,7 @@ export interface operations {
                      *           "email": "contact@acmecorp.com",
                      *           "customer_type": "business",
                      *           "kyb_status": "pending",
+                     *           "kyc_status": "pending",
                      *           "kyb_links": [
                      *             {
                      *               "provider_id": "trm_labs",
@@ -5630,6 +6021,31 @@ export interface operations {
             readonly header: {
                 /** @description Unique key to ensure request idempotency. If the same key is used within a certain time window, the original response will be returned instead of executing the request again. */
                 readonly "x-idempotency-key": components["parameters"]["IdempotencyKeyHeader"];
+                /**
+                 * @description Sandbox-only. Applies a preset failure or behavior mode for the request, selecting a coherent combination of error step, status, and message. The full set of scenarios is also exposed dynamically via `GET /sandbox/scenarios` along with descriptions and per-rail applicability.
+                 *     Effective only on `https://api.platform.sandbox.dakota.xyz`. Ignored in production.
+                 */
+                readonly "X-Sandbox-Scenario"?: components["parameters"]["SandboxScenarioHeader"];
+                /**
+                 * @description Sandbox-only. Names the pipeline step at which the injected error fires. Pair with `X-Sandbox-Error-Status` and (optionally) `X-Sandbox-Error-Message` to drive a deterministic failure mode at a known point in the request lifecycle. Values longer than 100 characters are ignored.
+                 *     Effective only on `https://api.platform.sandbox.dakota.xyz`. Ignored in production.
+                 */
+                readonly "X-Sandbox-Error-Step"?: components["parameters"]["SandboxErrorStepHeader"];
+                /**
+                 * @description Sandbox-only. Sets the HTTP status code returned when the sandbox injects an error at the configured step (see `X-Sandbox-Error-Step`). Must be a valid HTTP status code in the range 100-599; values outside that range are ignored. Status codes >= 400 cause the request to short-circuit immediately with a structured error response.
+                 *     Effective only on `https://api.platform.sandbox.dakota.xyz`. Ignored in production.
+                 */
+                readonly "X-Sandbox-Error-Status"?: components["parameters"]["SandboxErrorStatusHeader"];
+                /**
+                 * @description Sandbox-only. Sets the human-readable `message` field of the injected sandbox error response. Truncated values longer than 500 characters are ignored.
+                 *     Effective only on `https://api.platform.sandbox.dakota.xyz`. Ignored in production.
+                 */
+                readonly "X-Sandbox-Error-Message"?: components["parameters"]["SandboxErrorMessageHeader"];
+                /**
+                 * @description Sandbox-only. When `true`, prevents the default 5-second KYB auto-approval that the sandbox applies to newly created customers. Use this header (typically with `X-Sandbox-Scenario: kyb_manual_review` or `kyb_rejected`) to keep an application in `pending` so integrators can exercise manual-review and rejection flows. Accepts `true`/`false` (also `1`/`0`, `yes`/`no`); other values are treated as `false`.
+                 *     Effective only on `https://api.platform.sandbox.dakota.xyz`. Ignored in production.
+                 */
+                readonly "X-Sandbox-Skip-Auto-Approval"?: components["parameters"]["SandboxSkipAutoApprovalHeader"];
             };
             readonly path?: never;
             readonly cookie?: never;
@@ -5775,6 +6191,7 @@ export interface operations {
                      *       "name": "John Doe",
                      *       "customer_type": "individual",
                      *       "kyb_status": "pending",
+                     *       "kyc_status": "not_started",
                      *       "is_sub_client": false,
                      *       "sub_client_id": "2ABCrqBHb3cTfLVkFSGmHZqdXYZ",
                      *       "sub_client_name": "Partner Corp",
@@ -5846,6 +6263,7 @@ export interface operations {
                      *       "email": "contact@acmecorp.com",
                      *       "customer_type": "business",
                      *       "kyb_status": "pending",
+                     *       "kyc_status": "pending",
                      *       "kyb_links": [
                      *         {
                      *           "provider_id": "trm_labs",
@@ -6561,6 +6979,22 @@ export interface operations {
                 readonly source_asset?: string;
                 /** @description Filter one-off transactions by destination asset. */
                 readonly destination_asset?: string;
+                /** @description Field to sort one-off transactions by. Defaults to `created_at`. */
+                readonly sort_by?: "amount" | "created_at" | "customer_name" | "status";
+                /** @description Sort direction. Defaults to `desc`. */
+                readonly sort_dir?: "asc" | "desc";
+                /** @description Filter one-off transactions created at or after this ISO 8601 datetime (e.g. 2024-01-01T00:00:00Z). */
+                readonly created_at_from?: string;
+                /** @description Filter one-off transactions created at or before this ISO 8601 datetime (e.g. 2024-12-31T23:59:59Z). */
+                readonly created_at_to?: string;
+                /** @description Filter one-off transactions by minimum destination amount (inclusive). */
+                readonly amount_min?: string;
+                /** @description Filter one-off transactions by maximum destination amount (inclusive). */
+                readonly amount_max?: string;
+                /** @description Free-text search across customer name, customer email, and transaction ID. */
+                readonly search?: string;
+                /** @description Comma-separated list of statuses to filter by (e.g. `pending,completed,failed`). Takes precedence over `status` when both are provided. */
+                readonly statuses?: string;
             };
             readonly header?: never;
             readonly path?: never;
@@ -6769,6 +7203,31 @@ export interface operations {
             readonly header: {
                 /** @description Unique key to ensure request idempotency. If the same key is used within a certain time window, the original response will be returned instead of executing the request again. */
                 readonly "x-idempotency-key": components["parameters"]["IdempotencyKeyHeader"];
+                /**
+                 * @description Sandbox-only. Applies a preset failure or behavior mode for the request, selecting a coherent combination of error step, status, and message. The full set of scenarios is also exposed dynamically via `GET /sandbox/scenarios` along with descriptions and per-rail applicability.
+                 *     Effective only on `https://api.platform.sandbox.dakota.xyz`. Ignored in production.
+                 */
+                readonly "X-Sandbox-Scenario"?: components["parameters"]["SandboxScenarioHeader"];
+                /**
+                 * @description Sandbox-only. Names the pipeline step at which the injected error fires. Pair with `X-Sandbox-Error-Status` and (optionally) `X-Sandbox-Error-Message` to drive a deterministic failure mode at a known point in the request lifecycle. Values longer than 100 characters are ignored.
+                 *     Effective only on `https://api.platform.sandbox.dakota.xyz`. Ignored in production.
+                 */
+                readonly "X-Sandbox-Error-Step"?: components["parameters"]["SandboxErrorStepHeader"];
+                /**
+                 * @description Sandbox-only. Sets the HTTP status code returned when the sandbox injects an error at the configured step (see `X-Sandbox-Error-Step`). Must be a valid HTTP status code in the range 100-599; values outside that range are ignored. Status codes >= 400 cause the request to short-circuit immediately with a structured error response.
+                 *     Effective only on `https://api.platform.sandbox.dakota.xyz`. Ignored in production.
+                 */
+                readonly "X-Sandbox-Error-Status"?: components["parameters"]["SandboxErrorStatusHeader"];
+                /**
+                 * @description Sandbox-only. Sets the human-readable `message` field of the injected sandbox error response. Truncated values longer than 500 characters are ignored.
+                 *     Effective only on `https://api.platform.sandbox.dakota.xyz`. Ignored in production.
+                 */
+                readonly "X-Sandbox-Error-Message"?: components["parameters"]["SandboxErrorMessageHeader"];
+                /**
+                 * @description Sandbox-only. When `true`, asynchronous simulation flows complete immediately rather than progressing through their normal timed states. Useful for fast end-to-end test runs that do not need to exercise intermediate webhook events. Accepts `true`/`false` (also `1`/`0`, `yes`/`no`); other values are treated as `false`.
+                 *     Effective only on `https://api.platform.sandbox.dakota.xyz`. Ignored in production.
+                 */
+                readonly "X-Sandbox-Instant-Completion"?: components["parameters"]["SandboxInstantCompletionHeader"];
             };
             readonly path?: never;
             readonly cookie?: never;
@@ -7203,6 +7662,26 @@ export interface operations {
             readonly header: {
                 /** @description Unique key to ensure request idempotency. If the same key is used within a certain time window, the original response will be returned instead of executing the request again. */
                 readonly "x-idempotency-key": components["parameters"]["IdempotencyKeyHeader"];
+                /**
+                 * @description Sandbox-only. Applies a preset failure or behavior mode for the request, selecting a coherent combination of error step, status, and message. The full set of scenarios is also exposed dynamically via `GET /sandbox/scenarios` along with descriptions and per-rail applicability.
+                 *     Effective only on `https://api.platform.sandbox.dakota.xyz`. Ignored in production.
+                 */
+                readonly "X-Sandbox-Scenario"?: components["parameters"]["SandboxScenarioHeader"];
+                /**
+                 * @description Sandbox-only. Names the pipeline step at which the injected error fires. Pair with `X-Sandbox-Error-Status` and (optionally) `X-Sandbox-Error-Message` to drive a deterministic failure mode at a known point in the request lifecycle. Values longer than 100 characters are ignored.
+                 *     Effective only on `https://api.platform.sandbox.dakota.xyz`. Ignored in production.
+                 */
+                readonly "X-Sandbox-Error-Step"?: components["parameters"]["SandboxErrorStepHeader"];
+                /**
+                 * @description Sandbox-only. Sets the HTTP status code returned when the sandbox injects an error at the configured step (see `X-Sandbox-Error-Step`). Must be a valid HTTP status code in the range 100-599; values outside that range are ignored. Status codes >= 400 cause the request to short-circuit immediately with a structured error response.
+                 *     Effective only on `https://api.platform.sandbox.dakota.xyz`. Ignored in production.
+                 */
+                readonly "X-Sandbox-Error-Status"?: components["parameters"]["SandboxErrorStatusHeader"];
+                /**
+                 * @description Sandbox-only. Sets the human-readable `message` field of the injected sandbox error response. Truncated values longer than 500 characters are ignored.
+                 *     Effective only on `https://api.platform.sandbox.dakota.xyz`. Ignored in production.
+                 */
+                readonly "X-Sandbox-Error-Message"?: components["parameters"]["SandboxErrorMessageHeader"];
             };
             readonly path: {
                 /** @description Unique identifier of the transaction. */
@@ -8521,6 +9000,26 @@ export interface operations {
             readonly header: {
                 /** @description Unique key to ensure request idempotency. If the same key is used within a certain time window, the original response will be returned instead of executing the request again. */
                 readonly "x-idempotency-key": components["parameters"]["IdempotencyKeyHeader"];
+                /**
+                 * @description Sandbox-only. Applies a preset failure or behavior mode for the request, selecting a coherent combination of error step, status, and message. The full set of scenarios is also exposed dynamically via `GET /sandbox/scenarios` along with descriptions and per-rail applicability.
+                 *     Effective only on `https://api.platform.sandbox.dakota.xyz`. Ignored in production.
+                 */
+                readonly "X-Sandbox-Scenario"?: components["parameters"]["SandboxScenarioHeader"];
+                /**
+                 * @description Sandbox-only. Names the pipeline step at which the injected error fires. Pair with `X-Sandbox-Error-Status` and (optionally) `X-Sandbox-Error-Message` to drive a deterministic failure mode at a known point in the request lifecycle. Values longer than 100 characters are ignored.
+                 *     Effective only on `https://api.platform.sandbox.dakota.xyz`. Ignored in production.
+                 */
+                readonly "X-Sandbox-Error-Step"?: components["parameters"]["SandboxErrorStepHeader"];
+                /**
+                 * @description Sandbox-only. Sets the HTTP status code returned when the sandbox injects an error at the configured step (see `X-Sandbox-Error-Step`). Must be a valid HTTP status code in the range 100-599; values outside that range are ignored. Status codes >= 400 cause the request to short-circuit immediately with a structured error response.
+                 *     Effective only on `https://api.platform.sandbox.dakota.xyz`. Ignored in production.
+                 */
+                readonly "X-Sandbox-Error-Status"?: components["parameters"]["SandboxErrorStatusHeader"];
+                /**
+                 * @description Sandbox-only. Sets the human-readable `message` field of the injected sandbox error response. Truncated values longer than 500 characters are ignored.
+                 *     Effective only on `https://api.platform.sandbox.dakota.xyz`. Ignored in production.
+                 */
+                readonly "X-Sandbox-Error-Message"?: components["parameters"]["SandboxErrorMessageHeader"];
             };
             readonly path?: never;
             readonly cookie?: never;
@@ -9554,6 +10053,18 @@ export interface operations {
                 readonly input_asset?: string;
                 /** @description Filter transactions by destination asset symbol */
                 readonly destination_asset?: string;
+                /** @description Filter transactions by one or more statuses. Comma-separated list (e.g. `pending,processing`). */
+                readonly statuses?: string;
+                /** @description Filter transactions by one or more types. Comma-separated list (e.g. `onramp,offramp`). */
+                readonly types?: string;
+                /** @description Filter transactions where outgoing_amount is greater than or equal to this value. */
+                readonly outgoing_amount_min?: string;
+                /** @description Filter transactions where outgoing_amount is less than or equal to this value. */
+                readonly outgoing_amount_max?: string;
+                /** @description Field to sort transactions by. Currently only `created_at` is supported. Defaults to `created_at`. */
+                readonly sort_by?: "created_at";
+                /** @description Sort direction. Defaults to `desc`. */
+                readonly sort_dir?: "asc" | "desc";
             };
             readonly header?: never;
             readonly path?: never;
@@ -9743,6 +10254,113 @@ export interface operations {
                      *     }
                      */
                     readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    readonly bulkImportFromSumsubTokens: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header: {
+                /** @description Unique key to ensure request idempotency. If the same key is used within a certain time window, the original response will be returned instead of executing the request again. */
+                readonly "x-idempotency-key": components["parameters"]["IdempotencyKeyHeader"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                /**
+                 * @example {
+                 *       "tokens": [
+                 *         "_act-sbx-jwt-eyJhbGciOiJub25lIn0...",
+                 *         "_act-sbx-jwt-eyKhbGciOiJub25lIn0..."
+                 *       ]
+                 *     }
+                 */
+                readonly "application/json": {
+                    /** @description List of Sumsub share tokens to import */
+                    readonly tokens: readonly string[];
+                };
+            };
+        };
+        readonly responses: {
+            /** @description Bulk import completed (individual results may include errors) */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "total": 2,
+                     *       "succeeded": 1,
+                     *       "failed": 1,
+                     *       "results": [
+                     *         {
+                     *           "name": "Sarah Williams (from Sumsub)",
+                     *           "success": true,
+                     *           "customer_id": "abc123",
+                     *           "application_id": "def456"
+                     *         },
+                     *         {
+                     *           "name": "Unknown",
+                     *           "success": false,
+                     *           "error": "Share token expired"
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    readonly "application/json": {
+                        readonly total?: number;
+                        readonly succeeded?: number;
+                        readonly failed?: number;
+                        readonly results?: readonly {
+                            readonly name?: string;
+                            readonly success?: boolean;
+                            readonly customer_id?: string;
+                            readonly application_id?: string;
+                            readonly error?: string;
+                        }[];
+                    };
+                };
+            };
+            /** @description Invalid request */
+            readonly 400: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://api.platform.dakota.xyz/problems/invalid-request",
+                     *       "title": "Invalid Request",
+                     *       "status": 400,
+                     *       "detail": "Request body must contain at least one item",
+                     *       "instance": "https://api.platform.dakota.xyz/customers/bulk-import-sumsub-tokens",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            readonly 401: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://api.platform.dakota.xyz/problems/unauthorized",
+                     *       "title": "Unauthorized",
+                     *       "status": 401,
+                     *       "detail": "Unauthorized",
+                     *       "instance": "https://api.platform.dakota.xyz/customers/bulk-import-sumsub-tokens",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["ProblemDetails"];
                 };
             };
         };
@@ -12930,6 +13548,23 @@ export interface operations {
                      *     }
                      */
                     readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Insufficient self-serve credits to perform this submission. */
+            readonly 402: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "error": "insufficient_credits",
+                     *       "message": "Insufficient credits to submit this application. Required 2500 cents, balance 500 cents.",
+                     *       "required_cents": 2500,
+                     *       "balance_cents": 500
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["InsufficientCreditsError"];
                 };
             };
             /** @description Forbidden - application not owned by client */
@@ -16951,6 +17586,14 @@ export interface operations {
                 readonly starting_after?: components["parameters"]["StartingAfterParam"];
                 /** @description A cursor for use in pagination. `ending_before` is a KSUID for the object you are listing that defines your place in the list. For instance, if you make a list request and receive 100 objects, starting with ID `2B5J8KZ9N7M1K3P6Q8R4T7V9`, your subsequent call can include `ending_before=2B5J8KZ9N7M1K3P6Q8R4T7V9` in order to fetch the previous page of the list. */
                 readonly ending_before?: components["parameters"]["EndingBeforeParam"];
+                /** @description Filter API keys created at or after this ISO 8601 datetime (e.g. 2024-01-01T00:00:00Z). */
+                readonly created_at_from?: string;
+                /** @description Filter API keys created at or before this ISO 8601 datetime (e.g. 2024-12-31T23:59:59Z). */
+                readonly created_at_to?: string;
+                /** @description Field to sort API keys by. Currently only `created_at` is supported. */
+                readonly sort_by?: "created_at";
+                /** @description Sort direction. Defaults to `desc`. */
+                readonly sort_dir?: "asc" | "desc";
             };
             readonly header?: never;
             readonly path?: never;
@@ -17407,6 +18050,18 @@ export interface operations {
                 readonly starting_after?: components["parameters"]["StartingAfterParam"];
                 /** @description A cursor for use in pagination. `ending_before` is a KSUID for the object you are listing that defines your place in the list. For instance, if you make a list request and receive 100 objects, starting with ID `2B5J8KZ9N7M1K3P6Q8R4T7V9`, your subsequent call can include `ending_before=2B5J8KZ9N7M1K3P6Q8R4T7V9` in order to fetch the previous page of the list. */
                 readonly ending_before?: components["parameters"]["EndingBeforeParam"];
+                /** @description Fuzzy search across first/last name, email, and user ID. */
+                readonly search?: string;
+                /** @description Filter users created at or after this ISO 8601 datetime (e.g. 2024-01-01T00:00:00Z). */
+                readonly created_at_from?: string;
+                /** @description Filter users created at or before this ISO 8601 datetime (e.g. 2024-12-31T23:59:59Z). */
+                readonly created_at_to?: string;
+                /** @description Filter users by one or more roles. Comma-separated list (e.g. `admin,member`). */
+                readonly roles?: string;
+                /** @description Field to sort users by. Defaults to `created_at`. */
+                readonly sort_by?: "created_at" | "email" | "name" | "role";
+                /** @description Sort direction. Defaults to `desc`. */
+                readonly sort_dir?: "asc" | "desc";
             };
             readonly header?: never;
             readonly path?: never;
@@ -18902,6 +19557,31 @@ export interface operations {
             readonly header: {
                 /** @description Unique key to ensure request idempotency. If the same key is used within a certain time window, the original response will be returned instead of executing the request again. */
                 readonly "x-idempotency-key": components["parameters"]["IdempotencyKeyHeader"];
+                /**
+                 * @description Sandbox-only. Applies a preset failure or behavior mode for the request, selecting a coherent combination of error step, status, and message. The full set of scenarios is also exposed dynamically via `GET /sandbox/scenarios` along with descriptions and per-rail applicability.
+                 *     Effective only on `https://api.platform.sandbox.dakota.xyz`. Ignored in production.
+                 */
+                readonly "X-Sandbox-Scenario"?: components["parameters"]["SandboxScenarioHeader"];
+                /**
+                 * @description Sandbox-only. Names the pipeline step at which the injected error fires. Pair with `X-Sandbox-Error-Status` and (optionally) `X-Sandbox-Error-Message` to drive a deterministic failure mode at a known point in the request lifecycle. Values longer than 100 characters are ignored.
+                 *     Effective only on `https://api.platform.sandbox.dakota.xyz`. Ignored in production.
+                 */
+                readonly "X-Sandbox-Error-Step"?: components["parameters"]["SandboxErrorStepHeader"];
+                /**
+                 * @description Sandbox-only. Sets the HTTP status code returned when the sandbox injects an error at the configured step (see `X-Sandbox-Error-Step`). Must be a valid HTTP status code in the range 100-599; values outside that range are ignored. Status codes >= 400 cause the request to short-circuit immediately with a structured error response.
+                 *     Effective only on `https://api.platform.sandbox.dakota.xyz`. Ignored in production.
+                 */
+                readonly "X-Sandbox-Error-Status"?: components["parameters"]["SandboxErrorStatusHeader"];
+                /**
+                 * @description Sandbox-only. Sets the human-readable `message` field of the injected sandbox error response. Truncated values longer than 500 characters are ignored.
+                 *     Effective only on `https://api.platform.sandbox.dakota.xyz`. Ignored in production.
+                 */
+                readonly "X-Sandbox-Error-Message"?: components["parameters"]["SandboxErrorMessageHeader"];
+                /**
+                 * @description Sandbox-only. When `true`, asynchronous simulation flows complete immediately rather than progressing through their normal timed states. Useful for fast end-to-end test runs that do not need to exercise intermediate webhook events. Accepts `true`/`false` (also `1`/`0`, `yes`/`no`); other values are treated as `false`.
+                 *     Effective only on `https://api.platform.sandbox.dakota.xyz`. Ignored in production.
+                 */
+                readonly "X-Sandbox-Instant-Completion"?: components["parameters"]["SandboxInstantCompletionHeader"];
             };
             readonly path?: never;
             readonly cookie?: never;
@@ -18925,24 +19605,52 @@ export interface operations {
                      */
                     readonly simulation_id: string;
                     /**
-                     * @description Payment rail and direction
+                     * @description Payment rail and direction. Use the `fedwire_*` values for
+                     *     Fedwire flows; the `wire_*` values are accepted as legacy
+                     *     aliases for backwards compatibility and may be removed in
+                     *     a future major version.
                      * @example ach_inbound
                      * @enum {string}
                      */
-                    readonly type: "ach_inbound" | "wire_inbound" | "crypto_inbound" | "ach_outbound_returned" | "ach_outbound_failed" | "wire_outbound_returned" | "wire_outbound_failed" | "ach_outbound_settled" | "ach_outbound_rejected" | "wire_outbound_settled" | "wire_outbound_rejected" | "ach_reversal" | "wire_reversal";
+                    readonly type: "ach_inbound" | "fedwire_inbound" | "wire_inbound" | "crypto_inbound" | "ach_outbound_returned" | "ach_outbound_failed" | "fedwire_outbound_returned" | "wire_outbound_returned" | "fedwire_outbound_failed" | "wire_outbound_failed" | "ach_outbound_settled" | "ach_outbound_rejected" | "fedwire_outbound_settled" | "wire_outbound_settled" | "fedwire_outbound_rejected" | "wire_outbound_rejected" | "ach_reversal" | "fedwire_reversal" | "wire_reversal";
                     /**
-                     * @description Platform account ID (required for ach_inbound and wire_inbound types)
+                     * @description Platform account ID of the target onramp/offramp auto account.
+                     *     **Required for `ach_inbound` and `fedwire_inbound`.**
+                     *     Ignored for other `type` values.
                      * @example acc_123
                      */
-                    readonly account_id: string;
+                    readonly account_id?: string;
                     /**
-                     * @description Wallet ID (required for crypto_inbound type)
-                     * @example wallet_abc
+                     * @description The on-chain wallet address returned by `POST /wallets`
+                     *     (see the `address` field in the response). **Required for
+                     *     `crypto_inbound`.** Ignored for other types.
+                     * @example 0x165cd37b4c644c2921454429e7f9358d18a45e14
+                     */
+                    readonly wallet_address?: string;
+                    /**
+                     * @deprecated
+                     * @description Legacy alias for `wallet_address`. Prefer `wallet_address` —
+                     *     this field is accepted for backwards compatibility and may
+                     *     be removed in a future major version.
+                     * @example 0x165cd37b4c644c2921454429e7f9358d18a45e14
                      */
                     readonly wallet_id?: string;
                     /**
-                     * @description Movement ID (required for outbound types)
-                     * @example mov_456
+                     * @description The one-off transaction ID returned by
+                     *     `POST /transactions/one-off` (see the `id` field in the
+                     *     response). **Required for outbound types**
+                     *     (`ach_outbound_*`, `fedwire_outbound_*`, `*_reversal`).
+                     *     Ignored for inbound types.
+                     * @example 2NfHrqBHb3cTfLVkFSGmHZqdDQ7
+                     */
+                    readonly one_off_transaction_id?: string;
+                    /**
+                     * @deprecated
+                     * @description Legacy alias for `one_off_transaction_id`. Prefer
+                     *     `one_off_transaction_id` — this field is accepted for
+                     *     backwards compatibility and may be removed in a future
+                     *     major version.
+                     * @example 2NfHrqBHb3cTfLVkFSGmHZqdDQ7
                      */
                     readonly movement_id?: string;
                     /**
@@ -19104,6 +19812,36 @@ export interface operations {
             readonly header: {
                 /** @description Unique key to ensure request idempotency. If the same key is used within a certain time window, the original response will be returned instead of executing the request again. */
                 readonly "x-idempotency-key": components["parameters"]["IdempotencyKeyHeader"];
+                /**
+                 * @description Sandbox-only. Applies a preset failure or behavior mode for the request, selecting a coherent combination of error step, status, and message. The full set of scenarios is also exposed dynamically via `GET /sandbox/scenarios` along with descriptions and per-rail applicability.
+                 *     Effective only on `https://api.platform.sandbox.dakota.xyz`. Ignored in production.
+                 */
+                readonly "X-Sandbox-Scenario"?: components["parameters"]["SandboxScenarioHeader"];
+                /**
+                 * @description Sandbox-only. Names the pipeline step at which the injected error fires. Pair with `X-Sandbox-Error-Status` and (optionally) `X-Sandbox-Error-Message` to drive a deterministic failure mode at a known point in the request lifecycle. Values longer than 100 characters are ignored.
+                 *     Effective only on `https://api.platform.sandbox.dakota.xyz`. Ignored in production.
+                 */
+                readonly "X-Sandbox-Error-Step"?: components["parameters"]["SandboxErrorStepHeader"];
+                /**
+                 * @description Sandbox-only. Sets the HTTP status code returned when the sandbox injects an error at the configured step (see `X-Sandbox-Error-Step`). Must be a valid HTTP status code in the range 100-599; values outside that range are ignored. Status codes >= 400 cause the request to short-circuit immediately with a structured error response.
+                 *     Effective only on `https://api.platform.sandbox.dakota.xyz`. Ignored in production.
+                 */
+                readonly "X-Sandbox-Error-Status"?: components["parameters"]["SandboxErrorStatusHeader"];
+                /**
+                 * @description Sandbox-only. Sets the human-readable `message` field of the injected sandbox error response. Truncated values longer than 500 characters are ignored.
+                 *     Effective only on `https://api.platform.sandbox.dakota.xyz`. Ignored in production.
+                 */
+                readonly "X-Sandbox-Error-Message"?: components["parameters"]["SandboxErrorMessageHeader"];
+                /**
+                 * @description Sandbox-only. When `true`, asynchronous simulation flows complete immediately rather than progressing through their normal timed states. Useful for fast end-to-end test runs that do not need to exercise intermediate webhook events. Accepts `true`/`false` (also `1`/`0`, `yes`/`no`); other values are treated as `false`.
+                 *     Effective only on `https://api.platform.sandbox.dakota.xyz`. Ignored in production.
+                 */
+                readonly "X-Sandbox-Instant-Completion"?: components["parameters"]["SandboxInstantCompletionHeader"];
+                /**
+                 * @description Sandbox-only. When `true`, prevents the default 5-second KYB auto-approval that the sandbox applies to newly created customers. Use this header (typically with `X-Sandbox-Scenario: kyb_manual_review` or `kyb_rejected`) to keep an application in `pending` so integrators can exercise manual-review and rejection flows. Accepts `true`/`false` (also `1`/`0`, `yes`/`no`); other values are treated as `false`.
+                 *     Effective only on `https://api.platform.sandbox.dakota.xyz`. Ignored in production.
+                 */
+                readonly "X-Sandbox-Skip-Auto-Approval"?: components["parameters"]["SandboxSkipAutoApprovalHeader"];
             };
             readonly path?: never;
             readonly cookie?: never;
@@ -19385,7 +20123,7 @@ export interface operations {
                      *           "description": "Simulates an immediate successful settlement callback sequence.",
                      *           "valid_for": [
                      *             "ach_inbound",
-                     *             "wire_inbound"
+                     *             "fedwire_inbound"
                      *           ],
                      *           "stateful": false,
                      *           "example_webhook_sequence": [
@@ -19762,6 +20500,7 @@ export interface operations {
                      *         {
                      *           "id": "2WCn7YQ2QqA4oQ7wYpQyQ1QZKp1",
                      *           "entry_type": "purchase",
+                     *           "category": "purchase",
                      *           "amount_cents": 10000,
                      *           "balance_after_cents": 10000,
                      *           "transaction_id": null,
@@ -19771,6 +20510,7 @@ export interface operations {
                      *         {
                      *           "id": "2WCn7d4W2KzGdYJZmkQ8q2rKQm8",
                      *           "entry_type": "deduction",
+                     *           "category": "transaction_fee",
                      *           "amount_cents": -250,
                      *           "balance_after_cents": 9750,
                      *           "transaction_id": "2WCn7kNcM6Yd3D2d4nY1Ld4Z1mV",
@@ -19878,6 +20618,82 @@ export interface operations {
                      *     }
                      */
                     readonly "application/json": components["schemas"]["SelfServeCreditTiersResponse"];
+                };
+            };
+            /** @description Unauthorized */
+            readonly 401: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#authentication-error",
+                     *       "title": "Authentication Required",
+                     *       "status": 401,
+                     *       "detail": "Missing or invalid authentication credentials."
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Credit management is only available for self-serve customers */
+            readonly 403: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#forbidden",
+                     *       "title": "Forbidden",
+                     *       "status": 403,
+                     *       "detail": "Credit management is only available for self-serve customers."
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unexpected error */
+            readonly default: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    readonly getSelfServeCreditsPricing: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Current pricing config. */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "monthlyMinimumCents": 10000,
+                     *       "transferFeeBps": 25,
+                     *       "achFeeCents": 100,
+                     *       "wireFeeCents": 2500,
+                     *       "sepaFeeCents": 150,
+                     *       "swiftFeeCents": 4000,
+                     *       "kycFeeCents": 500,
+                     *       "kybFeeCents": 2500,
+                     *       "effectiveFrom": "2024-01-01T00:00:00Z",
+                     *       "createdAt": "2024-01-01T00:00:00Z",
+                     *       "updatedAt": "2024-01-01T00:00:00Z"
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["ClientPricingConfig"];
                 };
             };
             /** @description Unauthorized */

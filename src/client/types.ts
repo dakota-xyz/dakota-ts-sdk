@@ -56,6 +56,29 @@ export type UpdateCustomerSubClientRequest =
 /** Summary of a sub-client including the count of associated customers */
 export type SubClientSummary = components['schemas']['SubClientSummary'];
 
+/** Request body for bulk-importing customers from Sumsub share tokens */
+export interface BulkImportSumsubTokensRequest {
+  /** List of Sumsub share tokens to import */
+  tokens: string[];
+}
+
+/** Per-token outcome for a bulk Sumsub import */
+export interface BulkImportSumsubTokensResult {
+  name?: string;
+  success?: boolean;
+  customer_id?: string;
+  application_id?: string;
+  error?: string;
+}
+
+/** Response from bulk-importing customers from Sumsub share tokens */
+export interface BulkImportSumsubTokensResponse {
+  total?: number;
+  succeeded?: number;
+  failed?: number;
+  results?: BulkImportSumsubTokensResult[];
+}
+
 // ============================================================================
 // Recipient Types
 // ============================================================================
@@ -790,6 +813,17 @@ export type SelfServeCreditTier = components['schemas']['SelfServeCreditTier'];
 
 /** Self-serve credit tiers response */
 export type SelfServeCreditTiersResponse = components['schemas']['SelfServeCreditTiersResponse'];
+
+/** Self-serve client pricing configuration (fee schedule) */
+export type ClientPricingConfig = components['schemas']['ClientPricingConfig'];
+
+/**
+ * Self-serve credits pricing response.
+ *
+ * Returned by `GET /self-serve/credits/pricing` — the caller's current
+ * `ClientPricingConfig` (transfer/ACH/wire/SEPA/SWIFT/KYC/KYB fees + monthly minimum).
+ */
+export type SelfServeCreditsPricingResponse = ClientPricingConfig;
 
 /** Ledger entry type filter */
 export type SelfServeCreditsLedgerEntryType = SelfServeCreditsLedgerEntry['entry_type'];

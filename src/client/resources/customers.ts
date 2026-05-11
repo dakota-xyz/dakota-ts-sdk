@@ -5,6 +5,8 @@
 import { BaseResource } from './base.js';
 import { PaginatedIterator } from '../pagination.js';
 import type {
+  BulkImportSumsubTokensRequest,
+  BulkImportSumsubTokensResponse,
   Customer,
   CustomerCreateRequest,
   CustomerCreateResponse,
@@ -157,5 +159,39 @@ export class CustomersResource extends BaseResource {
       path: '/customers/sub-client-summary',
     });
     return response.data;
+  }
+
+  /**
+   * Bulk-import customers from Sumsub share tokens.
+   *
+   * Exchanges one or more Sumsub share tokens for Dakota customers + applications.
+   * The response surfaces per-token results — individual tokens can fail while
+   * others succeed.
+   *
+   * @param data - Bulk-import request containing the share tokens to redeem
+   * @param options - Request options (e.g., custom idempotency key)
+   * @returns Bulk-import summary with per-token results
+   *
+   * @example
+   * ```typescript
+   * const result = await client.customers.bulkImportFromSumsubTokens({
+   *   tokens: ['_act-sbx-jwt-...', '_act-sbx-jwt-...'],
+   * });
+   * console.log(`Imported ${result.succeeded}/${result.total}`);
+   * for (const r of result.results ?? []) {
+   *   if (!r.success) console.error(r.name, r.error);
+   * }
+   * ```
+   */
+  async bulkImportFromSumsubTokens(
+    data: BulkImportSumsubTokensRequest,
+    options?: RequestOptions
+  ): Promise<BulkImportSumsubTokensResponse> {
+    return this.transport.request<BulkImportSumsubTokensResponse>({
+      method: 'POST',
+      path: '/customers/bulk-import-sumsub-tokens',
+      body: data,
+      idempotencyKey: options?.idempotencyKey,
+    });
   }
 }

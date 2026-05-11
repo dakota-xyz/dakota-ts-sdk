@@ -9,6 +9,7 @@ import type {
   SelfServeCreditsBalanceResponse,
   SelfServeCreditsLedgerResponse,
   SelfServeCreditsLedgerParams,
+  SelfServeCreditsPricingResponse,
   SelfServeCreditTiersResponse,
   RequestOptions,
 } from '../types.js';
@@ -122,6 +123,28 @@ export class SelfServeResource extends BaseResource {
     return this.transport.request<SelfServeCreditTiersResponse>({
       method: 'GET',
       path: '/self-serve/credits/tiers',
+    });
+  }
+
+  /**
+   * Get the self-serve client's pricing config (fee schedule).
+   *
+   * Returns the caller's current `ClientPricingConfig` — transfer/ACH/wire/SEPA/SWIFT/KYC/KYB
+   * fees plus the monthly minimum. Self-serve clients only.
+   *
+   * @returns The current pricing configuration
+   *
+   * @example
+   * ```typescript
+   * const pricing = await client.selfServe.getPricing();
+   * console.log(`ACH fee: ${pricing.achFeeCents} cents`);
+   * console.log(`Wire fee: ${pricing.wireFeeCents} cents`);
+   * ```
+   */
+  async getPricing(): Promise<SelfServeCreditsPricingResponse> {
+    return this.transport.request<SelfServeCreditsPricingResponse>({
+      method: 'GET',
+      path: '/self-serve/credits/pricing',
     });
   }
 }

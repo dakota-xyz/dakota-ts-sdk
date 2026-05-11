@@ -2,6 +2,41 @@
 
 All notable changes to the Dakota TypeScript SDK are documented in this file.
 
+## [1.2.0] - 2026-05-11
+
+### Summary
+
+Sync the SDK's OpenAPI spec to the latest Dakota Platform API docs
+(`mintlify-docs`). Adds 2 new endpoints, 4 new schemas, and pulls in shape
+updates for ~18 schemas / 16 operations that already existed.
+
+### Added
+
+#### Customers
+- `customers.bulkImportFromSumsubTokens(data)` — bulk-import customers from
+  one or more Sumsub share tokens (`POST /customers/bulk-import-sumsub-tokens`).
+  Returns per-token results so partial successes are observable.
+- `BulkImportSumsubTokensRequest`, `BulkImportSumsubTokensResponse`,
+  `BulkImportSumsubTokensResult` types.
+
+#### Self-Serve Credits
+- `selfServe.getPricing()` — fetch the caller's `ClientPricingConfig`
+  (fee schedule: ACH / wire / SEPA / SWIFT / KYC / KYB + monthly minimum)
+  (`GET /self-serve/credits/pricing`). Self-serve clients only.
+- `ClientPricingConfig`, `SelfServeCreditsPricingResponse` types.
+
+### Changed
+
+- Regenerated `src/generated/api.ts` from the latest `openapi.yaml`
+  (mintlify-docs source of truth). Pulls in shape changes for `Application`,
+  `AutoAccountTransaction`, `ClientUser`, `Customer`, `FiatIBANDestinationRequest`,
+  `FiatIBANDestinationResponse`, `FiatUSDestinationRequest`, `KybLinkType`,
+  `OneOffTransaction`, `OneOffTransactionRequest`, `OneOffTransactionStatus`,
+  `PaymentCapability`, `Policy`, `SelfServeCreditsLedgerEntry`, `Signer`,
+  `SignerCreateRequest`, `Transaction`, and `TransactionStatus`.
+- New schemas now available on `components['schemas']`: `ClientPricingConfig`,
+  `FiatUSDestinationAddress`, `InsufficientCreditsError`, `SenderDetails`.
+
 ## [1.1.0] - 2026-04-17
 
 ### Summary
