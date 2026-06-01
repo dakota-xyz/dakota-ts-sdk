@@ -108,6 +108,46 @@ export type paths = {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/wallets/{wallet_id}": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Get a single wallet
+         * @description Returns a single wallet by id. The response includes `customer_name` and `created_at` joined server-side.
+         */
+        readonly get: operations["getWallet"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/wallets/{wallet_id}/policies": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Get policies attached to a wallet
+         * @description Returns slim references (id + name) for the policies currently attached to the specified wallet.
+         */
+        readonly get: operations["getPoliciesForWallet"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/wallets/{wallet_id}/balances": {
         readonly parameters: {
             readonly query?: never;
@@ -162,8 +202,10 @@ export type paths = {
         readonly get: operations["listTransactions"];
         readonly put?: never;
         /**
-         * Create a transaction
-         * @description Create a transaction resource.
+         * Create a one-off transfer
+         * @description Create a one-off transfer. Supports both offramp (destination is a
+         *     bank account, fiat_us or fiat_iban) and swap (destination is a crypto
+         *     address) flows; the destination type selects which.
          */
         readonly post: operations["createTransaction"];
         readonly delete?: never;
@@ -721,6 +763,23 @@ export type paths = {
          *     to cloud storage, then create a verification resource for the upload.
          *
          *     **Authentication:** Accepts Application Token (X-Application-Token header).
+         *
+         *     **Individual PoA & transaction limits**
+         *
+         *     Individual customers may onboard without a Proof of Address. Dakota enforces a
+         *     **$3,000 USD-equivalent rolling 7-day transaction limit** on individuals without PoA
+         *     on file. If a customer's volume crosses this threshold, the customer is frozen and
+         *     inbound transactions paused until a Proof of Address is submitted and approved.
+         *     **Clients are expected to implement their own volume tracking and limits on their
+         *     customers** — Dakota's enforcement is a backstop, not the only line of defense.
+         *
+         *     **Post-decision PoA upload**
+         *
+         *     Uploading a PoA-equivalent document (`proof_of_address`, `bank_statement`, or
+         *     `utility_bill`) on an already-decided individual application (status `approved` or
+         *     `completed`) automatically transitions the application to `compliance_review` and sets
+         *     `poa_status` to `submitted_pending_review`. The applicant can use the same onboarding
+         *     link to upload their document after the initial decision.
          */
         readonly post: operations["createApplicationDocumentUpload"];
         readonly delete?: never;
@@ -816,6 +875,13 @@ export type paths = {
          *     After uploading to the presigned URL, call the verify endpoint to complete the upload process.
          *
          *     **Authentication:** Accepts Application Token (X-Application-Token header).
+         *
+         *     **Post-decision PoA upload**
+         *
+         *     Uploading a PoA-equivalent document (`proof_of_address`, `bank_statement`, or
+         *     `utility_bill`) on an already-decided individual application (status `approved` or
+         *     `completed`) automatically transitions the application to `compliance_review` and sets
+         *     `poa_status` to `submitted_pending_review`.
          */
         readonly post: operations["createAssociatedIndividualDocumentUpload"];
         readonly delete?: never;
@@ -933,6 +999,26 @@ export type paths = {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/policies/{policy_id}/wallets": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Get wallets attached to a policy
+         * @description Returns slim references (id + name + family) for the wallets the given policy is currently attached to.
+         */
+        readonly get: operations["getWalletsForPolicy"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/policies/{policy_id}/rules": {
         readonly parameters: {
             readonly query?: never;
@@ -1036,6 +1122,26 @@ export type paths = {
          * @description Retrieves a signer group by `signer_group_id`.
          */
         readonly get: operations["getSignerGroup"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/signer-groups/{signer_group_id}/wallets": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Get wallets attached to a signer group
+         * @description Returns slim references (id + name + family) for the wallets the given signer group is currently attached to.
+         */
+        readonly get: operations["getWalletsForSignerGroup"];
         readonly put?: never;
         readonly post?: never;
         readonly delete?: never;
@@ -1376,6 +1482,13 @@ export type paths = {
         /**
          * List events
          * @description Returns a paginated event stream for the authenticated client for audit and operational troubleshooting.
+         *
+         *     `customer.kyb_status.updated` events may include a `reason_code` field in `data.object` when the status change is driven by the Proof-of-Address (PoA) flow:
+         *     - `pending_proof_of_address` — emitted on freeze when the customer's rolling 7-day inbound volume exceeds the PoA-required threshold and no PoA is on file.
+         *     - `proof_of_address_rejected` — emitted when compliance rejects a submitted PoA document.
+         *     - `proof_of_address_approved` — emitted when compliance approves a submitted PoA, unfreezing the customer.
+         *
+         *     Other `customer.kyb_status.*` events do not include `reason_code`.
          */
         readonly get: operations["listEvents"];
         readonly put?: never;
@@ -1977,7 +2090,7 @@ export type components = {
              */
             readonly wireFeeCents: number;
             /**
-             * @description Per-SWIFT transaction fee in cents
+             * @description Per-SEPA transaction fee in cents
              * @example 150
              */
             readonly sepaFeeCents: number;
@@ -2151,7 +2264,7 @@ export type components = {
             readonly idempotency_key?: string | null;
         };
         readonly EventData: {
-            /** @description Event resource snapshot after provider-field sanitization. */
+            /** @description Event resource snapshot after provider-field sanitization. The shape varies by event type; see the `GET /events` example responses for representative payloads. */
             readonly object: {
                 readonly [key: string]: unknown;
             };
@@ -2389,6 +2502,18 @@ export type components = {
             /** @description ID of the KYB application associated with this customer */
             readonly application_id?: components["schemas"]["KSUID"];
             /**
+             * @description Current lifecycle state of the customer's onboarding application
+             *     (e.g. `pending`, `submitted`, `under_review`, `approved`,
+             *     `declined`). Omitted when the customer has no application.
+             *
+             *     Use this field to drive workflow UI — it tracks where the
+             *     customer is in the onboarding flow. For the orthogonal questions
+             *     "is this customer cleared to transact?" and "what's the
+             *     provider-agnostic KYC verdict?", see `kyb_status` and
+             *     `kyc_status` respectively.
+             */
+            readonly application_status?: components["schemas"]["ApplicationStatus"];
+            /**
              * @description Application decision status
              * @example approved
              * @enum {string}
@@ -2539,10 +2664,15 @@ export type components = {
          *     - `approved` - Application approved
          *     - `declined` - Application declined
          *     - `completed` - Legacy status (deprecated, use approved/declined instead)
+         *     - `compliance_review` - Application is awaiting compliance review of a Proof of Address
+         *       document. Set when an individual applicant uploads a PoA-equivalent document
+         *       (proof_of_address, bank_statement, or utility_bill) after their application has
+         *       already been approved or completed. The customer remains active but is subject to
+         *       the $3,000 USD-equivalent rolling 7-day transaction limit until the review concludes.
          * @example submitted
          * @enum {string}
          */
-        readonly ApplicationStatus: "pending" | "submitted" | "under_review" | "request_for_information" | "admin_revision" | "approved" | "declined" | "completed";
+        readonly ApplicationStatus: "pending" | "submitted" | "under_review" | "request_for_information" | "admin_revision" | "approved" | "declined" | "completed" | "compliance_review";
         /**
          * Family
          * @description Blockchain family for the crypto account.
@@ -2556,7 +2686,7 @@ export type components = {
          * @example ach
          * @enum {string}
          */
-        readonly PaymentCapability: "ach" | "fedwire" | "swift" | "us_bank_account";
+        readonly PaymentCapability: "ach" | "fedwire" | "swift" | "sepa" | "us_bank_account";
         /**
          * Transaction Status
          * @description Current status of a transaction.
@@ -2837,7 +2967,7 @@ export type components = {
         };
         /**
          * IBAN Fiat Destination Request
-         * @description Request for creating or updating an IBAN bank account destination (for SWIFT and SWIFT transfers).
+         * @description Request for creating or updating an IBAN bank account destination (for SWIFT and SEPA transfers).
          */
         readonly FiatIBANDestinationRequest: Omit<components["schemas"]["DestinationRequest"], "destination_type"> & {
             /**
@@ -2858,7 +2988,7 @@ export type components = {
              */
             readonly iban: string;
             /**
-             * @description BIC/SWIFT code for the international bank account (optional for required for SWIFT).
+             * @description BIC/SWIFT code for the international bank account (optional for SEPA, required for SWIFT).
              * @example DEUTDEFFXXX
              */
             readonly bic?: string;
@@ -3063,7 +3193,7 @@ export type components = {
         };
         /**
          * IBAN Fiat Destination Response
-         * @description Response for an IBAN bank account destination (for SWIFT and SWIFT transfers).
+         * @description Response for an IBAN bank account destination (for SWIFT and SEPA transfers).
          */
         readonly FiatIBANDestinationResponse: Omit<components["schemas"]["DestinationResponse"], "destination_type"> & {
             /**
@@ -3082,7 +3212,7 @@ export type components = {
              */
             readonly iban: string;
             /**
-             * @description BIC/SWIFT code for the international bank account (optional for required for SWIFT).
+             * @description BIC/SWIFT code for the international bank account (optional for SEPA, required for SWIFT).
              * @example DEUTDEFFXXX
              */
             readonly bic?: string;
@@ -3509,20 +3639,59 @@ export type components = {
         readonly PaginatedAutoTransactionResponse: components["schemas"]["PaginatedListResponse"] & {
             readonly data?: readonly components["schemas"]["AutoAccountTransaction"][];
         };
+        /** @description Slim reference to a policy attached to a wallet (id + name only). */
+        readonly AttachedPolicy: {
+            /**
+             * @description Policy id.
+             * @example pol_2N4YkKpKu7M3mKpGYmF8kcJ8oZT
+             */
+            readonly id: string;
+            /**
+             * @description Policy name.
+             * @example High Value Transaction Policy
+             */
+            readonly name: string;
+        };
+        /** @description Slim reference to a wallet attached to a policy or signer group (id + name + family). */
+        readonly AttachedWallet: {
+            readonly id: components["schemas"]["KSUID"];
+            /**
+             * @description Wallet name.
+             * @example Treasury Wallet
+             */
+            readonly name: string;
+            readonly family: components["schemas"]["Family"];
+        };
         /**
          * @description Transaction type for one-off transaction creation.
          * @example one_off
          * @enum {string}
          */
         readonly OneOffTransactionType: "one_off";
-        /** @description Request to create a one-off offramp transaction */
+        /**
+         * @description Request to create a one-off transfer. The transfer type is determined by
+         *     the destination type referenced by `destination_id`:
+         *     - **Offramp** when the destination is a fiat bank account (fiat_us or
+         *       fiat_iban). `destination_payment_rail` is honored; `destination_network_id`
+         *       is ignored.
+         *     - **Swap** when the destination is a crypto address.
+         *       `destination_network_id` is required and selects the destination
+         *       chain.
+         *
+         *     The platform generates a single-use deposit address and finalizes the
+         *     transfer once the source-asset deposit arrives.
+         */
         readonly OneOffTransactionRequest: {
             readonly transaction_type?: components["schemas"]["OneOffTransactionType"];
             /**
-             * @description Amount to transfer as a decimal string
+             * @description Optional expected destination amount as a decimal string. When
+             *     omitted, the resulting transaction's destination amount is
+             *     populated from the actual deposit once funds arrive. When
+             *     provided, must be at least 0.01 and is enforced by sandbox
+             *     amount caps where applicable.
              * @example 1.23
              */
-            readonly amount: string;
+            readonly amount?: string;
             readonly customer_id: components["schemas"]["KSUID"];
             readonly source_network_id: components["schemas"]["NetworkId"];
             /**
@@ -3533,14 +3702,14 @@ export type components = {
             readonly destination_id: components["schemas"]["KSUID"];
             readonly destination_network_id?: components["schemas"]["NetworkId"];
             /**
-             * @description Destination fiat currency
+             * @description Destination asset symbol. For offramps this is a fiat currency (e.g. `USD`, `EUR`). For swaps this is the destination stablecoin (e.g. `USDC`, `DKUSD`).
              * @example USD
              */
             readonly destination_asset: string;
-            /** @description Optional preferred payment rail for bank transfers. If not specified, the system will automatically select the most appropriate rail based on the destination's supported methods. */
+            /** @description Optional preferred payment rail for bank transfers (offramp). Ignored when the destination is a crypto address. If not specified, the system will automatically select the most appropriate rail based on the destination's supported methods. */
             readonly destination_payment_rail?: components["schemas"]["PaymentCapability"];
             /**
-             * @description Optional payment reference message for bank transfers. Length limits: ACH (1-10 chars), Wire (1-140 chars) (6-140 chars), SWIFT (1-140 chars, max 4 lines of 35 chars each)
+             * @description Optional payment reference message for bank transfers. Length limits: ACH (1-10 chars), Wire (1-140 chars), SEPA (6-140 chars), SWIFT (1-140 chars, max 4 lines of 35 chars each)
              * @example Invoice payment for services
              */
             readonly payment_reference?: string;
@@ -3551,7 +3720,7 @@ export type components = {
              */
             readonly developer_fee_bps?: number;
         };
-        /** @description A one-off transaction response. Used for single on/off-ramp transactions. */
+        /** @description A one-off transaction response. Used for single-use offramp (crypto-to-fiat) and swap (crypto-to-crypto) transfers; the destination type determines which. */
         readonly OneOffTransaction: {
             readonly id: components["schemas"]["KSUID"];
             /**
@@ -3588,6 +3757,7 @@ export type components = {
             readonly failure_reason?: string;
             readonly receipt?: components["schemas"]["TransactionReceipt"];
             readonly crypto_details?: components["schemas"]["TransactionCryptoDetails"];
+            readonly sender_details?: components["schemas"]["SenderDetails"];
             /**
              * @description Unix timestamp when the transaction was created
              * @example 1234567890
@@ -3605,7 +3775,7 @@ export type components = {
             readonly completed_at?: number;
             /** @description The payment rail that was selected for this transaction */
             readonly destination_payment_rail?: components["schemas"]["PaymentCapability"];
-            /** @description Payment reference message for bank transfers (e.g. wire message, SWIFT reference) */
+            /** @description Payment reference message for bank transfers (e.g. wire message, SWIFT or SEPA reference) */
             readonly payment_reference?: string | null;
             /**
              * @description Name of the destination bank
@@ -3687,6 +3857,8 @@ export type components = {
             readonly id: components["schemas"]["KSUID"];
             readonly client_id: components["schemas"]["KSUID"];
             readonly customer_id?: components["schemas"]["KSUID"];
+            /** @description Customer name joined server-side. Populated on GET responses; omitted from create responses. */
+            readonly customer_name?: string | null;
             readonly family: components["schemas"]["Family"];
             /**
              * @description The wallet address, same across all networks within the same family
@@ -3698,6 +3870,8 @@ export type components = {
              * @example My Wallet
              */
             readonly name: string;
+            /** @description Created-at unix timestamp. Populated on GET responses. */
+            readonly created_at?: number;
         };
         /** @description Request to create a new non-custodial wallet */
         readonly WalletCreateRequest: {
@@ -3964,6 +4138,21 @@ export type components = {
             readonly operation: components["schemas"]["TransactionOperation"];
             /** @description A unique key to ensure idempotency of the request */
             readonly idempotency_key: string;
+            /**
+             * @description Optional opaque SHA-256d digest (base64-encoded) of an upstream
+             *     operator-meaningful context envelope produced by the originating
+             *     service (e.g. financial-account).
+             *
+             *     Neither platform nor policy-engine interprets the semantic
+             *     content. Policy-engine includes the field in canonical hashing
+             *     so the WebAuthn signature commits to it; beyond that the digest
+             *     is never read, validated, or logged. The pre-image is persisted
+             *     upstream and exists for forensic / non-repudiation purposes
+             *     (see ENG-1962).
+             *
+             *     Intents predating this field validate as today (empty / omitted).
+             */
+            readonly context_digest?: string;
         };
         readonly TransactionOperation: {
             /** @description Transaction type: transfer or contract call */
@@ -3972,7 +4161,12 @@ export type components = {
             readonly from: string;
             /** @description The recipient address of the transaction */
             readonly to: string;
-            /** @description Amount to be transferred (for transfer operations) */
+            /**
+             * @description Amount to be transferred as a non-negative decimal string. Required for
+             *     transfer operations; optional for contract calls (defaults to zero).
+             *     Leading zeros, signs, commas, and non-finite values are rejected.
+             *     For transfer operations the handler additionally requires the value to be greater than zero.
+             */
             readonly amount?: string;
             /**
              * @description Crypto asset symbol for the transfer or contract call.
@@ -4580,7 +4774,7 @@ export type components = {
              */
             readonly uploaded_at: string;
         };
-        /** @description Information about a required document that hasn't been uploaded yet */
+        /** @description Information about a missing document the applicant has not yet uploaded. Includes both required documents (whose absence blocks readiness) and optional ones (e.g. Proof of Address for individuals when the PoA-optional flow is enabled — surfaced so the UI can render an upload affordance without gating submission). */
         readonly MissingDocument: {
             /**
              * @description The purpose this document serves in the onboarding requirements
@@ -4600,6 +4794,11 @@ export type components = {
              * @example Articles of Incorporation or equivalent formation document
              */
             readonly description: string;
+            /**
+             * @description Whether this document must be uploaded for the application to be ready for review. When false, the document is optional — typically because an alternative gating mechanism applies (e.g. the post-onboarding $3,000 / 7-day rolling-window threshold for Proof of Address on individual applications under the PoA-optional flow).
+             * @example true
+             */
+            readonly required?: boolean;
         };
         /** @description Document status information for an applicant entity */
         readonly DocumentInfo: {
@@ -5371,6 +5570,24 @@ export type components = {
             readonly validation?: components["schemas"]["ApplicationValidation"];
             /** @description Risk rating (only present for superadmin users) */
             readonly risk_rating?: components["schemas"]["RiskRating"];
+            /**
+             * @description Tracks the review state of the Proof of Address for individual applications.
+             *     Null for business applications and for non-primary-individual rows.
+             *
+             *     - `missing` — No Proof of Address has been submitted. The individual is subject
+             *       to the $3,000 USD-equivalent rolling 7-day transaction limit.
+             *     - `submitted_pending_review` — A PoA-equivalent document (proof_of_address,
+             *       bank_statement, or utility_bill) has been uploaded and is awaiting compliance
+             *       review. The individual remains subject to the transaction limit until the review
+             *       concludes.
+             *     - `approved` — The Proof of Address has been reviewed and approved. The individual
+             *       is exempt from the $3,000 / 7-day rolling transaction threshold.
+             *     - `rejected` — The submitted Proof of Address was rejected. The individual
+             *       remains subject to the transaction limit and may re-upload a new document.
+             * @example missing
+             * @enum {string|null}
+             */
+            readonly poa_status?: "missing" | "submitted_pending_review" | "approved" | "rejected" | null;
         };
         /** @description Lightweight business info for list views */
         readonly BusinessListItem: {
@@ -5872,12 +6089,19 @@ export interface operations {
                  *     `approved`, `expired`, `rejected`).
                  */
                 readonly kyc_statuses?: string;
+                /**
+                 * @description Filter customers by one or more onboarding application statuses.
+                 *     Comma-separated list (e.g. `submitted,under_review`). Values
+                 *     mirror the `ApplicationStatus` enum. Customers without an
+                 *     application are excluded when this filter is set.
+                 */
+                readonly application_statuses?: string;
                 /** @description Filter customers by sub-client association. Returns only customers associated with the specified sub-client. */
                 readonly sub_client_id?: components["schemas"]["KSUID"];
                 /** @description When set to true, returns only customers that are acting as sub-clients (have other customers associated with them). */
                 readonly is_sub_client?: boolean;
                 /** @description Field to sort customers by. Defaults to `name`. */
-                readonly sort_by?: "created_at" | "customer_type" | "id" | "kyb_status" | "kyc_status" | "name";
+                readonly sort_by?: "application_status" | "created_at" | "customer_type" | "id" | "kyb_status" | "kyc_status" | "name";
                 /** @description Sort direction. Defaults to `asc`. */
                 readonly sort_dir?: "asc" | "desc";
                 /** @description Filter customers created at or after this ISO 8601 datetime (e.g. 2024-01-01T00:00:00Z). */
@@ -6616,6 +6840,224 @@ export interface operations {
             };
         };
     };
+    readonly getWallet: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                /** @description Wallet ID */
+                readonly wallet_id: components["schemas"]["KSUID"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Wallet retrieved successfully */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi",
+                     *       "client_id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi",
+                     *       "customer_id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi",
+                     *       "customer_name": "Acme Capital LP",
+                     *       "family": "evm",
+                     *       "address": "0x165cd37b4c644c2921454429e7f9358d18a45e14",
+                     *       "name": "My Wallet",
+                     *       "created_at": 1731556800
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["Wallet"];
+                };
+            };
+            /** @description Bad request - invalid input data */
+            readonly 400: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#invalid-request",
+                     *       "title": "Bad request - invalid input data",
+                     *       "status": 400,
+                     *       "detail": "Bad request - invalid input data",
+                     *       "instance": "https://api.platform.dakota.xyz/wallets/example-id",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            readonly 401: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#authentication-error",
+                     *       "title": "Unauthorized",
+                     *       "status": 401,
+                     *       "detail": "Unauthorized",
+                     *       "instance": "https://api.platform.dakota.xyz/wallets/example-id",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Wallet not found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#not-found",
+                     *       "title": "Wallet not found",
+                     *       "status": 404,
+                     *       "detail": "Wallet not found",
+                     *       "instance": "https://api.platform.dakota.xyz/wallets/example-id",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal server error */
+            readonly 500: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#internal-error",
+                     *       "title": "Internal server error",
+                     *       "status": 500,
+                     *       "detail": "Internal server error",
+                     *       "instance": "https://api.platform.dakota.xyz/wallets/example-id",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    readonly getPoliciesForWallet: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                /** @description Wallet ID */
+                readonly wallet_id: components["schemas"]["KSUID"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Attached policies retrieved successfully */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "id": "pol_2N4YkKpKu7M3mKpGYmF8kcJ8oZT",
+                     *         "name": "High Value Transaction Policy"
+                     *       }
+                     *     ]
+                     */
+                    readonly "application/json": readonly components["schemas"]["AttachedPolicy"][];
+                };
+            };
+            /** @description Bad request - invalid input data */
+            readonly 400: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#invalid-request",
+                     *       "title": "Bad request - invalid input data",
+                     *       "status": 400,
+                     *       "detail": "Bad request - invalid input data",
+                     *       "instance": "https://api.platform.dakota.xyz/wallets/example-id/policies",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            readonly 401: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#authentication-error",
+                     *       "title": "Unauthorized",
+                     *       "status": 401,
+                     *       "detail": "Unauthorized",
+                     *       "instance": "https://api.platform.dakota.xyz/wallets/example-id/policies",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Wallet not found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#not-found",
+                     *       "title": "Wallet not found",
+                     *       "status": 404,
+                     *       "detail": "Wallet not found",
+                     *       "instance": "https://api.platform.dakota.xyz/wallets/example-id/policies",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal server error */
+            readonly 500: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#internal-error",
+                     *       "title": "Internal server error",
+                     *       "status": 500,
+                     *       "detail": "Internal server error",
+                     *       "instance": "https://api.platform.dakota.xyz/wallets/example-id/policies",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     readonly getWalletBalances: {
         readonly parameters: {
             readonly query?: never;
@@ -6762,7 +7204,7 @@ export interface operations {
                  *           "kind": "string",
                  *           "from": "string",
                  *           "to": "string",
-                 *           "amount": "string",
+                 *           "amount": "100.50",
                  *           "asset_id": "USDC",
                  *           "method": "string",
                  *           "args": [
@@ -15897,6 +16339,114 @@ export interface operations {
             };
         };
     };
+    readonly getWalletsForPolicy: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                /** @description Policy ID */
+                readonly policy_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Attached wallets retrieved successfully */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi",
+                     *         "name": "Treasury Wallet",
+                     *         "family": "evm"
+                     *       }
+                     *     ]
+                     */
+                    readonly "application/json": readonly components["schemas"]["AttachedWallet"][];
+                };
+            };
+            /** @description Bad request */
+            readonly 400: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#invalid-request",
+                     *       "title": "Bad request",
+                     *       "status": 400,
+                     *       "detail": "Bad request",
+                     *       "instance": "https://api.platform.dakota.xyz/policies/example-id/wallets",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            readonly 401: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#authentication-error",
+                     *       "title": "Unauthorized",
+                     *       "status": 401,
+                     *       "detail": "Unauthorized",
+                     *       "instance": "https://api.platform.dakota.xyz/policies/example-id/wallets",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Policy not found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#not-found",
+                     *       "title": "Policy not found",
+                     *       "status": 404,
+                     *       "detail": "Policy not found",
+                     *       "instance": "https://api.platform.dakota.xyz/policies/example-id/wallets",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal server error */
+            readonly 500: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#internal-error",
+                     *       "title": "Internal server error",
+                     *       "status": 500,
+                     *       "detail": "Internal server error",
+                     *       "instance": "https://api.platform.dakota.xyz/policies/example-id/wallets",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     readonly addPolicyRule: {
         readonly parameters: {
             readonly query?: never;
@@ -16994,6 +17544,114 @@ export interface operations {
                      *       "status": 500,
                      *       "detail": "Internal server error",
                      *       "instance": "https://api.platform.dakota.xyz/signer-groups/example-id",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    readonly getWalletsForSignerGroup: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                /** @description Signer group ID */
+                readonly signer_group_id: components["schemas"]["KSUID"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Attached wallets retrieved successfully */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi",
+                     *         "name": "Treasury Wallet",
+                     *         "family": "evm"
+                     *       }
+                     *     ]
+                     */
+                    readonly "application/json": readonly components["schemas"]["AttachedWallet"][];
+                };
+            };
+            /** @description Bad request */
+            readonly 400: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#invalid-request",
+                     *       "title": "Bad request",
+                     *       "status": 400,
+                     *       "detail": "Bad request",
+                     *       "instance": "https://api.platform.dakota.xyz/signer-groups/example-id/wallets",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            readonly 401: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#authentication-error",
+                     *       "title": "Unauthorized",
+                     *       "status": 401,
+                     *       "detail": "Unauthorized",
+                     *       "instance": "https://api.platform.dakota.xyz/signer-groups/example-id/wallets",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Signer group not found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#not-found",
+                     *       "title": "Signer group not found",
+                     *       "status": 404,
+                     *       "detail": "Signer group not found",
+                     *       "instance": "https://api.platform.dakota.xyz/signer-groups/example-id/wallets",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal server error */
+            readonly 500: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#internal-error",
+                     *       "title": "Internal server error",
+                     *       "status": 500,
+                     *       "detail": "Internal server error",
+                     *       "instance": "https://api.platform.dakota.xyz/signer-groups/example-id/wallets",
                      *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
                      *     }
                      */

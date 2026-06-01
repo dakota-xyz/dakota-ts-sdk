@@ -2,6 +2,43 @@
 
 All notable changes to the Dakota TypeScript SDK are documented in this file.
 
+## [1.3.0] - 2026-06-01
+
+### Summary
+
+Sync the SDK's OpenAPI spec to the latest from `platform/openapi.public.yaml`.
+Adds 4 new endpoints (single-wallet GET and three "attached resources" lookups)
+and 2 new schemas for slim relationship references.
+
+### Added
+
+#### Wallets
+- `wallets.get(walletId)` — fetch a single wallet by ID
+  (`GET /wallets/{wallet_id}`). Includes `customer_name` and `created_at`
+  joined server-side.
+- `wallets.getPolicies(walletId)` — list policies attached to a wallet
+  (`GET /wallets/{wallet_id}/policies`). Returns `AttachedPolicy[]`
+  (slim `id` + `name` references).
+
+#### Policies
+- `policies.getWallets(policyId)` — list wallets a policy is attached to
+  (`GET /policies/{policy_id}/wallets`). Returns `AttachedWallet[]`
+  (slim `id` + `name` + `family` references).
+
+#### Signer Groups
+- `signerGroups.getWallets(signerGroupId)` — list wallets a signer group is
+  attached to (`GET /signer-groups/{signer_group_id}/wallets`). Returns
+  `AttachedWallet[]`.
+
+#### Types
+- `AttachedPolicy` — slim reference (id + name).
+- `AttachedWallet` — slim reference (id + name + family).
+
+### Changed
+
+- Regenerated `src/generated/api.ts` from the updated `openapi.yaml`
+  (now sourced from `platform/openapi.public.yaml`).
+
 ## [1.2.0] - 2026-05-11
 
 ### Summary

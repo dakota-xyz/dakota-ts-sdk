@@ -183,6 +183,12 @@ export type WalletTransactionRequest = components['schemas']['SendTransactionInt
 /** Wallet transaction response */
 export type WalletTransaction = components['schemas']['WalletTransaction'];
 
+/** Slim reference to a policy attached to a wallet (id + name) */
+export type AttachedPolicy = components['schemas']['AttachedPolicy'];
+
+/** Slim reference to a wallet attached to a policy or signer group (id + name + family) */
+export type AttachedWallet = components['schemas']['AttachedWallet'];
+
 // ============================================================================
 // Event Types
 // ============================================================================
