@@ -2,6 +2,22 @@
 
 All notable changes to the Dakota TypeScript SDK are documented in this file.
 
+## [1.3.1] - 2026-06-02
+
+### Fixed
+
+- **Packaging:** `package.json` `main`, `module`, and `exports` map referenced
+  filenames (`index.cjs`, `index.d.cts`) that `tsup` does not produce. The
+  actual build outputs are `dist/index.js` (CJS) and `dist/index.mjs` (ESM),
+  with `dist/index.d.ts` / `dist/index.d.mts` for types respectively. This
+  caused `require('@dakota-xyz/ts-sdk')` from Node/`tsx` to fail with
+  `MODULE_NOT_FOUND` for `dist/index.cjs`, and ESM consumers were silently
+  served the CJS file. Bundlers (Next.js/webpack/Vite) tolerated the mismatch,
+  so the issue only surfaced for plain Node and CLI script runners.
+- Updated all four `exports` entries (root + `./webhook`, both `import` and
+  `require` conditions) plus `main`/`module` to point at the files that
+  actually ship in the tarball.
+
 ## [1.3.0] - 2026-06-01
 
 ### Summary
