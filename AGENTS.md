@@ -201,10 +201,19 @@ const wallet = await client.wallets.create({
 });
 console.log(wallet.address);
 
+// Get a single wallet
+const wallet = await client.wallets.get(walletId);
+
 // Get balances
 const balances = await client.wallets.getBalances(walletId);
 for (const balance of balances) {
   console.log(balance.asset, balance.amount);
+}
+
+// Get policies attached to a wallet
+const attachedPolicies = await client.wallets.getPolicies(walletId);
+for (const policy of attachedPolicies) {
+  console.log(policy.id, policy.name);
 }
 
 // Create wallet transaction
@@ -302,6 +311,12 @@ await client.policies.attachToWallet(policyId, walletId);
 
 // Detach from wallet
 await client.policies.detachFromWallet(policyId, walletId);
+
+// List wallets attached to this policy
+const policyWallets = await client.policies.getWallets(policyId);
+for (const w of policyWallets) {
+  console.log(w.id, w.name, w.family);
+}
 ```
 
 ### Signer Groups
@@ -329,6 +344,12 @@ await client.signerGroups.attachToWallet(walletId, groupId);
 
 // Detach from wallet
 await client.signerGroups.detachFromWallet(walletId, groupId);
+
+// List wallets attached to this signer group
+const groupWallets = await client.signerGroups.getWallets(groupId);
+for (const w of groupWallets) {
+  console.log(w.id, w.name, w.family);
+}
 ```
 
 ### Signers

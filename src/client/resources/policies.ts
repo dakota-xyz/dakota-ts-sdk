@@ -9,6 +9,7 @@ import type {
   PolicyCreateRequest,
   PolicyRule,
   PolicyRuleCreateRequest,
+  AttachedWallet,
   ListParams,
   RequestOptions,
 } from '../types.js';
@@ -119,6 +120,21 @@ export class PoliciesResource extends BaseResource {
     await this.transport.request<void>({
       method: 'DELETE',
       path: `/policies/${policyId}/rules/${ruleId}`,
+    });
+  }
+
+  /**
+   * Get wallets attached to a policy.
+   *
+   * Returns slim references (id + name + family) for the wallets the policy is currently attached to.
+   *
+   * @param policyId - Policy ID
+   * @returns Array of attached wallets
+   */
+  async getWallets(policyId: string): Promise<AttachedWallet[]> {
+    return this.transport.request<AttachedWallet[]>({
+      method: 'GET',
+      path: `/policies/${policyId}/wallets`,
     });
   }
 

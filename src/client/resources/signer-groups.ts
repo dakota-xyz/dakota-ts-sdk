@@ -9,6 +9,7 @@ import type {
   SignerGroupCreateRequest,
   Signer,
   SignerCreateRequest,
+  AttachedWallet,
   ListParams,
   RequestOptions,
 } from '../types.js';
@@ -85,6 +86,21 @@ export class SignerGroupsResource extends BaseResource {
     await this.transport.request<void>({
       method: 'DELETE',
       path: `/signer-groups/${signerGroupId}/signers/${signerId}`,
+    });
+  }
+
+  /**
+   * Get wallets attached to a signer group.
+   *
+   * Returns slim references (id + name + family) for the wallets the signer group is currently attached to.
+   *
+   * @param signerGroupId - Signer group ID
+   * @returns Array of attached wallets
+   */
+  async getWallets(signerGroupId: string): Promise<AttachedWallet[]> {
+    return this.transport.request<AttachedWallet[]>({
+      method: 'GET',
+      path: `/signer-groups/${signerGroupId}/wallets`,
     });
   }
 
