@@ -2,6 +2,74 @@
 
 All notable changes to the Dakota TypeScript SDK are documented in this file.
 
+## [1.4.0] - 2026-06-10
+
+### Summary
+
+Five correctness fixes aligning the SDK with the canonical server behavior:
+transport-level idempotency on PUT/PATCH, endorsed-body forwarding on six
+policy / signer-group methods, a `response.data` audit that uncovered three
+methods silently returning `undefined`, webhook signature canonicalization,
+and a webhook event type field rename. Includes type-level changes to two
+public fields, but no consumer could meaningfully depend on the old shapes
+(both returned `undefined` at runtime), so this ships as a minor bump.
+
+### Fixed
+
+- **Transport (idempotency on PUT/PATCH).** `Transport.buildHeaders` only
+  attached `x-idempotency-key` when `method === 'POST'`. Dakota's
+  `IdempotencyKeyHeader` is required on every mutating endpoint, so every
+  PUT and PATCH call from earlier SDKs was being sent without an
+  idempotency key. The predicate now covers POST, PUT, and PATCH (DELETE
+  stays excluded — naturally idempotent). The retry guards for "POST with
+  idempotency key" were widened to the same set.
+- **Policies / SignerGroups (endorsed body forwarding).** Six methods that
+  call endorsed PUT/DELETE endpoints had no `body` slot in their typed
+  wrappers, so the `EndorsedRequest` envelope (`{ signatures, intent }`)
+  never reached the wire — the policy engine was effectively verifying
+  nothing for SDK consumers. `RequestOptions` now carries a typed
+  `endorsement?: EndorsedRequest` field that is forwarded as the request
+  body on: `policies.delete`, `policies.deleteRule`,
+  `policies.attachToWallet`, `policies.detachFromWallet`,
+  `signerGroups.attachToWallet`, `signerGroups.detachFromWallet`. For
+  `policies.addRule` / `policies.updateRule` (which already accept a typed
+  `data` arg), `options.endorsement` takes precedence over `data` so you
+  can swap a bare data shape for an endorsed envelope at the call site
+  without breaking the typed signature.
+- **`wallets.getBalances` returned `undefined`.** The endpoint returns
+  `WalletBalances` directly (`{ wallet_id, address, balances,
+  total_amount_usd }`), not the paginated `{ data, meta }` envelope.
+  Earlier versions read `response.data` and returned `undefined`, which
+  crashed any caller that chained `.map()` on the result. Now reads
+  `response.balances`.
+- **`info.getCountries` returned `undefined`.** Same `response.data`
+  bug — the endpoint returns `Country[]` directly. Now returns the
+  response.
+- **`info.getNetworks` returned `undefined`.** Same `response.data` bug —
+  the endpoint returns `string[]` directly. Return type tightened from
+  `Network[]` to `string[]` to match the spec.
+- **Webhook signature canonicalization.** `webhook/signature.ts`
+  `buildSignedMessage` was building `timestamp + '.' + payload`, but the
+  platform signer concatenates `timestamp || payload` with no separator.
+  Every webhook was failing Ed25519 verification via the SDK helper
+  (`WebhookHandler`, `verifySignature`, `verifySignatureSync`). Dropped
+  the period.
+- **`WebhookEvent.created_at` was always `undefined`.** Wire field is
+  `created` (matches OpenAPI event-stream examples and the platform event
+  builder). Renamed the typed field to match.
+
+### Changed
+
+- `RequestOptions` extended with `endorsement?: EndorsedRequest` (re-exported
+  from `client/types.ts`).
+- `info.getNetworks(): Promise<string[]>` (was `Promise<Network[]>`).
+- `WebhookEvent.created: number` (was `created_at: number`).
+
+### Added
+
+- 4 new transport tests covering idempotency on PUT (auto-key), PUT
+  (custom key), PATCH, and DELETE (no key).
+
 ## [1.3.1] - 2026-06-02
 
 ### Fixed
