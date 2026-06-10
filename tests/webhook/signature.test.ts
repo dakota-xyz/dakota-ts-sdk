@@ -24,7 +24,9 @@ const publicKeyHex = Buffer.from(publicKey).toString('hex');
  * Create a valid signature for testing.
  */
 async function createSignature(payload: string, timestamp: string): Promise<string> {
-  const message = new TextEncoder().encode(`${timestamp}.${payload}`);
+  // Platform signs `timestamp || payload` with no separator (see
+  // platform/internal/security/webhook_signer.go:73-78).
+  const message = new TextEncoder().encode(`${timestamp}${payload}`);
   const signature = await ed25519.signAsync(message, privateKey);
   return Buffer.from(signature).toString('base64');
 }

@@ -24,7 +24,9 @@ const publicKeyHex = Buffer.from(publicKey).toString('hex');
 async function createSignedRequest(payload: object) {
   const body = JSON.stringify(payload);
   const timestamp = Math.floor(Date.now() / 1000).toString();
-  const message = new TextEncoder().encode(`${timestamp}.${body}`);
+  // Platform signs `timestamp || body` with no separator (see
+  // platform/internal/security/webhook_signer.go:73-78).
+  const message = new TextEncoder().encode(`${timestamp}${body}`);
   const signature = await ed25519.signAsync(message, privateKey);
   const signatureB64 = Buffer.from(signature).toString('base64');
 
@@ -103,7 +105,7 @@ describe('WebhookHandler', () => {
         id: 'evt_123',
         type: 'customer.created',
         data: { id: 'cust_abc' },
-        created_at: 1234567890,
+        created: 1234567890,
       });
 
       await handler.handleRequest(body, headers);
@@ -126,7 +128,7 @@ describe('WebhookHandler', () => {
         id: 'evt_123',
         type: 'transaction.completed',
         data: {},
-        created_at: 123,
+        created: 123,
       });
 
       await handler.handleRequest(body, headers);
@@ -141,7 +143,7 @@ describe('WebhookHandler', () => {
         id: 'evt_123',
         type: 'unknown.event',
         data: {},
-        created_at: 123,
+        created: 123,
       });
 
       await handler.handleRequest(body, headers);
@@ -157,7 +159,7 @@ describe('WebhookHandler', () => {
         id: 'evt_123',
         type: 'customer.created',
         data: {},
-        created_at: 123,
+        created: 123,
       });
 
       await handler.handleRequest(body, headers);
@@ -170,7 +172,7 @@ describe('WebhookHandler', () => {
         id: 'evt_123',
         type: 'test',
         data: {},
-        created_at: 123,
+        created: 123,
       });
 
       delete (headers as Record<string, string>)['x-webhook-signature'];
@@ -185,7 +187,7 @@ describe('WebhookHandler', () => {
         id: 'evt_123',
         type: 'test',
         data: {},
-        created_at: 123,
+        created: 123,
       });
 
       delete (headers as Record<string, string>)['x-webhook-timestamp'];
@@ -200,7 +202,7 @@ describe('WebhookHandler', () => {
         id: 'evt_123',
         type: 'test',
         data: {},
-        created_at: 123,
+        created: 123,
       });
 
       // Tamper with signature
@@ -214,14 +216,14 @@ describe('WebhookHandler', () => {
         id: 'evt_123',
         type: 'test',
         data: {},
-        created_at: 123,
+        created: 123,
       });
 
       const tamperedBody = JSON.stringify({
         id: 'evt_456',
         type: 'test',
         data: {},
-        created_at: 123,
+        created: 123,
       });
 
       await expect(handler.handleRequest(tamperedBody, headers)).rejects.toThrow(
@@ -237,7 +239,7 @@ describe('WebhookHandler', () => {
         id: 'evt_123',
         type: 'customer.created',
         data: {},
-        created_at: 123,
+        created: 123,
       });
 
       // First request
@@ -258,7 +260,7 @@ describe('WebhookHandler', () => {
         id: 'evt_123',
         type: 'test',
         data: { large: 'x'.repeat(200) },
-        created_at: 123,
+        created: 123,
       });
 
       await expect(smallHandler.handleRequest(body, headers)).rejects.toThrow('too large');
@@ -272,7 +274,7 @@ describe('WebhookHandler', () => {
         id: 'evt_123',
         type: 'test',
         data: {},
-        created_at: 123,
+        created: 123,
       });
 
       await handler.handleRequest(Buffer.from(body), headers);
@@ -287,7 +289,7 @@ describe('WebhookHandler', () => {
         id: 'evt_123',
         type: 'test',
         data: {},
-        created_at: 123,
+        created: 123,
       });
 
       await handler.handleRequest(new TextEncoder().encode(body), headers);
@@ -304,7 +306,7 @@ describe('WebhookHandler', () => {
         id: 'evt_123',
         type: 'test',
         data: { key: 'value' },
-        created_at: 123,
+        created: 123,
       });
 
       const event = await handler.constructEvent(
@@ -333,7 +335,7 @@ describe('WebhookHandler', () => {
         id: 'evt_123',
         type: 'test',
         data: {},
-        created_at: 123,
+        created: 123,
       });
 
       const req = { body, headers };

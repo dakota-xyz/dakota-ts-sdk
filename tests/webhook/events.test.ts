@@ -12,7 +12,7 @@ describe('Webhook Events', () => {
         id: 'evt_123',
         type: 'customer.created',
         data: { id: 'cust_abc', name: 'Test' },
-        created_at: 1234567890,
+        created: 1234567890,
       });
 
       const event = parseEvent(payload);
@@ -20,7 +20,7 @@ describe('Webhook Events', () => {
       expect(event.id).toBe('evt_123');
       expect(event.type).toBe('customer.created');
       expect(event.data).toEqual({ id: 'cust_abc', name: 'Test' });
-      expect(event.created_at).toBe(1234567890);
+      expect(event.created).toBe(1234567890);
     });
 
     it('parses valid event from Uint8Array', () => {
@@ -29,7 +29,7 @@ describe('Webhook Events', () => {
           id: 'evt_456',
           type: 'transaction.completed',
           data: { amount: '100.00' },
-          created_at: 1234567890,
+          created: 1234567890,
         })
       );
 
@@ -76,7 +76,7 @@ describe('Webhook Events', () => {
         id: 'evt_123',
         type: 'test',
         data: {},
-        created_at: 123,
+        created: 123,
         api_version: '2024-01-01',
       });
 

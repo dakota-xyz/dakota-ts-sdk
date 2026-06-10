@@ -7,6 +7,7 @@ import type {
   Wallet,
   WalletCreateRequest,
   WalletBalance,
+  WalletBalances,
   WalletTransactionRequest,
   WalletTransaction,
   AttachedPolicy,
@@ -101,11 +102,17 @@ export class WalletsResource extends BaseResource {
    * ```
    */
   async getBalances(walletId: string): Promise<WalletBalance[]> {
-    const response = await this.transport.request<{ data: WalletBalance[] }>({
+    // /wallets/{id}/balances returns the WalletBalances object directly
+    // ({ wallet_id, address, balances, total_amount_usd }), not the
+    // paginated { data, meta } envelope. Earlier versions read
+    // response.data here and silently returned undefined.
+    const response = await this.transport.request<WalletBalances>({
       method: 'GET',
       path: `/wallets/${walletId}/balances`,
     });
-    return response.data;
+    // WalletBalances.balances is readonly per the OpenAPI types — copy
+    // into a mutable array so callers can sort/filter/etc.
+    return response.balances ? [...response.balances] : [];
   }
 
   /**

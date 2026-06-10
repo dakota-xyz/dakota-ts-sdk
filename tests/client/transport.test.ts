@@ -188,6 +188,83 @@ describe('Transport', () => {
       expect(headers['x-idempotency-key']).toBeUndefined();
     });
 
+    it('adds idempotency key for PUT requests', async () => {
+      mockFetch = createMockFetch([{ status: 204 }]);
+      const config = resolveConfig({
+        apiKey: 'test_api_key',
+        fetch: mockFetch as unknown as typeof fetch,
+      });
+      transport = new Transport(config);
+
+      await transport.request({
+        method: 'PUT',
+        path: '/policies/pol_1/wallets/wal_1',
+        idempotencyKey: 'attach-key-1',
+      });
+
+      const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+      const headers = init.headers as Record<string, string>;
+      expect(headers['x-idempotency-key']).toBe('attach-key-1');
+    });
+
+    it('adds idempotency key for PATCH requests', async () => {
+      mockFetch = createMockFetch([{ status: 200, body: {} }]);
+      const config = resolveConfig({
+        apiKey: 'test_api_key',
+        fetch: mockFetch as unknown as typeof fetch,
+      });
+      transport = new Transport(config);
+
+      await transport.request({
+        method: 'PATCH',
+        path: '/policies/pol_1/rules/rule_1',
+        body: {},
+        idempotencyKey: 'update-key-1',
+      });
+
+      const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+      const headers = init.headers as Record<string, string>;
+      expect(headers['x-idempotency-key']).toBe('update-key-1');
+    });
+
+    it('auto-generates idempotency key for PUT when automaticIdempotency is enabled', async () => {
+      mockFetch = createMockFetch([{ status: 204 }]);
+      const config = resolveConfig({
+        apiKey: 'test_api_key',
+        fetch: mockFetch as unknown as typeof fetch,
+      });
+      transport = new Transport(config);
+
+      await transport.request({
+        method: 'PUT',
+        path: '/policies/pol_1/wallets/wal_1',
+      });
+
+      const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+      const headers = init.headers as Record<string, string>;
+      expect(headers['x-idempotency-key']).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+      );
+    });
+
+    it('does not add idempotency key for DELETE requests', async () => {
+      mockFetch = createMockFetch([{ status: 204 }]);
+      const config = resolveConfig({
+        apiKey: 'test_api_key',
+        fetch: mockFetch as unknown as typeof fetch,
+      });
+      transport = new Transport(config);
+
+      await transport.request({
+        method: 'DELETE',
+        path: '/customers/123',
+      });
+
+      const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+      const headers = init.headers as Record<string, string>;
+      expect(headers['x-idempotency-key']).toBeUndefined();
+    });
+
     it('handles 204 No Content', async () => {
       mockFetch = createMockFetch([{ status: 204 }]);
       const config = resolveConfig({
