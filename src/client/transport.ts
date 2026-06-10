@@ -12,6 +12,14 @@ const RETRYABLE_STATUS_CODES = new Set([429, 500, 502, 503, 504]);
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'PUT', 'DELETE', 'OPTIONS']);
 
 /**
+ * HTTP methods that accept an idempotency key. Dakota's spec marks
+ * `IdempotencyKeyHeader` as required on every mutating endpoint, so the
+ * SDK must forward it for POST, PUT, and PATCH. Earlier versions only
+ * attached the header on POST and silently dropped it on PUT/PATCH.
+ */
+const IDEMPOTENT_METHODS = new Set(['POST', 'PUT', 'PATCH']);
+
+/**
  * Request options for the transport layer.
  */
 export interface TransportRequestOptions {
@@ -97,8 +105,8 @@ export class Transport {
     // Add authentication header
     this.addAuthHeader(headers, path);
 
-    // Add idempotency key for POST requests
-    if (method === 'POST') {
+    // Add idempotency key for mutating requests (POST, PUT, PATCH).
+    if (IDEMPOTENT_METHODS.has(method)) {
       const key =
         idempotencyKey ??
         (this.config.automaticIdempotency ? this.config.idempotencyKeyGenerator() : undefined);
@@ -252,8 +260,10 @@ export class Transport {
       return true;
     }
 
-    // POST can be retried if we have an idempotency key
-    if (method === 'POST' && init.headers) {
+    // Mutating methods (POST/PUT/PATCH) can be retried if we have an
+    // idempotency key. PUT/PATCH are already in SAFE_METHODS so they hit
+    // the branch above; this catches POST.
+    if (IDEMPOTENT_METHODS.has(method) && init.headers) {
       const headers = init.headers as Record<string, string>;
       return !!headers['x-idempotency-key'];
     }
@@ -274,8 +284,9 @@ export class Transport {
       return true;
     }
 
-    // POST can be retried if we have an idempotency key
-    if (method === 'POST' && init.headers) {
+    // Mutating methods (POST/PUT/PATCH) can be retried if we have an
+    // idempotency key.
+    if (IDEMPOTENT_METHODS.has(method) && init.headers) {
       const headers = init.headers as Record<string, string>;
       return !!headers['x-idempotency-key'];
     }

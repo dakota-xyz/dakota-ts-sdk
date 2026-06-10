@@ -180,6 +180,15 @@ export type WalletBalances = components['schemas']['WalletBalances'];
 /** Wallet transaction request */
 export type WalletTransactionRequest = components['schemas']['SendTransactionIntent'];
 
+/**
+ * Endorsed request envelope: `{ signatures: string[], intent: <one of the
+ * endorsed intent types> }`. Required by every mutating policy / signer-group
+ * / wallet-transaction endpoint. Build the canonical intent, sign it with
+ * each required signer's private key, and pass the resulting envelope as
+ * the `endorsement` option on the relevant resource method.
+ */
+export type EndorsedRequest = components['schemas']['EndorsedRequest'];
+
 /** Wallet transaction response */
 export type WalletTransaction = components['schemas']['WalletTransaction'];
 
@@ -875,6 +884,18 @@ export interface RequestOptions {
    * - Not reused across different business intents
    */
   idempotencyKey?: string;
+
+  /**
+   * Endorsed-request envelope (`{ signatures, intent }`) for mutating
+   * policy, signer-group, and wallet-transaction endpoints. Required by the
+   * server on all endorsed routes — passing this is the only way the
+   * signature ever reaches the wire. On methods that already accept a
+   * typed `data` argument (e.g. `policies.addRule`, `policies.updateRule`),
+   * `endorsement` takes precedence over `data` when both are provided so
+   * you can swap a bare data shape for an endorsed envelope at the call
+   * site without breaking the typed signature.
+   */
+  endorsement?: EndorsedRequest;
 }
 
 // ============================================================================

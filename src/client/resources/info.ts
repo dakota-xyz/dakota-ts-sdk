@@ -3,7 +3,7 @@
  */
 
 import { BaseResource } from './base.js';
-import type { Country, Network } from '../types.js';
+import type { Country } from '../types.js';
 
 /**
  * Info API resource for platform capabilities.
@@ -20,11 +20,13 @@ export class InfoResource extends BaseResource {
    * ```
    */
   async getCountries(): Promise<Country[]> {
-    const response = await this.transport.request<{ data: Country[] }>({
+    // /capabilities/countries returns Country[] directly, not the
+    // paginated { data, meta } envelope. Earlier versions read
+    // response.data here and silently returned undefined.
+    return this.transport.request<Country[]>({
       method: 'GET',
       path: '/capabilities/countries',
     });
-    return response.data;
   }
 
   /**
@@ -40,11 +42,14 @@ export class InfoResource extends BaseResource {
    * }
    * ```
    */
-  async getNetworks(): Promise<Network[]> {
-    const response = await this.transport.request<{ data: Network[] }>({
+  async getNetworks(): Promise<string[]> {
+    // /capabilities/networks returns string[] (network IDs like
+    // "ethereum-mainnet") directly, not the paginated { data, meta }
+    // envelope. Earlier versions typed this as Network[] and read
+    // response.data, which silently returned undefined.
+    return this.transport.request<string[]>({
       method: 'GET',
       path: '/capabilities/networks',
     });
-    return response.data;
   }
 }

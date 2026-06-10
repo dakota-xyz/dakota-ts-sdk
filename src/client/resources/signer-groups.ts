@@ -107,8 +107,13 @@ export class SignerGroupsResource extends BaseResource {
   /**
    * Attach a signer group to a wallet.
    *
+   * Endorsed endpoint — `options.endorsement` must contain a signed
+   * `AttachGroupToWalletIntent`. The server rejects requests without a
+   * valid endorsement body.
+   *
    * @param walletId - Wallet ID
    * @param signerGroupId - Signer group ID
+   * @param options - Request options (must include `endorsement`)
    */
   async attachToWallet(
     walletId: string,
@@ -118,6 +123,7 @@ export class SignerGroupsResource extends BaseResource {
     await this.transport.request<void>({
       method: 'PUT',
       path: `/wallets/${walletId}/signer-groups/${signerGroupId}`,
+      body: options?.endorsement,
       idempotencyKey: options?.idempotencyKey,
     });
   }
@@ -125,13 +131,24 @@ export class SignerGroupsResource extends BaseResource {
   /**
    * Detach a signer group from a wallet.
    *
+   * Endorsed endpoint — `options.endorsement` must contain a signed
+   * `DetachGroupFromWalletIntent`. The server rejects requests without a
+   * valid endorsement body.
+   *
    * @param walletId - Wallet ID
    * @param signerGroupId - Signer group ID
+   * @param options - Request options (must include `endorsement`)
    */
-  async detachFromWallet(walletId: string, signerGroupId: string): Promise<void> {
+  async detachFromWallet(
+    walletId: string,
+    signerGroupId: string,
+    options?: RequestOptions
+  ): Promise<void> {
     await this.transport.request<void>({
       method: 'DELETE',
       path: `/wallets/${walletId}/signer-groups/${signerGroupId}`,
+      body: options?.endorsement,
+      idempotencyKey: options?.idempotencyKey,
     });
   }
 

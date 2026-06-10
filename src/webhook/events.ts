@@ -127,8 +127,14 @@ export interface WebhookEvent<T = unknown> {
   type: string;
   /** Event data payload */
   data: T;
-  /** Unix timestamp when the event was created */
-  created_at: number;
+  /**
+   * Unix timestamp (seconds) when the event was created.
+   *
+   * The wire field is `created`, matching the OpenAPI event-stream examples
+   * and the platform event builders. Earlier SDK versions exposed this as
+   * `created_at`, which was always `undefined` at runtime.
+   */
+  created: number;
   /** API version */
   api_version?: string;
 }

@@ -137,11 +137,15 @@ export function validateTimestamp(timestampStr: string, toleranceSeconds: number
 /**
  * Build the message to verify.
  *
- * The signed message format is: `timestamp.payload`
+ * The signed message is the raw concatenation `timestamp || payload` with
+ * no separator. Earlier versions used `timestamp + '.' + payload`, which
+ * silently rejected every webhook because the platform signer at
+ * platform/internal/security/webhook_signer.go:73-78 concatenates without
+ * a separator.
  */
 function buildSignedMessage(payload: Uint8Array | string, timestamp: string): Uint8Array {
   const payloadBytes = typeof payload === 'string' ? new TextEncoder().encode(payload) : payload;
-  const timestampBytes = new TextEncoder().encode(timestamp + '.');
+  const timestampBytes = new TextEncoder().encode(timestamp);
 
   const message = new Uint8Array(timestampBytes.length + payloadBytes.length);
   message.set(timestampBytes);

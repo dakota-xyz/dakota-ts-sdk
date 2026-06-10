@@ -59,12 +59,19 @@ export class PoliciesResource extends BaseResource {
   /**
    * Delete a policy.
    *
+   * Endorsed endpoint — `options.endorsement` must contain a signed
+   * `DeletePolicyIntent`. The server rejects requests without a valid
+   * endorsement body.
+   *
    * @param policyId - Policy ID
+   * @param options - Request options (must include `endorsement`)
    */
-  async delete(policyId: string): Promise<void> {
+  async delete(policyId: string, options?: RequestOptions): Promise<void> {
     await this.transport.request<void>({
       method: 'DELETE',
       path: `/policies/${policyId}`,
+      body: options?.endorsement,
+      idempotencyKey: options?.idempotencyKey,
     });
   }
 
@@ -83,7 +90,7 @@ export class PoliciesResource extends BaseResource {
     return this.transport.request<PolicyRule>({
       method: 'POST',
       path: `/policies/${policyId}/rules`,
-      body: data,
+      body: options?.endorsement ?? data,
       idempotencyKey: options?.idempotencyKey,
     });
   }
@@ -105,7 +112,7 @@ export class PoliciesResource extends BaseResource {
     return this.transport.request<PolicyRule>({
       method: 'PATCH',
       path: `/policies/${policyId}/rules/${ruleId}`,
-      body: data,
+      body: options?.endorsement ?? data,
       idempotencyKey: options?.idempotencyKey,
     });
   }
@@ -113,13 +120,20 @@ export class PoliciesResource extends BaseResource {
   /**
    * Delete a policy rule.
    *
+   * Endorsed endpoint — `options.endorsement` must contain a signed
+   * `RemovePolicyRuleIntent`. The server rejects requests without a valid
+   * endorsement body.
+   *
    * @param policyId - Policy ID
    * @param ruleId - Rule ID
+   * @param options - Request options (must include `endorsement`)
    */
-  async deleteRule(policyId: string, ruleId: string): Promise<void> {
+  async deleteRule(policyId: string, ruleId: string, options?: RequestOptions): Promise<void> {
     await this.transport.request<void>({
       method: 'DELETE',
       path: `/policies/${policyId}/rules/${ruleId}`,
+      body: options?.endorsement,
+      idempotencyKey: options?.idempotencyKey,
     });
   }
 
@@ -141,8 +155,13 @@ export class PoliciesResource extends BaseResource {
   /**
    * Attach a policy to a wallet.
    *
+   * Endorsed endpoint — `options.endorsement` must contain a signed
+   * `AttachPolicyToWalletIntent`. The server rejects requests without a
+   * valid endorsement body.
+   *
    * @param policyId - Policy ID
    * @param walletId - Wallet ID
+   * @param options - Request options (must include `endorsement`)
    */
   async attachToWallet(
     policyId: string,
@@ -152,6 +171,7 @@ export class PoliciesResource extends BaseResource {
     await this.transport.request<void>({
       method: 'PUT',
       path: `/policies/${policyId}/wallets/${walletId}`,
+      body: options?.endorsement,
       idempotencyKey: options?.idempotencyKey,
     });
   }
@@ -159,13 +179,24 @@ export class PoliciesResource extends BaseResource {
   /**
    * Detach a policy from a wallet.
    *
+   * Endorsed endpoint — `options.endorsement` must contain a signed
+   * `DetachPolicyFromWalletIntent`. The server rejects requests without a
+   * valid endorsement body.
+   *
    * @param policyId - Policy ID
    * @param walletId - Wallet ID
+   * @param options - Request options (must include `endorsement`)
    */
-  async detachFromWallet(policyId: string, walletId: string): Promise<void> {
+  async detachFromWallet(
+    policyId: string,
+    walletId: string,
+    options?: RequestOptions
+  ): Promise<void> {
     await this.transport.request<void>({
       method: 'DELETE',
       path: `/policies/${policyId}/wallets/${walletId}`,
+      body: options?.endorsement,
+      idempotencyKey: options?.idempotencyKey,
     });
   }
 }
