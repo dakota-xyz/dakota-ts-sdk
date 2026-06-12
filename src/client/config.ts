@@ -163,8 +163,8 @@ export function resolveConfig(config: DakotaClientConfig): ResolvedConfig {
 
   // Validate timeout
   const timeout = config.timeout ?? 15000;
-  if (timeout <= 0) {
-    throw new ConfigurationError('Timeout must be greater than zero');
+  if (!Number.isFinite(timeout) || timeout <= 0) {
+    throw new ConfigurationError('Timeout must be a positive finite number');
   }
 
   // Resolve retry policy
@@ -175,14 +175,14 @@ export function resolveConfig(config: DakotaClientConfig): ResolvedConfig {
   };
 
   // Validate retry policy
-  if (retryPolicy.maxAttempts <= 0) {
-    throw new ConfigurationError('Retry max attempts must be greater than zero');
+  if (!Number.isFinite(retryPolicy.maxAttempts) || retryPolicy.maxAttempts <= 0) {
+    throw new ConfigurationError('Retry max attempts must be a positive finite number');
   }
-  if (retryPolicy.initialBackoffMs <= 0) {
-    throw new ConfigurationError('Retry initial backoff must be greater than zero');
+  if (!Number.isFinite(retryPolicy.initialBackoffMs) || retryPolicy.initialBackoffMs <= 0) {
+    throw new ConfigurationError('Retry initial backoff must be a positive finite number');
   }
-  if (retryPolicy.maxBackoffMs <= 0) {
-    throw new ConfigurationError('Retry max backoff must be greater than zero');
+  if (!Number.isFinite(retryPolicy.maxBackoffMs) || retryPolicy.maxBackoffMs <= 0) {
+    throw new ConfigurationError('Retry max backoff must be a positive finite number');
   }
   if (retryPolicy.maxBackoffMs < retryPolicy.initialBackoffMs) {
     throw new ConfigurationError('Retry max backoff must be >= initial backoff');
