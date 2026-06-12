@@ -110,14 +110,21 @@ describe('Config', () => {
           apiKey: 'test_key',
           timeout: 0,
         })
-      ).toThrow('Timeout must be greater than zero');
+      ).toThrow('Timeout must be a positive finite number');
 
       expect(() =>
         resolveConfig({
           apiKey: 'test_key',
           timeout: -1000,
         })
-      ).toThrow('Timeout must be greater than zero');
+      ).toThrow('Timeout must be a positive finite number');
+
+      expect(() =>
+        resolveConfig({
+          apiKey: 'test_key',
+          timeout: Number.POSITIVE_INFINITY,
+        })
+      ).toThrow('Timeout must be a positive finite number');
     });
 
     it('uses default retry policy', () => {
@@ -140,7 +147,7 @@ describe('Config', () => {
           apiKey: 'test_key',
           retryPolicy: { maxAttempts: 0 },
         })
-      ).toThrow('Retry max attempts must be greater than zero');
+      ).toThrow('Retry max attempts must be a positive finite number');
     });
 
     it('validates retry initialBackoffMs is positive', () => {
@@ -149,7 +156,7 @@ describe('Config', () => {
           apiKey: 'test_key',
           retryPolicy: { initialBackoffMs: 0 },
         })
-      ).toThrow('Retry initial backoff must be greater than zero');
+      ).toThrow('Retry initial backoff must be a positive finite number');
     });
 
     it('validates retry maxBackoffMs is positive', () => {
@@ -158,7 +165,30 @@ describe('Config', () => {
           apiKey: 'test_key',
           retryPolicy: { maxBackoffMs: 0 },
         })
-      ).toThrow('Retry max backoff must be greater than zero');
+      ).toThrow('Retry max backoff must be a positive finite number');
+    });
+
+    it('validates retry policy values are finite', () => {
+      expect(() =>
+        resolveConfig({
+          apiKey: 'test_key',
+          retryPolicy: { maxAttempts: Number.POSITIVE_INFINITY },
+        })
+      ).toThrow('Retry max attempts must be a positive finite number');
+
+      expect(() =>
+        resolveConfig({
+          apiKey: 'test_key',
+          retryPolicy: { initialBackoffMs: Number.NaN },
+        })
+      ).toThrow('Retry initial backoff must be a positive finite number');
+
+      expect(() =>
+        resolveConfig({
+          apiKey: 'test_key',
+          retryPolicy: { maxBackoffMs: Number.POSITIVE_INFINITY },
+        })
+      ).toThrow('Retry max backoff must be a positive finite number');
     });
 
     it('validates maxBackoffMs >= initialBackoffMs', () => {
