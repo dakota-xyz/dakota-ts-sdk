@@ -2,6 +2,39 @@
 
 All notable changes to the Dakota TypeScript SDK are documented in this file.
 
+## [1.5.0] - 2026-06-17
+
+### Summary
+
+Sync against platform OpenAPI spec — three commits since the 1.4.0 sync:
+
+- **ENG-2454** — `customers.create` now accepts `is_sub_client: boolean` to
+  designate a customer as a sub-client at creation. A regular customer
+  cannot be promoted afterwards; cannot be combined with `sub_client_id`.
+- **ENG-2368** — `transactions.list` now accepts `wallet_id` and
+  `direction` (`'in' | 'out'`) when `transaction_type: 'wallet'`. New
+  `PaginatedWalletTransactionResponse` shape. `WalletTransaction` gains
+  `created_at` and `confirmed_at` (Unix seconds).
+- **ENG-2064** — Wallet balance descriptions clarified: `total_amount_usd`
+  and `amount_usd` are rounded DOWN to cents (truncated toward zero), so
+  they never exceed the holder's spendable balance. No schema change.
+
+### Added
+
+- `CustomerCreateRequest.is_sub_client?: boolean` — re-exported as
+  optional. The generated type marks it required because of the
+  `default: false`, but the spec's `required:` list excludes it.
+- `TransactionListParams.wallet_id?: string`
+- `TransactionListParams.direction?: 'in' | 'out'`
+
+### Changed
+
+- `WalletTransaction.created_at?: number`, `WalletTransaction.confirmed_at?: number`
+  surfaced through the regenerated types.
+- JSDoc examples on `customers.create` and `transactions.list` updated to
+  show the new fields.
+- `AGENTS.md` updated for both.
+
 ## [1.4.0] - 2026-06-10
 
 ### Summary

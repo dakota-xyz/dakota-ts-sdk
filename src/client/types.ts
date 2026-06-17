@@ -40,8 +40,22 @@ export type PersonName = components['schemas']['PersonName'];
 /** Customer record */
 export type Customer = components['schemas']['Customer'];
 
-/** Customer creation request */
-export type CustomerCreateRequest = components['schemas']['CustomerCreateRequest'];
+/**
+ * Customer creation request.
+ *
+ * NOTE: openapi-typescript generates `is_sub_client` as required because the
+ * OpenAPI spec declares a `default: false`. The spec's `required:` list is
+ * only `['name', 'customer_type']`, so this alias re-exports with
+ * `is_sub_client` optional to match the server's runtime behaviour. Pass
+ * `is_sub_client: true` to designate a sub-client at creation; cannot be
+ * combined with `sub_client_id`. See ENG-2454.
+ */
+export type CustomerCreateRequest = Omit<
+  components['schemas']['CustomerCreateRequest'],
+  'is_sub_client'
+> & {
+  is_sub_client?: boolean;
+};
 
 /** Customer creation response */
 export type CustomerCreateResponse = components['schemas']['CustomerCreateResponse'];
@@ -932,6 +946,19 @@ export interface TransactionListParams extends ListParams {
   source_network_id?: string;
   source_asset?: string;
   destination_asset?: string;
+  /**
+   * Filter wallet transactions by wallet ID.
+   * Only valid with `transaction_type: 'wallet'`.
+   */
+  wallet_id?: string;
+  /**
+   * Filter wallet transactions by direction relative to the wallet:
+   * - `'out'` — transactions sent FROM the wallet
+   * - `'in'` — transactions recorded with the wallet as the recipient
+   *
+   * Only valid with `transaction_type: 'wallet'`.
+   */
+  direction?: 'in' | 'out';
 }
 
 /** Event list parameters */

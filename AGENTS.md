@@ -30,6 +30,16 @@ const customer = await client.customers.create({
 });
 console.log(customer.application_url); // KYB onboarding URL
 
+// Designate as a sub-client at creation (ENG-2454).
+// `is_sub_client` can ONLY be set here — a regular customer cannot be
+// promoted to a sub-client afterwards. Cannot be combined with
+// `sub_client_id`.
+const subClient = await client.customers.create({
+  name: 'Partner Corp',
+  customer_type: 'business',
+  is_sub_client: true,
+});
+
 // List customers
 for await (const customer of client.customers.list()) {
   console.log(customer.name, customer.kyb_status);
@@ -37,6 +47,9 @@ for await (const customer of client.customers.list()) {
 
 // List with filters
 const active = client.customers.list({ kyb_status: 'active' });
+
+// List sub-clients only
+const subClients = client.customers.list({ is_sub_client: true });
 
 // Collect all to array
 const all = await client.customers.list().toArray();
@@ -169,6 +182,15 @@ for await (const tx of client.transactions.list()) {
 const completed = client.transactions.list({
   customer_id: customerId,
   status: 'completed',
+});
+
+// Wallet-scoped filters (ENG-2368). Require transaction_type: 'wallet'.
+//  - wallet_id — filter to one wallet
+//  - direction — 'out' = sent FROM the wallet, 'in' = received TO it
+const sentFromWallet = client.transactions.list({
+  transaction_type: 'wallet',
+  wallet_id: walletId,
+  direction: 'out',
 });
 
 // Get transaction
