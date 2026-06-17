@@ -35,6 +35,40 @@ Sync against platform OpenAPI spec — three commits since the 1.4.0 sync:
   show the new fields.
 - `AGENTS.md` updated for both.
 
+### Fixed
+
+Two SDK-vs-platform type drifts surfaced by validating the agentic-build
+prompt pack against the live sandbox. Each fix verified against
+`platform/openapi.public.yaml` and the platform handler code.
+
+- **`WalletTransactionRequest`** was typed as `SendTransactionIntent`
+  (a bare intent). `POST /wallets/{id}/transactions` actually accepts
+  an `EndorsedRequest` envelope (`{signatures, intent}`) — confirmed at
+  `platform/openapi.public.yaml:1031` and `platform/internal/api/server_wallets.go:148`
+  (`request.Body.Intent.AsSendTransactionIntent()` extracts intent FROM
+  the envelope). Type is now `EndorsedRequest`; the bare intent is
+  re-exported as `SendTransactionIntent` for callers that build + sign
+  locally before wrapping. JSDoc example on `wallets.createTransaction`
+  now shows the full RFC 8785 → SHA-256 → ECDSA P-256 DER → base64 flow.
+
+  **Breaking** for any caller passing a bare intent — those calls were
+  already failing at runtime (platform rejects bodies missing
+  `signatures`), so no working integration depended on the old shape.
+
+- **`destinations.create` return type** was `Destination`
+  (`DestinationResponseUnion`, with `destination_id`). Platform returns
+  only `{id}` per `IDResponse` — confirmed at
+  `platform/openapi.public.yaml:2484` and
+  `platform/internal/api/server_recipients.go:1120`
+  (`CreateDestination201JSONResponse{Id: ...}`). New
+  `DestinationCreateResponse` alias = `IDResponse`. `destinations.list`
+  is unchanged — GET endpoints really do return the full union with
+  `destination_id`.
+
+  **Breaking** for any caller that read `.destination_id` on the create
+  response — that field was always `undefined` at runtime, so this
+  unbreaks type-level access to the real `.id` field.
+
 ## [1.4.0] - 2026-06-10
 
 ### Summary

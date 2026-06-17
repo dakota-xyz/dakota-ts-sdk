@@ -4,7 +4,13 @@
 
 import { BaseResource } from './base.js';
 import { PaginatedIterator } from '../pagination.js';
-import type { Destination, DestinationRequest, ListParams, RequestOptions } from '../types.js';
+import type {
+  Destination,
+  DestinationCreateResponse,
+  DestinationRequest,
+  ListParams,
+  RequestOptions,
+} from '../types.js';
 
 /**
  * Destinations API resource.
@@ -13,38 +19,47 @@ export class DestinationsResource extends BaseResource {
   /**
    * Create a new destination for a recipient.
    *
-   * Destinations can be bank accounts (fiat_us) or crypto wallets (crypto).
+   * Destinations can be bank accounts (fiat_us / fiat_iban) or crypto
+   * wallets (crypto).
+   *
+   * The platform returns just `{ id }` here (per `IDResponse`), not the
+   * full destination object. Call `destinations.list(recipientId)` if
+   * you need the rest of the fields.
    *
    * @param recipientId - Recipient ID
    * @param data - Destination creation data
-   * @returns Created destination
+   * @returns `{ id }` of the newly-created destination
    *
    * @example
    * ```typescript
-   * // Create a bank destination (for off-ramp)
-   * const bankDest = await client.destinations.create(recipientId, {
-   *   destination_type: 'fiat_us',
-   *   bank_name: 'Chase Bank',
-   *   account_holder_name: 'Acme Corp',
-   *   account_number: '123456789',
-   *   routing_number: '021000021',
-   *   account_type: 'checking',
-   * });
-   *
-   * // Create a crypto destination (for on-ramp)
+   * // Crypto destination (for on-ramp)
    * const cryptoDest = await client.destinations.create(recipientId, {
    *   destination_type: 'crypto',
+   *   name: 'Treasury USDC',
    *   crypto_address: '0x742d35Cc6634C0532925a3b844Bc9e7595f...',
    *   network_id: 'ethereum-mainnet',
    * });
+   * // → cryptoDest.id
+   *
+   * // Fiat US destination (for off-ramp)
+   * const bankDest = await client.destinations.create(recipientId, {
+   *   destination_type: 'fiat_us',
+   *   name: 'Acme Chase Checking',
+   *   bank_name: 'JPMorgan Chase',
+   *   account_holder_name: 'Acme Corp',
+   *   account_number: '000123456789',
+   *   aba_routing_number: '021000021',
+   *   account_type: 'checking',
+   * });
+   * // → bankDest.id
    * ```
    */
   async create(
     recipientId: string,
     data: DestinationRequest,
     options?: RequestOptions
-  ): Promise<Destination> {
-    return this.transport.request<Destination>({
+  ): Promise<DestinationCreateResponse> {
+    return this.transport.request<DestinationCreateResponse>({
       method: 'POST',
       path: `/recipients/${recipientId}/destinations`,
       body: data,

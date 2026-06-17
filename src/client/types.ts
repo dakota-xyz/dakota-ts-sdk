@@ -110,11 +110,19 @@ export type RecipientUpdateRequest = components['schemas']['RecipientRequest'];
 // Destination Types
 // ============================================================================
 
-/** Destination response union */
+/** Destination response union (used by `destinations.list`) */
 export type Destination = components['schemas']['DestinationResponseUnion'];
 
 /** Destination request union */
 export type DestinationRequest = components['schemas']['DestinationRequestUnion'];
+
+/**
+ * Response for `destinations.create` — the platform returns just `{ id }`
+ * (per `IDResponse`), NOT the full `DestinationResponseUnion`. Call
+ * `destinations.list(recipientId)` afterwards to read the full shape if
+ * you need it.
+ */
+export type DestinationCreateResponse = components['schemas']['IDResponse'];
 
 /** Fiat US destination request */
 export type FiatUSDestinationRequest = components['schemas']['FiatUSDestinationRequest'];
@@ -191,8 +199,25 @@ export type WalletBalance = components['schemas']['AssetBalance'];
 /** Wallet balances */
 export type WalletBalances = components['schemas']['WalletBalances'];
 
-/** Wallet transaction request */
-export type WalletTransactionRequest = components['schemas']['SendTransactionIntent'];
+/**
+ * Wallet transaction request body.
+ *
+ * `POST /wallets/{id}/transactions` expects an endorsed envelope —
+ * `{ signatures: string[], intent: SendTransactionIntent }` — NOT a bare
+ * intent. Build the `SendTransactionIntent`, canonicalize per RFC 8785,
+ * sign with the wallet's signer-group ECDSA P-256 key, then post the
+ * `{ signatures, intent }` envelope.
+ *
+ * @see https://docs.dakota.xyz/documentation/signing-guide
+ */
+export type WalletTransactionRequest = components['schemas']['EndorsedRequest'];
+
+/**
+ * The bare intent that goes inside `WalletTransactionRequest.intent`.
+ * Exposed for callers building + signing the intent locally before
+ * wrapping it in the endorsed envelope.
+ */
+export type SendTransactionIntent = components['schemas']['SendTransactionIntent'];
 
 /**
  * Endorsed request envelope: `{ signatures: string[], intent: <one of the

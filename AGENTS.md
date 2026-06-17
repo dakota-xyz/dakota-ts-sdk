@@ -83,6 +83,10 @@ const updated = await client.recipients.update(recipientId, {
 ### Destinations
 
 ```typescript
+// destinations.create returns just `{ id }` (per IDResponse) — it does
+// NOT return the full destination object. Call destinations.list to
+// read the rest of the fields if needed.
+
 // Create bank destination (for off-ramp)
 const bankDest = await client.destinations.create(recipientId, {
   destination_type: 'fiat_us',
@@ -93,18 +97,20 @@ const bankDest = await client.destinations.create(recipientId, {
   aba_routing_number: '021000021',
   account_type: 'checking',
 });
+const bankDestId = bankDest.id;
 
 // Create crypto destination (for on-ramp)
 const cryptoDest = await client.destinations.create(recipientId, {
   destination_type: 'crypto',
   name: 'Crypto Wallet',
-  address: '0x742d35Cc6634C0532925a3b844Bc9e7595f...',
+  crypto_address: '0x742d35Cc6634C0532925a3b844Bc9e7595f...',
   network_id: 'ethereum-mainnet',
 });
+const cryptoDestId = cryptoDest.id;
 
-// List destinations
+// List destinations — these DO have `destination_id` (full union shape)
 for await (const dest of client.destinations.list(recipientId)) {
-  console.log(dest);
+  console.log(dest.destination_id, dest.destination_type);
 }
 ```
 
@@ -238,12 +244,33 @@ for (const policy of attachedPolicies) {
   console.log(policy.id, policy.name);
 }
 
-// Create wallet transaction
+// Send a transaction from a wallet — requires an EndorsedRequest
+// envelope (`{ signatures, intent }`). Build the SendTransactionIntent,
+// canonicalize per RFC 8785, sign with the wallet's signer-group ECDSA
+// P-256 key, base64-encode the DER signature, then post the envelope.
+import canonicalize from 'canonicalize';
+import { createSign, createPrivateKey, randomUUID } from 'node:crypto';
+
+const intent = {
+  wallet_id: walletId,
+  caip2: 'eip155:1',                 // 11155111 for sepolia
+  operation: {
+    kind: 'transfer',
+    from: wallet.address,
+    to: '0x...',
+    amount: '100.00',
+    asset_id: 'USDC',
+  },
+  idempotency_key: randomUUID(),
+};
+const canonical = canonicalize(intent)!;
+const sig = createSign('SHA256').update(canonical).sign({
+  key: createPrivateKey({ key: privateKeyDer, format: 'der', type: 'pkcs8' }),
+  dsaEncoding: 'der',
+});
 const tx = await client.wallets.createTransaction(walletId, {
-  to: '0x...',
-  amount: '100.00',
-  asset: 'USDC',
-  network_id: 'ethereum-mainnet',
+  signatures: [sig.toString('base64')],
+  intent,
 });
 ```
 
