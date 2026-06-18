@@ -282,7 +282,7 @@ paths:
             $ref: '#/components/schemas/KSUID'
         - name: is_sub_client
           in: query
-          description: When set to true, returns only customers that are acting as sub-clients (have other customers associated with them).
+          description: When true, returns only customers that are sub-clients (designated as such at creation). When false or omitted, returns all customers.
           required: false
           schema:
             type: boolean
@@ -1384,6 +1384,25 @@ paths:
           required: false
           schema:
             $ref: '#/components/schemas/KSUID'
+        - name: wallet_id
+          in: query
+          description: Filter wallet transactions by wallet ID. Only valid with `transaction_type=wallet`.
+          required: false
+          schema:
+            $ref: '#/components/schemas/KSUID'
+        - name: direction
+          in: query
+          description: >-
+            Filter wallet transactions by direction relative to the wallet:
+            `out` matches transactions sent from the wallet; `in` matches
+            transactions recorded with the wallet as the recipient. Only
+            valid with `transaction_type=wallet`.
+          required: false
+          schema:
+            type: string
+            enum:
+              - in
+              - out
         - name: destination_id
           in: query
           description: Filter transactions by destination ID.
@@ -13642,7 +13661,11 @@ components:
           example: external_customer_123
         sub_client_id:
           $ref: '#/components/schemas/KSUID'
-          description: ID of an existing customer to associate this new customer with as a sub-client. The referenced customer must belong to the same client.
+          description: ID of an existing sub-client to associate this new customer with. The referenced customer must belong to the same client and must itself be a sub-client. Cannot be combined with is_sub_client.
+        is_sub_client:
+          type: boolean
+          description: When true, create this customer as a sub-client. A customer can only be designated a sub-client at creation time; a regular customer cannot be promoted to a sub-client afterwards. Cannot be combined with sub_client_id.
+          default: false
       required:
         - name
         - customer_type
@@ -13793,7 +13816,7 @@ components:
           example: Partner Corp
         is_sub_client:
           type: boolean
-          description: Whether this customer is acting as a sub-client (has other customers associated with it).
+          description: Whether this customer is a sub-client. This is set when the customer is created and cannot be changed afterwards.
           default: false
     KybStatus:
       type: string
@@ -14721,6 +14744,7 @@ components:
       oneOf:
         - $ref: '#/components/schemas/PaginatedOneOffTransactionResponse'
         - $ref: '#/components/schemas/PaginatedCustomerTransactionResponse'
+        - $ref: '#/components/schemas/PaginatedWalletTransactionResponse'
     TransactionAmount:
       type: object
       description: An amount of money with its asset.
@@ -15445,6 +15469,15 @@ components:
               type: array
               items:
                 $ref: '#/components/schemas/OneOffTransaction'
+    PaginatedWalletTransactionResponse:
+      allOf:
+        - $ref: '#/components/schemas/PaginatedListResponse'
+        - type: object
+          properties:
+            data:
+              type: array
+              items:
+                $ref: '#/components/schemas/WalletTransaction'
     Wallet:
       type: object
       description: Non-custodial wallet managed by Dakota Platform with a single address usable across networks within the same family.
@@ -15526,7 +15559,10 @@ components:
           description: List of asset balances
         total_amount_usd:
           type: string
-          description: Total USD value of all balances
+          description: >-
+            Total USD value of all balances, as a decimal string with 2 decimal
+            places (cents). Rounded DOWN (truncated toward zero), never rounded
+            up, so the value never exceeds the holder's spendable balance.
           example: '1234.56'
     AssetBalance:
       type: object
@@ -15539,7 +15575,10 @@ components:
           $ref: '#/components/schemas/AssetDeployment'
         amount_usd:
           type: string
-          description: USD value of this asset balance
+          description: >-
+            USD value of this asset balance, as a decimal string with 2 decimal
+            places (cents). Rounded DOWN (truncated toward zero), never rounded
+            up, so the value never exceeds the holder's spendable balance.
           example: '123.45'
     WalletTransaction:
       type: object
@@ -15581,6 +15620,16 @@ components:
           $ref: '#/components/schemas/Asset'
         status:
           $ref: '#/components/schemas/TransactionStatus'
+        created_at:
+          type: integer
+          format: int64
+          description: Unix time the transaction was created.
+          example: 1781181600
+        confirmed_at:
+          type: integer
+          format: int64
+          description: Unix time the transaction was confirmed on chain; absent until confirmed.
+          example: 1781181660
     WalletTransactionType:
       type: string
       description: Type of transaction

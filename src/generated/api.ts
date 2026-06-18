@@ -2427,8 +2427,13 @@ export type components = {
              * @example external_customer_123
              */
             readonly external_id?: string;
-            /** @description ID of an existing customer to associate this new customer with as a sub-client. The referenced customer must belong to the same client. */
+            /** @description ID of an existing sub-client to associate this new customer with. The referenced customer must belong to the same client and must itself be a sub-client. Cannot be combined with is_sub_client. */
             readonly sub_client_id?: components["schemas"]["KSUID"];
+            /**
+             * @description When true, create this customer as a sub-client. A customer can only be designated a sub-client at creation time; a regular customer cannot be promoted to a sub-client afterwards. Cannot be combined with sub_client_id.
+             * @default false
+             */
+            readonly is_sub_client: boolean;
         };
         /** @description Response returned when a customer creation process is successfully initiated. */
         readonly CustomerCreateResponse: {
@@ -2547,7 +2552,7 @@ export type components = {
              */
             readonly sub_client_name?: string;
             /**
-             * @description Whether this customer is acting as a sub-client (has other customers associated with it).
+             * @description Whether this customer is a sub-client. This is set when the customer is created and cannot be changed afterwards.
              * @default false
              */
             readonly is_sub_client: boolean;
@@ -3294,7 +3299,7 @@ export type components = {
         readonly PaginatedCustomerTransactionResponse: components["schemas"]["PaginatedListResponse"] & {
             readonly data?: readonly components["schemas"]["Transaction"][];
         };
-        readonly PaginatedTransactionResourceResponse: components["schemas"]["PaginatedOneOffTransactionResponse"] | components["schemas"]["PaginatedCustomerTransactionResponse"];
+        readonly PaginatedTransactionResourceResponse: components["schemas"]["PaginatedOneOffTransactionResponse"] | components["schemas"]["PaginatedCustomerTransactionResponse"] | components["schemas"]["PaginatedWalletTransactionResponse"];
         /** @description An amount of money with its asset. */
         readonly TransactionAmount: {
             /**
@@ -3852,6 +3857,9 @@ export type components = {
         readonly PaginatedOneOffTransactionResponse: components["schemas"]["PaginatedListResponse"] & {
             readonly data?: readonly components["schemas"]["OneOffTransaction"][];
         };
+        readonly PaginatedWalletTransactionResponse: components["schemas"]["PaginatedListResponse"] & {
+            readonly data?: readonly components["schemas"]["WalletTransaction"][];
+        };
         /** @description Non-custodial wallet managed by Dakota Platform with a single address usable across networks within the same family. */
         readonly Wallet: {
             readonly id: components["schemas"]["KSUID"];
@@ -3895,7 +3903,7 @@ export type components = {
             /** @description List of asset balances */
             readonly balances: readonly components["schemas"]["AssetBalance"][];
             /**
-             * @description Total USD value of all balances
+             * @description Total USD value of all balances, as a decimal string with 2 decimal places (cents). Rounded DOWN (truncated toward zero), never rounded up, so the value never exceeds the holder's spendable balance.
              * @example 1234.56
              */
             readonly total_amount_usd: string;
@@ -3904,7 +3912,7 @@ export type components = {
         readonly AssetBalance: {
             readonly asset: components["schemas"]["AssetDeployment"];
             /**
-             * @description USD value of this asset balance
+             * @description USD value of this asset balance, as a decimal string with 2 decimal places (cents). Rounded DOWN (truncated toward zero), never rounded up, so the value never exceeds the holder's spendable balance.
              * @example 123.45
              */
             readonly amount_usd: string;
@@ -3936,6 +3944,18 @@ export type components = {
             readonly amount?: string;
             readonly asset?: components["schemas"]["Asset"];
             readonly status: components["schemas"]["TransactionStatus"];
+            /**
+             * Format: int64
+             * @description Unix time the transaction was created.
+             * @example 1781181600
+             */
+            readonly created_at?: number;
+            /**
+             * Format: int64
+             * @description Unix time the transaction was confirmed on chain; absent until confirmed.
+             * @example 1781181660
+             */
+            readonly confirmed_at?: number;
         };
         /**
          * @description Type of transaction
@@ -6098,7 +6118,7 @@ export interface operations {
                 readonly application_statuses?: string;
                 /** @description Filter customers by sub-client association. Returns only customers associated with the specified sub-client. */
                 readonly sub_client_id?: components["schemas"]["KSUID"];
-                /** @description When set to true, returns only customers that are acting as sub-clients (have other customers associated with them). */
+                /** @description When true, returns only customers that are sub-clients (designated as such at creation). When false or omitted, returns all customers. */
                 readonly is_sub_client?: boolean;
                 /** @description Field to sort customers by. Defaults to `name`. */
                 readonly sort_by?: "application_status" | "created_at" | "customer_type" | "id" | "kyb_status" | "kyc_status" | "name";
@@ -7411,6 +7431,10 @@ export interface operations {
                 readonly transaction_type?: components["schemas"]["TransactionResourceType"];
                 /** @description Filter transactions by customer ID. */
                 readonly customer_id?: components["schemas"]["KSUID"];
+                /** @description Filter wallet transactions by wallet ID. Only valid with `transaction_type=wallet`. */
+                readonly wallet_id?: components["schemas"]["KSUID"];
+                /** @description Filter wallet transactions by direction relative to the wallet: `out` matches transactions sent from the wallet; `in` matches transactions recorded with the wallet as the recipient. Only valid with `transaction_type=wallet`. */
+                readonly direction?: "in" | "out";
                 /** @description Filter transactions by destination ID. */
                 readonly destination_id?: components["schemas"]["KSUID"];
                 /** @description Filter one-off transactions by status. */

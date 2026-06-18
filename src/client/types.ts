@@ -40,8 +40,22 @@ export type PersonName = components['schemas']['PersonName'];
 /** Customer record */
 export type Customer = components['schemas']['Customer'];
 
-/** Customer creation request */
-export type CustomerCreateRequest = components['schemas']['CustomerCreateRequest'];
+/**
+ * Customer creation request.
+ *
+ * NOTE: openapi-typescript generates `is_sub_client` as required because the
+ * OpenAPI spec declares a `default: false`. The spec's `required:` list is
+ * only `['name', 'customer_type']`, so this alias re-exports with
+ * `is_sub_client` optional to match the server's runtime behaviour. Pass
+ * `is_sub_client: true` to designate a sub-client at creation; cannot be
+ * combined with `sub_client_id`. See ENG-2454.
+ */
+export type CustomerCreateRequest = Omit<
+  components['schemas']['CustomerCreateRequest'],
+  'is_sub_client'
+> & {
+  is_sub_client?: boolean;
+};
 
 /** Customer creation response */
 export type CustomerCreateResponse = components['schemas']['CustomerCreateResponse'];
@@ -96,11 +110,19 @@ export type RecipientUpdateRequest = components['schemas']['RecipientRequest'];
 // Destination Types
 // ============================================================================
 
-/** Destination response union */
+/** Destination response union (used by `destinations.list`) */
 export type Destination = components['schemas']['DestinationResponseUnion'];
 
 /** Destination request union */
 export type DestinationRequest = components['schemas']['DestinationRequestUnion'];
+
+/**
+ * Response for `destinations.create` — the platform returns just `{ id }`
+ * (per `IDResponse`), NOT the full `DestinationResponseUnion`. Call
+ * `destinations.list(recipientId)` afterwards to read the full shape if
+ * you need it.
+ */
+export type DestinationCreateResponse = components['schemas']['IDResponse'];
 
 /** Fiat US destination request */
 export type FiatUSDestinationRequest = components['schemas']['FiatUSDestinationRequest'];
@@ -177,8 +199,25 @@ export type WalletBalance = components['schemas']['AssetBalance'];
 /** Wallet balances */
 export type WalletBalances = components['schemas']['WalletBalances'];
 
-/** Wallet transaction request */
-export type WalletTransactionRequest = components['schemas']['SendTransactionIntent'];
+/**
+ * Wallet transaction request body.
+ *
+ * `POST /wallets/{id}/transactions` expects an endorsed envelope —
+ * `{ signatures: string[], intent: SendTransactionIntent }` — NOT a bare
+ * intent. Build the `SendTransactionIntent`, canonicalize per RFC 8785,
+ * sign with the wallet's signer-group ECDSA P-256 key, then post the
+ * `{ signatures, intent }` envelope.
+ *
+ * @see https://docs.dakota.xyz/documentation/signing-guide
+ */
+export type WalletTransactionRequest = components['schemas']['EndorsedRequest'];
+
+/**
+ * The bare intent that goes inside `WalletTransactionRequest.intent`.
+ * Exposed for callers building + signing the intent locally before
+ * wrapping it in the endorsed envelope.
+ */
+export type SendTransactionIntent = components['schemas']['SendTransactionIntent'];
 
 /**
  * Endorsed request envelope: `{ signatures: string[], intent: <one of the
@@ -932,6 +971,19 @@ export interface TransactionListParams extends ListParams {
   source_network_id?: string;
   source_asset?: string;
   destination_asset?: string;
+  /**
+   * Filter wallet transactions by wallet ID.
+   * Only valid with `transaction_type: 'wallet'`.
+   */
+  wallet_id?: string;
+  /**
+   * Filter wallet transactions by direction relative to the wallet:
+   * - `'out'` — transactions sent FROM the wallet
+   * - `'in'` — transactions recorded with the wallet as the recipient
+   *
+   * Only valid with `transaction_type: 'wallet'`.
+   */
+  direction?: 'in' | 'out';
 }
 
 /** Event list parameters */

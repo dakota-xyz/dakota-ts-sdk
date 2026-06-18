@@ -44,6 +44,15 @@ export class CustomersResource extends BaseResource {
    *   { idempotencyKey: 'create-acme-corp-001' }
    * );
    * console.log(customer.applicationUrl); // KYB onboarding URL
+   *
+   * // Designate as a sub-client at creation (ENG-2454).
+   * // `is_sub_client` can only be set here — a regular customer cannot
+   * // be promoted afterwards. Cannot be combined with `sub_client_id`.
+   * const subClient = await client.customers.create({
+   *   name: 'Partner Corp',
+   *   customer_type: 'business',
+   *   is_sub_client: true,
+   * });
    * ```
    */
   async create(

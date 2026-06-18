@@ -79,6 +79,13 @@ export class TransactionsResource extends BaseResource {
    *   customer_id: customerId,
    *   status: 'completed',
    * });
+   *
+   * // Wallet-scoped filters (require transaction_type: 'wallet')
+   * const sent = client.transactions.list({
+   *   transaction_type: 'wallet',
+   *   wallet_id: walletId,
+   *   direction: 'out',
+   * });
    * ```
    */
   list(params?: TransactionListParams): PaginatedIterator<OneOffTransaction> {

@@ -116,21 +116,47 @@ export class WalletsResource extends BaseResource {
   }
 
   /**
-   * Create a wallet transaction.
+   * Send a transaction from a wallet.
+   *
+   * The platform expects an **endorsed request** envelope —
+   * `{ signatures, intent }` — at this endpoint. Build the
+   * `SendTransactionIntent`, canonicalize it per RFC 8785 (JCS), sign
+   * with the wallet's signer-group ECDSA P-256 key, base64-encode the
+   * DER signature, then post the envelope.
    *
    * @param walletId - Wallet ID
-   * @param data - Transaction data
+   * @param data - Endorsed wallet transaction request: `{ signatures, intent }`
    * @returns Created transaction
    *
    * @example
    * ```typescript
+   * import canonicalize from 'canonicalize';
+   * import { createSign, createPrivateKey, randomUUID } from 'node:crypto';
+   *
+   * const intent = {
+   *   wallet_id: walletId,
+   *   caip2: 'eip155:1',                 // 11155111 for sepolia
+   *   operation: {
+   *     kind: 'transfer',
+   *     from: wallet.address,
+   *     to: '0x...',
+   *     amount: '100.00',
+   *     asset_id: 'USDC',
+   *   },
+   *   idempotency_key: randomUUID(),
+   * };
+   * const canonical = canonicalize(intent)!;
+   * const sig = createSign('SHA256').update(canonical).sign({
+   *   key: createPrivateKey({ key: privateKeyDer, format: 'der', type: 'pkcs8' }),
+   *   dsaEncoding: 'der',
+   * });
    * const tx = await client.wallets.createTransaction(walletId, {
-   *   to: '0x...',
-   *   amount: '100.00',
-   *   asset: 'USDC',
-   *   network_id: 'ethereum-mainnet',
+   *   signatures: [sig.toString('base64')],
+   *   intent,
    * });
    * ```
+   *
+   * @see https://docs.dakota.xyz/documentation/signing-guide
    */
   async createTransaction(
     walletId: string,
