@@ -6,7 +6,6 @@ import { BaseResource } from './base.js';
 import type {
   Wallet,
   WalletCreateRequest,
-  WalletBalance,
   WalletBalances,
   WalletTransactionRequest,
   WalletTransaction,
@@ -90,29 +89,39 @@ export class WalletsResource extends BaseResource {
   /**
    * Get wallet balances.
    *
+   * Returns the platform's full `WalletBalances` response: the wallet id,
+   * its on-chain address, every per-asset balance, and a pre-computed
+   * `total_amount_usd` across all assets. The previous return shape
+   * (`WalletBalance[]`) silently dropped `address` and `total_amount_usd`,
+   * forcing callers to do a second `wallets.get()` and sum the balances
+   * by hand. This is a small breaking change with a one-line migration
+   * (`balances` → `balances.balances`); the prior shape had been broken
+   * since 1.3.x anyway.
+   *
    * @param walletId - Wallet ID
-   * @returns Array of balances
+   * @returns `{ wallet_id, address, balances, total_amount_usd }`
    *
    * @example
    * ```typescript
-   * const balances = await client.wallets.getBalances(walletId);
-   * for (const balance of balances) {
-   *   console.log(balance.asset, balance.amount);
+   * const { address, total_amount_usd, balances } =
+   *   await client.wallets.getBalances(walletId);
+   * console.log(`${address} → $${total_amount_usd}`);
+   * for (const b of balances) {
+   *   console.log(b.asset.id, b.amount_usd);
    * }
    * ```
    */
-  async getBalances(walletId: string): Promise<WalletBalance[]> {
+  async getBalances(walletId: string): Promise<WalletBalances> {
     // /wallets/{id}/balances returns the WalletBalances object directly
     // ({ wallet_id, address, balances, total_amount_usd }), not the
-    // paginated { data, meta } envelope. Earlier versions read
-    // response.data here and silently returned undefined.
-    const response = await this.transport.request<WalletBalances>({
+    // paginated { data, meta } envelope. The 1.3.x impl read
+    // response.data here and silently returned undefined; the 1.4.x /
+    // 1.5.x impl returned just the balances array, dropping the wrapper
+    // fields. Now we return what the platform actually sends.
+    return this.transport.request<WalletBalances>({
       method: 'GET',
       path: `/wallets/${walletId}/balances`,
     });
-    // WalletBalances.balances is readonly per the OpenAPI types — copy
-    // into a mutable array so callers can sort/filter/etc.
-    return response.balances ? [...response.balances] : [];
   }
 
   /**
