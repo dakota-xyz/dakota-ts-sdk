@@ -2,6 +2,46 @@
 
 All notable changes to the Dakota TypeScript SDK are documented in this file.
 
+## [1.6.0] - 2026-06-23
+
+### Summary
+
+Fix `wallets.getBalances` to return the full `WalletBalances` envelope the
+platform sends, instead of just the per-asset array. Surfaced while wiring
+a public demo: a clean curl to `GET /wallets/{id}/balances` returned
+`{wallet_id, address, balances, total_amount_usd}`, but the SDK was
+dropping every wrapper field on the floor.
+
+### Fixed
+
+- **`wallets.getBalances`** now returns `Promise<WalletBalances>` (the
+  full `{ wallet_id, address, balances, total_amount_usd }` envelope)
+  instead of `Promise<WalletBalance[]>`. The previous shape forced
+  callers to do a second `wallets.get()` to recover the address and to
+  sum balance entries by hand to recover the total — both of which the
+  platform was already sending in the same response.
+
+  History: 1.3.x's impl read `response.data` and silently returned
+  `undefined` (no `.data` envelope exists for this endpoint). 1.4.x and
+  1.5.x correctly read `response.balances` but discarded the wrapper.
+  This release returns what the platform actually sends.
+
+  **Breaking** for callers that iterated the return as an array:
+
+  ```ts
+  // before (1.4.x / 1.5.x)
+  const balances = await client.wallets.getBalances(id);
+  for (const b of balances) { ... }
+
+  // after (1.6.0)
+  const { balances } = await client.wallets.getBalances(id);
+  for (const b of balances) { ... }
+  ```
+
+  Any 1.3.x integration on this method was already broken at runtime —
+  it was receiving `undefined` and crashing on the first iteration. The
+  1.4.x → 1.6.0 migration is the one-line destructure above.
+
 ## [1.5.0] - 2026-06-17
 
 ### Summary

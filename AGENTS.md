@@ -232,10 +232,13 @@ console.log(wallet.address);
 // Get a single wallet
 const wallet = await client.wallets.get(walletId);
 
-// Get balances
-const balances = await client.wallets.getBalances(walletId);
-for (const balance of balances) {
-  console.log(balance.asset, balance.amount);
+// Get balances — returns the full WalletBalances envelope from the
+// platform: { wallet_id, address, balances, total_amount_usd }.
+const { address, total_amount_usd, balances } =
+  await client.wallets.getBalances(walletId);
+console.log(`${address} → $${total_amount_usd}`);
+for (const b of balances) {
+  console.log(b.asset.id, b.amount_usd);
 }
 
 // Get policies attached to a wallet
