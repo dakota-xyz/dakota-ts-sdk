@@ -118,6 +118,26 @@ If OpenAPI spec changes:
 npm run generate
 ```
 
+`npm run generate` merges the base spec (`openapi.yaml`) with SDK-owned
+overlays (`openapi.agentic.yaml`) into a gitignored `openapi.merged.yaml`,
+then runs `openapi-typescript` against the merged output.
+
+### Why the overlay exists
+
+Alpha-tagged endpoints (`x-alpha: true` — today, the agentic-payments
+surface: `/payment-agents`, `/instructions`, `/mandates`,
+`/scheduled-payments`) are stripped from the platform openapi sync. The
+SDK still needs types for the alpha surface it opts into, so the alpha
+paths + schemas are kept in `openapi.agentic.yaml` and deep-merged in on
+generate. The merge is idempotent — if a future sync leaves alpha in
+`openapi.yaml`, the overlay redefines the same content harmlessly.
+
+- `npm run openapi:check` — CI guard; fails if the base `openapi.yaml`
+  is missing paths/schemas the overlay expects. (Useful defense in depth
+  even though the merge is idempotent.)
+- `npm run openapi:extract-agentic` — regenerate the overlay from the
+  base spec (run once after adding new agentic content upstream).
+
 ## Testing
 
 ```bash

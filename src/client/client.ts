@@ -23,7 +23,16 @@ import {
   InfoResource,
   SandboxResource,
   SelfServeResource,
+  PaymentAgentsResource,
+  InstructionsResource,
+  MandatesResource,
+  ScheduledPaymentsResource,
 } from './resources/index.js';
+import { AgentConversation, type ChatMessage } from '../agentic/chat.js';
+import {
+  attachUserToWallet as attachUserToWalletHelper,
+  detachUserFromWallet as detachUserFromWalletHelper,
+} from '../agentic/wallets.js';
 
 /**
  * Dakota Platform API Client.
@@ -92,6 +101,14 @@ export class DakotaClient {
   readonly sandbox: SandboxResource;
   /** Self-Serve Credits API - manage prepaid transfer credits */
   readonly selfServe: SelfServeResource;
+  /** Payment Agents API (ALPHA) - hosted signing agents that draft payments */
+  readonly paymentAgents: PaymentAgentsResource;
+  /** Instructions API (ALPHA) - accept and inspect actuated proposals */
+  readonly instructions: InstructionsResource;
+  /** Mandates API (ALPHA) - the §8 authorizations that arm scheduled payments */
+  readonly mandates: MandatesResource;
+  /** Scheduled Payments API (ALPHA) - schedule rows created from instructions */
+  readonly scheduledPayments: ScheduledPaymentsResource;
 
   /**
    * Create a new Dakota client.
@@ -148,6 +165,65 @@ export class DakotaClient {
     this.info = new InfoResource(this.transport);
     this.sandbox = new SandboxResource(this.transport);
     this.selfServe = new SelfServeResource(this.transport);
+    this.paymentAgents = new PaymentAgentsResource(this.transport);
+    this.instructions = new InstructionsResource(this.transport);
+    this.mandates = new MandatesResource(this.transport);
+    this.scheduledPayments = new ScheduledPaymentsResource(this.transport);
+  }
+
+  // ==========================================================================
+  // Agentic Payments high-level helpers (ALPHA)
+  //
+  // Collapse the multi-step, crypto-heavy hosted-agent flows into single
+  // calls with good defaults. The raw operations remain reachable via
+  // `signerGroups.addSigner` / `signerGroups.removeSigner` and friends.
+  // ==========================================================================
+
+  /**
+   * Start a fresh multi-turn conversation with a payment agent.
+   *
+   * @see AgentConversation
+   */
+  newAgentConversation(paymentAgentId: string): AgentConversation {
+    return new AgentConversation(this, paymentAgentId);
+  }
+
+  /**
+   * Rebuild a conversation from a persisted transcript (oldest first) —
+   * for backends that store the history between requests.
+   */
+  resumeAgentConversation(paymentAgentId: string, history: ChatMessage[]): AgentConversation {
+    return new AgentConversation(this, paymentAgentId, history);
+  }
+
+  /**
+   * Grant a principal (user or agent — both are just signers) permission to
+   * spend from a wallet by adding its signer to an EXISTING signer group on
+   * that wallet. Idempotent; errors if the group isn't attached to the wallet.
+   *
+   * @see attachUserToWallet in `agentic/wallets.ts` for the full contract.
+   */
+  attachUserToWallet(
+    walletId: string,
+    signerPublicKey: string,
+    spendingGroupId: string
+  ): Promise<{ alreadyMember: boolean }> {
+    return attachUserToWalletHelper(this, walletId, signerPublicKey, spendingGroupId);
+  }
+
+  /**
+   * Revoke a principal's spend permission by removing its signer from the
+   * given signer group — the inverse of {@link attachUserToWallet}.
+   * Idempotent; errors if the group isn't attached to the wallet.
+   *
+   * @see detachUserFromWallet in `agentic/wallets.ts` for the full contract.
+   */
+  detachUserFromWallet(
+    walletId: string,
+    signerPublicKey: string,
+    spendingGroupId: string
+  ): Promise<{ wasMember: boolean }> {
+    return detachUserFromWalletHelper(this, walletId, signerPublicKey, spendingGroupId);
   }
 
   /**

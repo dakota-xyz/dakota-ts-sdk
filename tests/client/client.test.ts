@@ -186,5 +186,47 @@ describe('DakotaClient', () => {
       expect(typeof client.selfServe.listTiers).toBe('function');
       expect(typeof client.selfServe.getPricing).toBe('function');
     });
+
+    it('exposes paymentAgents resource (ALPHA)', () => {
+      const client = new DakotaClient({ apiKey: 'test_key' });
+      expect(client.paymentAgents).toBeDefined();
+      expect(typeof client.paymentAgents.create).toBe('function');
+      expect(typeof client.paymentAgents.get).toBe('function');
+      expect(typeof client.paymentAgents.revoke).toBe('function');
+      expect(typeof client.paymentAgents.createProposals).toBe('function');
+    });
+
+    it('exposes instructions resource (ALPHA)', () => {
+      const client = new DakotaClient({ apiKey: 'test_key' });
+      expect(client.instructions).toBeDefined();
+      expect(typeof client.instructions.create).toBe('function');
+      expect(typeof client.instructions.get).toBe('function');
+    });
+
+    it('exposes mandates resource (ALPHA)', () => {
+      const client = new DakotaClient({ apiKey: 'test_key' });
+      expect(client.mandates).toBeDefined();
+      expect(typeof client.mandates.list).toBe('function');
+      expect(typeof client.mandates.get).toBe('function');
+      expect(typeof client.mandates.create).toBe('function');
+      expect(typeof client.mandates.approve).toBe('function');
+      expect(typeof client.mandates.cancel).toBe('function');
+    });
+
+    it('exposes scheduledPayments resource (ALPHA)', () => {
+      const client = new DakotaClient({ apiKey: 'test_key' });
+      expect(client.scheduledPayments).toBeDefined();
+      expect(typeof client.scheduledPayments.list).toBe('function');
+      expect(typeof client.scheduledPayments.create).toBe('function');
+      expect(typeof client.scheduledPayments.cancel).toBe('function');
+    });
+
+    it('exposes agentic conversation + wallet helpers (ALPHA)', () => {
+      const client = new DakotaClient({ apiKey: 'test_key' });
+      expect(typeof client.newAgentConversation).toBe('function');
+      expect(typeof client.resumeAgentConversation).toBe('function');
+      expect(typeof client.attachUserToWallet).toBe('function');
+      expect(typeof client.detachUserFromWallet).toBe('function');
+    });
   });
 });

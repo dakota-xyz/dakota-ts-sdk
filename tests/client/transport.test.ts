@@ -247,7 +247,7 @@ describe('Transport', () => {
       );
     });
 
-    it('does not add idempotency key for DELETE requests', async () => {
+    it('auto-generates idempotency key for DELETE requests (agentic detach requires it)', async () => {
       mockFetch = createMockFetch([{ status: 204 }]);
       const config = resolveConfig({
         apiKey: 'test_api_key',
@@ -257,12 +257,33 @@ describe('Transport', () => {
 
       await transport.request({
         method: 'DELETE',
-        path: '/customers/123',
+        path: '/signer-groups/g1/signers/s1',
       });
 
       const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
       const headers = init.headers as Record<string, string>;
-      expect(headers['x-idempotency-key']).toBeUndefined();
+      expect(headers['x-idempotency-key']).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+      );
+    });
+
+    it('uses custom idempotency key for DELETE when provided', async () => {
+      mockFetch = createMockFetch([{ status: 204 }]);
+      const config = resolveConfig({
+        apiKey: 'test_api_key',
+        fetch: mockFetch as unknown as typeof fetch,
+      });
+      transport = new Transport(config);
+
+      await transport.request({
+        method: 'DELETE',
+        path: '/signer-groups/g1/signers/s1',
+        idempotencyKey: 'detach-key-1',
+      });
+
+      const [, init] = mockFetch.mock.calls[0] as [string, RequestInit];
+      const headers = init.headers as Record<string, string>;
+      expect(headers['x-idempotency-key']).toBe('detach-key-1');
     });
 
     it('handles 204 No Content', async () => {

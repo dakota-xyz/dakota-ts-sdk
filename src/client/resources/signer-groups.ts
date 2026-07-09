@@ -7,6 +7,7 @@ import { PaginatedIterator } from '../pagination.js';
 import type {
   SignerGroup,
   SignerGroupCreateRequest,
+  SignerGroupSignerAddRequest,
   Signer,
   SignerCreateRequest,
   AttachedWallet,
@@ -57,18 +58,22 @@ export class SignerGroupsResource extends BaseResource {
   }
 
   /**
-   * Add a signer to a group.
+   * Add an existing signer's public key to a group.
+   *
+   * The endpoint takes `{ member_key }` — the base64 PKIX (SPKI) public
+   * key of an existing signer resource — not a fresh signer definition.
+   * Returns the updated group (with the new member included).
    *
    * @param signerGroupId - Signer group ID
-   * @param data - Signer creation data
-   * @returns Created signer
+   * @param data - `{ member_key }` (the signer's base64 PKIX public key)
+   * @returns The updated signer group
    */
   async addSigner(
     signerGroupId: string,
-    data: SignerCreateRequest,
+    data: SignerGroupSignerAddRequest,
     options?: RequestOptions
-  ): Promise<Signer> {
-    return this.transport.request<Signer>({
+  ): Promise<SignerGroup> {
+    return this.transport.request<SignerGroup>({
       method: 'POST',
       path: `/signer-groups/${signerGroupId}/signers`,
       body: data,
