@@ -595,11 +595,11 @@ const handler = new WebhookHandler({
 
 // Register handlers
 handler.on(WebhookEventType.CustomerCreated, async (event) => {
-  console.log('Customer created:', event.data);
+  console.log('Customer created:', event.data.object);
 });
 
 handler.on('transaction.*', async (event) => {
-  console.log('Transaction event:', event.type, event.data);
+  console.log('Transaction event:', event.type, event.data.object);
 });
 
 handler.onDefault(async (event) => {
@@ -699,7 +699,7 @@ const handler = new WebhookHandler({
 
 // Transaction created (deposit detected)
 handler.on('auto_transaction.created', async (event) => {
-  const tx = event.data;
+  const tx = event.data.object;
   await db.transactions.create({
     dakota_tx_id: tx.id,
     account_id: tx.account_id,
@@ -710,7 +710,7 @@ handler.on('auto_transaction.created', async (event) => {
 
 // Transaction updated (status changed)
 handler.on('auto_transaction.updated', async (event) => {
-  const tx = event.data;
+  const tx = event.data.object;
   await db.transactions.update({
     where: { dakota_tx_id: tx.id },
     data: { status: tx.status }, // 'processing' -> 'completed'
