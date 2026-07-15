@@ -7,6 +7,9 @@ import {
   parseEvent,
   matchesEventType,
   WebhookEventType,
+  type KybLinkData,
+  type KybApplicationSubmittedData,
+  type CustomerCapabilityStatusUpdatedData,
   type ScheduledPaymentFailedData,
 } from '../../src/webhook/events.js';
 
@@ -190,6 +193,87 @@ describe('Webhook Events', () => {
     });
   });
 
+  describe('typed event payloads', () => {
+    it('decodes a kyb link payload (platform field names)', () => {
+      const payload = JSON.stringify({
+        id: 'evt_kyb_1',
+        type: 'customer.kyb_link.created',
+        created: 1705315500,
+        data: {
+          object: {
+            customer_id: 'cust_1',
+            link_type: 'onboarding',
+            url: 'https://kyb.example/link',
+            status: 'pending',
+          },
+        },
+      });
+
+      const event = parseEvent<KybLinkData>(payload);
+
+      expect(event.data.object.link_type).toBe('onboarding');
+      expect(event.data.object.status).toBe('pending');
+      expect(event.data.object.expires_at).toBeUndefined();
+    });
+
+    it('decodes a kyb application submitted payload (platform field names)', () => {
+      const payload = JSON.stringify({
+        id: 'evt_kyb_2',
+        type: 'customer.kyb_application.submitted',
+        created: 1705315500,
+        data: {
+          object: {
+            customer_id: 'cust_1',
+            application_id: 'app_1',
+            application_type: 'business',
+          },
+        },
+      });
+
+      const event = parseEvent<KybApplicationSubmittedData>(payload);
+
+      expect(event.data.object.application_id).toBe('app_1');
+      expect(event.data.object.application_type).toBe('business');
+    });
+
+    it('decodes a capability status payload', () => {
+      const payload = JSON.stringify({
+        id: 'evt_cap_1',
+        type: 'customer.capability_status.updated',
+        created: 1705315500,
+        data: {
+          object: {
+            customer_id: 'cust_1',
+            capability: 'offramp_usd',
+            status: 'action_required',
+            requirements: [
+              {
+                type: 'terms_acceptance',
+                key: 'terms_v2',
+                title: 'Accept terms',
+                severity: 'required',
+              },
+              {
+                type: 'document',
+                key: 'proof_of_address',
+                title: 'Proof of address',
+                severity: 'requested',
+                url: 'https://docs.example',
+              },
+            ],
+          },
+        },
+      });
+
+      const event = parseEvent<CustomerCapabilityStatusUpdatedData>(payload);
+
+      expect(event.type).toBe(WebhookEventType.CustomerCapabilityStatusUpdated);
+      expect(event.data.object.requirements).toHaveLength(2);
+      expect(event.data.object.requirements[0]?.severity).toBe('required');
+      expect(event.data.object.requirements[1]?.url).toBe('https://docs.example');
+    });
+  });
+
   describe('matchesEventType', () => {
     it('matches exact event type', () => {
       expect(matchesEventType('customer.created', 'customer.created')).toBe(true);
@@ -250,6 +334,18 @@ describe('Webhook Events', () => {
 
     it('has scheduled payment events', () => {
       expect(WebhookEventType.ScheduledPaymentFailed).toBe('scheduled_payment.failed');
+    });
+
+    it('has customer lifecycle and capability events', () => {
+      expect(WebhookEventType.CustomerDeleted).toBe('customer.deleted');
+      expect(WebhookEventType.CustomerCapabilityStatusUpdated).toBe(
+        'customer.capability_status.updated'
+      );
+    });
+
+    it('has fee payout destination events', () => {
+      expect(WebhookEventType.FeePayoutDestinationUpdated).toBe('fee_payout_destination.updated');
+      expect(WebhookEventType.FeePayoutDestinationDeleted).toBe('fee_payout_destination.deleted');
     });
   });
 });
