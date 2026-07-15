@@ -23,3 +23,4 @@ export { PaymentAgentsResource } from './payment-agents.js';
 export { InstructionsResource } from './instructions.js';
 export { MandatesResource } from './mandates.js';
 export { ScheduledPaymentsResource } from './scheduled-payments.js';
+export { InsightsResource } from './insights.js';

@@ -86,11 +86,18 @@ export class SignerGroupsResource extends BaseResource {
    *
    * @param signerGroupId - Signer group ID
    * @param signerId - Signer ID
+   * @param options - Optional request options (e.g. an explicit idempotency
+   *   key — the platform requires one on this DELETE)
    */
-  async removeSigner(signerGroupId: string, signerId: string): Promise<void> {
+  async removeSigner(
+    signerGroupId: string,
+    signerId: string,
+    options?: RequestOptions
+  ): Promise<void> {
     await this.transport.request<void>({
       method: 'DELETE',
       path: `/signer-groups/${signerGroupId}/signers/${signerId}`,
+      idempotencyKey: options?.idempotencyKey,
     });
   }
 

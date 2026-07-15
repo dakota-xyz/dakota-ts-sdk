@@ -49,6 +49,15 @@ const AGENTIC_SCHEMAS = new Set([
   'MandateResponse',
   'MandateRule',
   'ScheduledPaymentResponse',
+  'InsightEvidence',
+  'InsightItem',
+  'InsightSnapshotBalance',
+  'InsightSnapshotUpcoming',
+  'InsightSnapshot',
+  'InsightReport',
+  'InsightChatMessage',
+  'InsightChatRequest',
+  'InsightChatResponse',
 ]);
 
 const base = yaml.load(readFileSync(BASE, 'utf8'));

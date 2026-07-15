@@ -124,13 +124,16 @@ then runs `openapi-typescript` against the merged output.
 
 ### Why the overlay exists
 
-Alpha-tagged endpoints (`x-alpha: true` — today, the agentic-payments
-surface: `/payment-agents`, `/instructions`, `/mandates`,
-`/scheduled-payments`) are stripped from the platform openapi sync. The
-SDK still needs types for the alpha surface it opts into, so the alpha
-paths + schemas are kept in `openapi.agentic.yaml` and deep-merged in on
-generate. The merge is idempotent — if a future sync leaves alpha in
-`openapi.yaml`, the overlay redefines the same content harmlessly.
+The overlay pins the alpha surface the SDK opts into (`x-alpha: true` —
+today the agentic-payments surface `/payment-agents`, `/instructions`,
+`/mandates`, `/scheduled-payments`, plus the customer Insights
+endpoints). Historically the platform sync STRIPPED alpha paths from
+`openapi.yaml`; since ENG-2756 the platform's published public spec keeps
+them (annotated with `x-alpha` + an alpha banner), so the overlay now
+mainly guards against a sync regression and gives the SDK an explicit,
+reviewable manifest of its alpha surface. The merge is idempotent — when
+the base already carries the alpha content, the overlay redefines the
+same content harmlessly.
 
 - `npm run openapi:check` — CI guard; fails if the base `openapi.yaml`
   is missing paths/schemas the overlay expects. (Useful defense in depth

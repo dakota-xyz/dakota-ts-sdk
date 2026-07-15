@@ -12624,6 +12624,163 @@ paths:
         default:
           description: Unexpected error
   # --- Agentic Payments (ported from platform spec, ENG-2484 Phase 0) ---
+  /customers/{customer_id}/insights:
+    x-alpha: true
+    get:
+      tags:
+        - Insights
+      summary: Get the customer's account insight report (ALPHA)
+      description: |
+        > **Alpha** — early access.
+
+        A deterministic, read-only report over the customer's agentic activity: a snapshot of typed facts (funding-wallet balances, upcoming totals, open payments, active mandates), observations (`insights`), and advisory recommendations (`suggestions`). Observations and suggestions share one item schema — `{kind, severity, message, detail, evidence}` — and every item carries `evidence`: typed references to the platform objects it was computed from. `kind` is an OPEN set; clients must ignore kinds they do not recognize. Every number is computed server-side; nothing here moves money or changes state.
+      operationId: getCustomerInsights
+      parameters:
+        - name: customer_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The customer's insight report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InsightReport'
+              example:
+                customer_id: 2vWxCustomer0000000000000000
+                generated_at: 1783075200
+                snapshot:
+                  total_usd: '3100.25'
+                  balances:
+                    - wallet_id: 2vWxWallet000000000000000000
+                      name: Operating
+                      network_id: base-mainnet
+                      asset: USDC
+                      amount_usd: '3100.25'
+                  upcoming:
+                    days: 14
+                    count: 3
+                    totals:
+                      USDC: '5200'
+                  open_scheduled_payments: 5
+                  active_mandates: 2
+                insights:
+                  - kind: upcoming_payments
+                    severity: info
+                    message: 3 payment(s) scheduled in the next 14 days (5200 USDC).
+                    detail:
+                      count: 3
+                      window_days: 14
+                    evidence:
+                      - type: scheduled_payment
+                        id: 2vWxPayment00000000000000000
+                suggestions:
+                  - kind: funding_shortfall
+                    severity: critical
+                    message: A funding wallet shows $3100.25 of USDC but 5200 USDC of payments fire from it on base-mainnet in the next 7 days — top up at least ~2099.75 USDC by 2026-07-14 or 3 payment(s) may fail.
+                    detail:
+                      wallet_id: 2vWxWallet000000000000000000
+                      shortfall_estimate: '2099.75'
+                    evidence:
+                      - type: wallet
+                        id: 2vWxWallet000000000000000000
+                      - type: scheduled_payment
+                        id: 2vWxPayment00000000000000000
+        '400':
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#invalid-identifier
+                title: Invalid Identifier
+                status: 400
+                detail: invalid customer id
+        '404':
+          description: Agentic payments not enabled, or the customer was not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#not-found
+                title: Not Found
+                status: 404
+                detail: customer not found
+  /customers/{customer_id}/insights/chat:
+    x-alpha: true
+    post:
+      tags:
+        - Insights
+      summary: Ask about the customer's account (ALPHA)
+      description: |
+        > **Alpha** — early access.
+
+        A read-only, advisory conversation over the customer's account. Stateless: send the conversation so far in `messages` on each call; the response is the assistant's next plain-text `reply`. The assistant narrates the same deterministic report `GET /customers/{customer_id}/insights` returns (plus the customer's payments and mandates) — it never originates a number, never proposes, and never moves money. Requires the LLM layer to be configured server-side.
+      operationId: chatCustomerInsights
+      parameters:
+        - name: customer_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InsightChatRequest'
+            example:
+              messages:
+                - role: user
+                  content: Anything I should know about my account this week?
+      responses:
+        '200':
+          description: The assistant's reply
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InsightChatResponse'
+              example:
+                reply: You have 3 payments (5200 USDC) due in the next two weeks, and your Operating wallet shows $3100.25 — about 2100 USDC short. Consider topping it up before July 14.
+        '400':
+          description: Invalid request, or the insight chat layer is not configured
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#invalid-request
+                title: Invalid Request
+                status: 400
+                detail: insight chat is not enabled (no LLM configured)
+        '404':
+          description: Agentic payments not enabled, or the customer was not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#not-found
+                title: Not Found
+                status: 404
+                detail: customer not found
+        '429':
+          description: |
+            The per-customer insight-chat rate limit was exceeded (an hourly burst window and a daily window). Back off and retry later.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#rate-limited
+                title: Rate Limited
+                status: 429
+                detail: insight chat rate limit reached for this customer (hour window) — retry later
   /payment-agents:
     x-alpha: true
     post:
@@ -14326,6 +14483,7 @@ components:
         - customer.kyb_status.created
         - customer.kyb_status.updated
         - customer.kyb_application.submitted
+        - customer.capability_status.updated
         - auto_account.created
         - auto_account.updated
         - auto_account.deleted
@@ -14354,6 +14512,9 @@ components:
         - wallet.transaction.created
         - wallet.transaction.updated
         - wallet.deposit
+        - fee_payout_destination.updated
+        - fee_payout_destination.deleted
+        - scheduled_payment.failed
       example: transaction.auto.updated
     EventRequest:
       type: object
@@ -19471,6 +19632,205 @@ components:
         document:
           $ref: "#/components/schemas/AgenticDocumentAttachment"
 
+    InsightEvidence:
+      type: object
+      required:
+        - type
+        - id
+      description: One typed reference to the platform object an insight item was computed from.
+      properties:
+        type:
+          type: string
+          description: |
+            Platform resource name — the kind of object `id` refers to. OPEN set (like `InsightItem.kind`): new resource types may be referenced without a breaking change, so a client MUST handle an unrecognized type gracefully (e.g. show the item without a deep-link), never error. `transaction` is reserved (advertised and client-handled, but not emitted today).
+          x-extensible-enum:
+            - wallet
+            - scheduled_payment
+            - mandate
+            - recipient
+            - transaction
+        id:
+          type: string
+    InsightItem:
+      type: object
+      required:
+        - kind
+        - severity
+        - message
+        - evidence
+      description: |
+        One observation (in `insights`) or advisory recommendation (in `suggestions`) — the same schema in both arrays. `kind` is an OPEN set: new kinds appear without notice and clients must ignore kinds they do not recognize.
+      properties:
+        kind:
+          type: string
+          description: |
+            Machine-readable item type. This is an OPEN set — the values below are the kinds emitted TODAY, but new kinds may be added at any time without a breaking change, so it is documented as an extensible enum rather than a closed one. A client MUST render an unrecognized kind generically from `message` + `severity` (and `evidence`), never drop it. Kinds emitted today, by array:
+            Observations (`insights[]`):
+              * `upcoming_payments` — open payments due within the horizon (count + per-asset totals).
+              * `payment_failures_clustered` — ≥2 recent failures to the same payee sharing one reason (root cause).
+              * `payments_failed` — remaining recent singleton failures, summarized.
+              * `account_activity` — executed volume over the window + mandates awaiting signature.
+              * `new_counterparty` — first open payments to a recently-added payee.
+              * `counterparty_concentration` — one payee dominates recent executed outflow.
+
+            Suggestions (`suggestions[]`, advisory — acting is a separate human-gated step):
+              * `payment_at_risk` — an open payment is past its scheduled time.
+              * `funding_shortfall` — a funding wallet's indexed balance is below its near-term payment needs.
+              * `mandate_expiring` — an active mandate ends soon (warn when open payments depend on it).
+              * `mandate_headroom` — a mandate's window budget is nearly or already over-consumed.
+          x-extensible-enum:
+            - upcoming_payments
+            - payment_failures_clustered
+            - payments_failed
+            - account_activity
+            - new_counterparty
+            - counterparty_concentration
+            - payment_at_risk
+            - funding_shortfall
+            - mandate_expiring
+            - mandate_headroom
+        severity:
+          type: string
+          enum:
+            - info
+            - warn
+            - critical
+        message:
+          type: string
+          description: Human-readable, self-contained statement of the finding, with exact amounts and dates.
+        detail:
+          type: object
+          additionalProperties: true
+          description: Machine-readable facts behind the message (decimal strings, counts, unix timestamps). Keys vary by kind.
+        evidence:
+          type: array
+          items:
+            $ref: '#/components/schemas/InsightEvidence'
+          description: The platform objects this item is computed from (capped; may be empty when the claim is an aggregate).
+    InsightSnapshotBalance:
+      type: object
+      required:
+        - wallet_id
+        - network_id
+        - asset
+        - amount_usd
+      description: One funding wallet's indexed holding of one asset on one network. The balance index prices holdings in USD; values may lag the chain.
+      properties:
+        wallet_id:
+          type: string
+        name:
+          type: string
+        network_id:
+          type: string
+        asset:
+          type: string
+        amount_usd:
+          type: string
+    InsightSnapshotUpcoming:
+      type: object
+      required:
+        - days
+        - count
+      description: Open scheduled payments due within the window.
+      properties:
+        days:
+          type: integer
+        count:
+          type: integer
+        totals:
+          type: object
+          additionalProperties:
+            type: string
+          description: Asset → total amount due in the window (decimal strings).
+    InsightSnapshot:
+      type: object
+      required:
+        - upcoming
+        - open_scheduled_payments
+        - active_mandates
+      description: |
+        Typed FACTS about the account — rendered directly by clients, not narrated. `balances`/`total_usd` cover the wallets the customer's open payments spend from and are present only when the balance index is configured; they degrade to absent, never to an error.
+      properties:
+        total_usd:
+          type: string
+        balances:
+          type: array
+          items:
+            $ref: '#/components/schemas/InsightSnapshotBalance'
+        upcoming:
+          $ref: '#/components/schemas/InsightSnapshotUpcoming'
+        open_scheduled_payments:
+          type: integer
+        active_mandates:
+          type: integer
+    InsightReport:
+      type: object
+      required:
+        - customer_id
+        - generated_at
+        - snapshot
+        - insights
+        - suggestions
+      description: The deterministic, read-only insight report for a customer. Computed on demand; nothing is stored.
+      properties:
+        customer_id:
+          type: string
+        generated_at:
+          type: integer
+          format: int64
+        snapshot:
+          $ref: '#/components/schemas/InsightSnapshot'
+        insights:
+          type: array
+          items:
+            $ref: '#/components/schemas/InsightItem'
+          description: Observations about the account (always present, possibly empty).
+        suggestions:
+          type: array
+          items:
+            $ref: '#/components/schemas/InsightItem'
+          description: Advisory recommendations (always present, possibly empty). Non-binding — acting on one is a separate, human-gated step.
+    InsightChatMessage:
+      type: object
+      required:
+        - role
+        - content
+      properties:
+        role:
+          type: string
+          enum:
+            - user
+            - assistant
+        content:
+          type: string
+          maxLength: 4000
+    InsightChatRequest:
+      type: object
+      required:
+        - messages
+      properties:
+        messages:
+          type: array
+          minItems: 1
+          maxItems: 40
+          items:
+            $ref: '#/components/schemas/InsightChatMessage'
+          description: The conversation so far, oldest first.
+    InsightChatResponse:
+      type: object
+      required:
+        - reply
+      properties:
+        reply:
+          type: string
+          description: The assistant's plain-text answer. Advisory only — the assistant cannot execute anything.
+        conversation_status:
+          type: string
+          enum:
+            - ok
+            - warned
+            - blocked
+          description: How the boundary screen treated this turn. `ok` is a normal turn; `warned` means the request was off-topic and the customer was warned but may continue; `blocked` means the conversation has been terminated (repeated off-topic turns or a manipulation attempt) — the client should stop serving it and offer a fresh chat.
     AgenticChatMessage:
       type: object
       required: [role, content]
@@ -19485,8 +19845,8 @@ components:
           description: >
             Input artifacts attached to this turn for the agent to investigate —
             e.g. an invoice PDF to draft a payment from. Optional. Document
-            processing ships in a follow-up; until then a request that carries
-            attachments is rejected with 400.
+            attachments (PDF or image) are accepted up to 8 MiB per document and
+            16 MiB per request, measured on the decoded payload.
           items:
             $ref: "#/components/schemas/AgenticAttachment"
 
@@ -19530,7 +19890,7 @@ components:
       properties:
         mandates:
           type: array
-          description: Every mandate this batch DRAFTED, in full wire shape (identical to GET /alpha/mandates/{id}) — sign the §8 approval immediately, no follow-up fetch or polling. Pending until a signer other than the bound one approves.
+          description: Every mandate this batch DRAFTED, in full wire shape (identical to GET /mandates/{mandate_id}) — sign the §8 approval immediately, no follow-up fetch or polling. Pending until a signer other than the bound one approves.
           items:
             $ref: "#/components/schemas/Mandate"
         instruction_ids:
@@ -19574,6 +19934,7 @@ components:
           description: The agent's conversational reply — a clarifying question or confirmation. Present without proposals when the agent needs more from the user; may accompany proposals as a short note.
         conversation_status:
           type: string
+          enum: [ok, warned, blocked]
           description: "How the boundary screen treated this turn: `ok` is a normal payments turn; `warned` means the request was off-topic and the customer was warned but may continue; `blocked` means the conversation has been terminated (repeated off-topic turns or a manipulation attempt) — the client should stop serving it and offer a fresh chat."
 
     ApproveMandateRequest:
@@ -19894,10 +20255,23 @@ components:
           description: One or more targets of the declared kind (recipient ids or addresses; empty for any). Max 32.
         network_id:
           type: string
+          description: >
+            The network the funding wallet pays on (e.g. base-sepolia). Empty
+            authorizes any network — the other dimensions still apply.
         asset:
           type: string
+          description: >
+            The asset the funding wallet SENDS — deposit-denominated, e.g. USDC —
+            compared case-insensitively against the firing payment. Write the
+            crypto deposit asset even when the recipient ultimately receives fiat
+            via a bank offramp (stablecoin conversion is 1:1): a fiat symbol such
+            as USD can never match a send, so the mandate would deny every payment.
         max_per_tx:
           type: string
+          description: >
+            Per-payment cap — a decimal string in the rule's (deposit) asset.
+            Empty means no per-payment cap; the window caps may still bound total
+            spend.
         window:
           type: string
           enum: [NONE, WEEKLY, MONTHLY]

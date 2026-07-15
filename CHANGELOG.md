@@ -2,6 +2,45 @@
 
 All notable changes to the Dakota TypeScript SDK are documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- **Agentic payments (ALPHA)** — the `x-alpha`, flag-gated hosted
+  payment-agent surface (TypeScript port of go-sdk#9): resources
+  `paymentAgents`, `instructions`, `mandates`, `scheduledPayments`; the
+  multi-turn `AgentConversation` proposals chat
+  (`client.newAgentConversation`); wallet membership helpers
+  `client.attachUserToWallet` / `client.detachUserFromWallet` (both accept
+  an optional caller-supplied `idempotencyKey` for durable retries); §8
+  mandate signing (`mandateSignPayload`, `P256MandateSigner`,
+  `verifyMandateSignature`) with JCS/RFC 8785 canonicalization pinned
+  byte-for-byte against the platform. Endpoints 404 unless the flag is
+  enabled for your key; the surface may change without a major-version
+  bump.
+- **Insights (ALPHA)** — `client.insights.get(customerId)` (deterministic
+  account report) and `client.insights.chat(customerId, …)` (stateless
+  advisory chat). Read-only; never moves money.
+- `signerGroups.removeSigner` now accepts `options` (e.g. an explicit
+  `idempotencyKey` — the platform requires one on this DELETE).
+- Transport auto-injects `x-idempotency-key` on DELETE requests (mirror of
+  go-sdk 619b62e).
+
+### Fixed
+
+- `signerGroups.addSigner` was typed as `SignerCreateRequest`
+  (name/public_key/key_type) but the endpoint takes `{ member_key }` —
+  retyped to `SignerGroupSignerAddRequest`.
+
+### OpenAPI
+
+- Alpha paths + schemas live in the SDK-owned `openapi.agentic.yaml`
+  overlay, deep-merged on `npm run generate`; `npm run openapi:check`
+  guards drift. Synced with the platform's published public spec
+  (ENG-2756), including the Insights endpoints and the
+  `scheduled_payment.failed`, `customer.capability_status.updated`, and
+  `fee_payout_destination.*` event-type enum values.
+
 ## [1.6.0] - 2026-06-23
 
 ### Summary

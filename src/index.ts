@@ -79,6 +79,7 @@ export {
   InstructionsResource,
   MandatesResource,
   ScheduledPaymentsResource,
+  InsightsResource,
   type AccountListParams,
 } from './client/resources/index.js';
 

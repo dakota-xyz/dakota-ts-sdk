@@ -27,6 +27,7 @@ import {
   InstructionsResource,
   MandatesResource,
   ScheduledPaymentsResource,
+  InsightsResource,
 } from './resources/index.js';
 import { AgentConversation, type ChatMessage } from '../agentic/chat.js';
 import {
@@ -109,6 +110,8 @@ export class DakotaClient {
   readonly mandates: MandatesResource;
   /** Scheduled Payments API (ALPHA) - schedule rows created from instructions */
   readonly scheduledPayments: ScheduledPaymentsResource;
+  /** Insights API (ALPHA) - read-only advisory reporting over agentic activity */
+  readonly insights: InsightsResource;
 
   /**
    * Create a new Dakota client.
@@ -169,6 +172,7 @@ export class DakotaClient {
     this.instructions = new InstructionsResource(this.transport);
     this.mandates = new MandatesResource(this.transport);
     this.scheduledPayments = new ScheduledPaymentsResource(this.transport);
+    this.insights = new InsightsResource(this.transport);
   }
 
   // ==========================================================================
@@ -206,9 +210,10 @@ export class DakotaClient {
   attachUserToWallet(
     walletId: string,
     signerPublicKey: string,
-    spendingGroupId: string
+    spendingGroupId: string,
+    options?: { idempotencyKey?: string }
   ): Promise<{ alreadyMember: boolean }> {
-    return attachUserToWalletHelper(this, walletId, signerPublicKey, spendingGroupId);
+    return attachUserToWalletHelper(this, walletId, signerPublicKey, spendingGroupId, options);
   }
 
   /**
@@ -221,9 +226,10 @@ export class DakotaClient {
   detachUserFromWallet(
     walletId: string,
     signerPublicKey: string,
-    spendingGroupId: string
+    spendingGroupId: string,
+    options?: { idempotencyKey?: string }
   ): Promise<{ wasMember: boolean }> {
-    return detachUserFromWalletHelper(this, walletId, signerPublicKey, spendingGroupId);
+    return detachUserFromWalletHelper(this, walletId, signerPublicKey, spendingGroupId, options);
   }
 
   /**

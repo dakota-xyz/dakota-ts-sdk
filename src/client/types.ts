@@ -1061,6 +1061,27 @@ export type ScheduledPayment = components['schemas']['ScheduledPaymentResponse']
 /** Request body for POST /scheduled-payments — direct (signer-first) schedule create. */
 export type CreateScheduledPaymentRequest = components['schemas']['CreateScheduledPaymentRequest'];
 
+/** The customer's account insight report (deterministic, read-only). */
+export type InsightReport = components['schemas']['InsightReport'];
+
+/** One observation or suggestion inside an InsightReport. `kind` is an OPEN set. */
+export type InsightItem = components['schemas']['InsightItem'];
+
+/** Typed reference to the platform object an insight was computed from. */
+export type InsightEvidence = components['schemas']['InsightEvidence'];
+
+/** The typed-facts snapshot inside an InsightReport. */
+export type InsightSnapshot = components['schemas']['InsightSnapshot'];
+
+/** One conversation turn for the insight chat. */
+export type InsightChatMessage = components['schemas']['InsightChatMessage'];
+
+/** Request body for POST /customers/{id}/insights/chat (stateless; send the whole conversation). */
+export type InsightChatRequest = components['schemas']['InsightChatRequest'];
+
+/** The insight-chat assistant's reply. */
+export type InsightChatResponse = components['schemas']['InsightChatResponse'];
+
 /** Parameters for listing mandates. */
 export interface MandateListParams extends ListParams {
   customer_id?: string;

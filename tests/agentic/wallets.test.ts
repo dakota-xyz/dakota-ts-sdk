@@ -116,6 +116,24 @@ describe('attachUserToWallet', () => {
     );
     expect(findRequest(requests, 'POST', `/signer-groups/${GROUP_ID}/signers`)).toBeUndefined();
   });
+
+  it('uses the caller-supplied idempotency key verbatim', async () => {
+    const signer = P256MandateSigner.generate();
+    const pub = signer.publicKeyBase64();
+
+    const { fetch, requests } = newAgenticMock(
+      [GROUP_ID],
+      [{ id: 'sig_other', public_key: 'someoneelse' }]
+    );
+    const client = makeClient(fetch as unknown as typeof globalThis.fetch);
+
+    await client.attachUserToWallet(WALLET_ID, pub, GROUP_ID, {
+      idempotencyKey: 'caller-key-attach',
+    });
+
+    const addReq = findRequest(requests, 'POST', `/signer-groups/${GROUP_ID}/signers`);
+    expect(addReq!.headers['x-idempotency-key']).toBe('caller-key-attach');
+  });
 });
 
 describe('detachUserFromWallet', () => {
@@ -138,6 +156,21 @@ describe('detachUserFromWallet', () => {
     const del = findRequest(requests, 'DELETE', `/signer-groups/${GROUP_ID}/signers/sig_self`);
     expect(del).toBeDefined();
     expect(del!.headers['x-idempotency-key']).toBeTruthy();
+  });
+
+  it('uses the caller-supplied idempotency key verbatim', async () => {
+    const signer = P256MandateSigner.generate();
+    const pub = signer.publicKeyBase64();
+
+    const { fetch, requests } = newAgenticMock([GROUP_ID], [{ id: 'sig_self', public_key: pub }]);
+    const client = makeClient(fetch as unknown as typeof globalThis.fetch);
+
+    await client.detachUserFromWallet(WALLET_ID, pub, GROUP_ID, {
+      idempotencyKey: 'caller-key-detach',
+    });
+
+    const del = findRequest(requests, 'DELETE', `/signer-groups/${GROUP_ID}/signers/sig_self`);
+    expect(del!.headers['x-idempotency-key']).toBe('caller-key-detach');
   });
 
   it('is idempotent when the signer is not a member (no delete)', async () => {

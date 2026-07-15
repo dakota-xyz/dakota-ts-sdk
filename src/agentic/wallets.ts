@@ -39,6 +39,11 @@ import type { DakotaClient } from '../client/client.js';
  * is not attached to `walletId`, so a wrong group fails loudly instead of
  * silently granting nothing.
  *
+ * The key must already exist as a signer resource — the add endpoint takes
+ * a `member_key` reference, it does not register keys. A hosted agent's key
+ * is minted by `paymentAgents.create`; for a bare user key, register it
+ * first (`POST /signers`) or the add fails with a signer-not-found error.
+ *
  * @param client - Dakota client
  * @param walletId - The wallet the principal will spend from
  * @param signerPublicKey - The principal's registered signer public key
@@ -46,6 +51,10 @@ import type { DakotaClient } from '../client/client.js';
  *   `paymentAgents.create` for a hosted agent
  * @param spendingGroupId - The signer group whose attached policies should
  *   govern the principal; must already be attached to `walletId`
+ * @param options - Optional. Supply `idempotencyKey` to make the WHOLE
+ *   helper safely retryable — a crashed or partitioned call replayed with
+ *   the same key dedupes the underlying write server-side. Defaults to a
+ *   fresh random key per call.
  * @returns `{ alreadyMember }` — true when the signer was already a member
  *   (no write performed)
  */
@@ -53,7 +62,8 @@ export async function attachUserToWallet(
   client: DakotaClient,
   walletId: string,
   signerPublicKey: string,
-  spendingGroupId: string
+  spendingGroupId: string,
+  options?: { idempotencyKey?: string }
 ): Promise<{ alreadyMember: boolean }> {
   if (!walletId || !signerPublicKey || !spendingGroupId) {
     throw new Error('walletId, signerPublicKey and spendingGroupId are all required');
@@ -76,7 +86,7 @@ export async function attachUserToWallet(
   await client.signerGroups.addSigner(
     spendingGroupId,
     { member_key: signerPublicKey },
-    { idempotencyKey: randomUUID() }
+    { idempotencyKey: options?.idempotencyKey ?? randomUUID() }
   );
   return { alreadyMember: false };
 }
@@ -107,12 +117,17 @@ export async function attachUserToWallet(
  * prefer `paymentAgents.revoke` (it destroys the agent's key, so the signer
  * can authorize nothing even while still listed) and use this for
  * membership hygiene.
+ *
+ * @param options - Optional. Supply `idempotencyKey` to make the WHOLE
+ *   helper safely retryable across crashes/partitions; defaults to a fresh
+ *   random key per call.
  */
 export async function detachUserFromWallet(
   client: DakotaClient,
   walletId: string,
   signerPublicKey: string,
-  spendingGroupId: string
+  spendingGroupId: string,
+  options?: { idempotencyKey?: string }
 ): Promise<{ wasMember: boolean }> {
   if (!walletId || !signerPublicKey || !spendingGroupId) {
     throw new Error('walletId, signerPublicKey and spendingGroupId are all required');
@@ -139,7 +154,9 @@ export async function detachUserFromWallet(
   // now injects one on DELETEs too, but revoking spend permission is
   // security-relevant, so we set one explicitly — this path must not depend
   // on transport configuration.
-  await client.signerGroups.removeSigner(spendingGroupId, signerId);
+  await client.signerGroups.removeSigner(spendingGroupId, signerId, {
+    idempotencyKey: options?.idempotencyKey ?? randomUUID(),
+  });
   return { wasMember: true };
 }
 
