@@ -30,6 +30,10 @@ export {
   type WebhookEventRequest,
   type KybLinkData,
   type KybApplicationSubmittedData,
+  type CustomerDeletedData,
+  type CapabilityRequirement,
+  type CustomerCapabilityStatusUpdatedData,
+  type FeePayoutDestinationUpdatedData,
   type ScheduledPaymentFailedData,
 } from './events.js';
 

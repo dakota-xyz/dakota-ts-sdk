@@ -27,11 +27,25 @@ export enum WebhookEventType {
   // ─────────────────────────────────────────────────────────────────────────────
   CustomerCreated = 'customer.created',
   CustomerUpdated = 'customer.updated',
+  CustomerDeleted = 'customer.deleted',
   CustomerKybLinkCreated = 'customer.kyb_link.created',
   CustomerKybLinkUpdated = 'customer.kyb_link.updated',
   CustomerKybStatusCreated = 'customer.kyb_status.created',
   CustomerKybStatusUpdated = 'customer.kyb_status.updated',
   CustomerKybApplicationSubmitted = 'customer.kyb_application.submitted',
+  /**
+   * Emitted when a customer's standing for a capability (rail) changes. The
+   * payload is {@link CustomerCapabilityStatusUpdatedData}.
+   */
+  CustomerCapabilityStatusUpdated = 'customer.capability_status.updated',
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  // Fee Payout Destination events
+  // ─────────────────────────────────────────────────────────────────────────────
+  /** Payload is {@link FeePayoutDestinationUpdatedData}. */
+  FeePayoutDestinationUpdated = 'fee_payout_destination.updated',
+  /** Payload is an empty object. */
+  FeePayoutDestinationDeleted = 'fee_payout_destination.deleted',
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Auto Account events (off-ramp/on-ramp account lifecycle)
@@ -187,8 +201,12 @@ export interface WebhookEvent<T = unknown> {
  */
 export interface KybLinkData {
   customer_id: string;
+  /** e.g. 'onboarding' */
+  link_type: string;
   url: string;
-  expires_at: number;
+  status: string;
+  /** Unix seconds; omitted when the link does not expire */
+  expires_at?: number;
 }
 
 /**
@@ -196,6 +214,52 @@ export interface KybLinkData {
  */
 export interface KybApplicationSubmittedData {
   customer_id: string;
+  application_id: string;
+  application_type: string;
+}
+
+/**
+ * Customer Deleted event data.
+ */
+export interface CustomerDeletedData {
+  customer_id: string;
+}
+
+/**
+ * A single outstanding capability requirement, keyed by an opaque join key
+ * (a terms id or a document type) — never a partner identifier.
+ */
+export interface CapabilityRequirement {
+  /** 'terms_acceptance' or 'document' */
+  type: string;
+  /** Opaque join key: a terms id (terms_acceptance) or a document type (document) */
+  key: string;
+  title: string;
+  /** 'required' blocks submission/unlock; 'requested' pre-empts an RFI, not blocking */
+  severity: string;
+  version?: string;
+  url?: string;
+}
+
+/**
+ * Customer Capability Status Updated event data.
+ *
+ * Emitted when a customer's standing for a capability (rail) changes; carries
+ * the capability, the new status, and the outstanding requirements.
+ */
+export interface CustomerCapabilityStatusUpdatedData {
+  customer_id: string;
+  capability: string;
+  /** e.g. 'available' | 'enabling' | 'action_required' */
+  status: string;
+  requirements: CapabilityRequirement[];
+}
+
+/**
+ * Fee Payout Destination Updated event data.
+ */
+export interface FeePayoutDestinationUpdatedData {
+  /** The destination kind, e.g. 'us_bank_account' or 'usdc_wallet' */
   type: string;
 }
 
