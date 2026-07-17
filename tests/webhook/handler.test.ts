@@ -104,7 +104,7 @@ describe('WebhookHandler', () => {
       const { body, headers } = await createSignedRequest({
         id: 'evt_123',
         type: 'customer.created',
-        data: { id: 'cust_abc' },
+        data: { object: { id: 'cust_abc' } },
         created: 1234567890,
       });
 
@@ -115,7 +115,7 @@ describe('WebhookHandler', () => {
         expect.objectContaining({
           id: 'evt_123',
           type: 'customer.created',
-          data: { id: 'cust_abc' },
+          data: { object: { id: 'cust_abc' } },
         })
       );
     });
@@ -127,7 +127,7 @@ describe('WebhookHandler', () => {
       const { body, headers } = await createSignedRequest({
         id: 'evt_123',
         type: 'transaction.completed',
-        data: {},
+        data: { object: {} },
         created: 123,
       });
 
@@ -142,7 +142,7 @@ describe('WebhookHandler', () => {
       const { body, headers } = await createSignedRequest({
         id: 'evt_123',
         type: 'unknown.event',
-        data: {},
+        data: { object: {} },
         created: 123,
       });
 
@@ -158,7 +158,7 @@ describe('WebhookHandler', () => {
       const { body, headers } = await createSignedRequest({
         id: 'evt_123',
         type: 'customer.created',
-        data: {},
+        data: { object: {} },
         created: 123,
       });
 
@@ -171,7 +171,7 @@ describe('WebhookHandler', () => {
       const { body, headers } = await createSignedRequest({
         id: 'evt_123',
         type: 'test',
-        data: {},
+        data: { object: {} },
         created: 123,
       });
 
@@ -186,7 +186,7 @@ describe('WebhookHandler', () => {
       const { body, headers } = await createSignedRequest({
         id: 'evt_123',
         type: 'test',
-        data: {},
+        data: { object: {} },
         created: 123,
       });
 
@@ -201,7 +201,7 @@ describe('WebhookHandler', () => {
       const { body, headers } = await createSignedRequest({
         id: 'evt_123',
         type: 'test',
-        data: {},
+        data: { object: {} },
         created: 123,
       });
 
@@ -215,14 +215,14 @@ describe('WebhookHandler', () => {
       const { headers } = await createSignedRequest({
         id: 'evt_123',
         type: 'test',
-        data: {},
+        data: { object: {} },
         created: 123,
       });
 
       const tamperedBody = JSON.stringify({
         id: 'evt_456',
         type: 'test',
-        data: {},
+        data: { object: {} },
         created: 123,
       });
 
@@ -238,7 +238,7 @@ describe('WebhookHandler', () => {
       const { body, headers } = await createSignedRequest({
         id: 'evt_123',
         type: 'customer.created',
-        data: {},
+        data: { object: {} },
         created: 123,
       });
 
@@ -259,7 +259,7 @@ describe('WebhookHandler', () => {
       const { body, headers } = await createSignedRequest({
         id: 'evt_123',
         type: 'test',
-        data: { large: 'x'.repeat(200) },
+        data: { object: { large: 'x'.repeat(200) } },
         created: 123,
       });
 
@@ -273,7 +273,7 @@ describe('WebhookHandler', () => {
       const { body, headers } = await createSignedRequest({
         id: 'evt_123',
         type: 'test',
-        data: {},
+        data: { object: {} },
         created: 123,
       });
 
@@ -288,7 +288,7 @@ describe('WebhookHandler', () => {
       const { body, headers } = await createSignedRequest({
         id: 'evt_123',
         type: 'test',
-        data: {},
+        data: { object: {} },
         created: 123,
       });
 
@@ -305,7 +305,7 @@ describe('WebhookHandler', () => {
       const { body, headers } = await createSignedRequest({
         id: 'evt_123',
         type: 'test',
-        data: { key: 'value' },
+        data: { object: { key: 'value' } },
         created: 123,
       });
 
@@ -317,7 +317,7 @@ describe('WebhookHandler', () => {
 
       expect(event.id).toBe('evt_123');
       expect(event.type).toBe('test');
-      expect(event.data).toEqual({ key: 'value' });
+      expect(event.data.object).toEqual({ key: 'value' });
       expect(onTest).not.toHaveBeenCalled();
     });
   });
@@ -334,7 +334,7 @@ describe('WebhookHandler', () => {
       const { body, headers } = await createSignedRequest({
         id: 'evt_123',
         type: 'test',
-        data: {},
+        data: { object: {} },
         created: 123,
       });
 

@@ -12623,6 +12623,1115 @@ paths:
                 detail: Credit management is only available for self-serve customers.
         default:
           description: Unexpected error
+  # --- Agentic Payments (ported from platform spec, ENG-2484 Phase 0) ---
+  /customers/{customer_id}/insights:
+    x-alpha: true
+    get:
+      tags:
+        - Insights
+      summary: Get the customer's account insight report (ALPHA)
+      description: |
+        > **Alpha** — early access.
+
+        A deterministic, read-only report over the customer's agentic activity: a snapshot of typed facts (funding-wallet balances, upcoming totals, open payments, active mandates), observations (`insights`), and advisory recommendations (`suggestions`). Observations and suggestions share one item schema — `{kind, severity, message, detail, evidence}` — and every item carries `evidence`: typed references to the platform objects it was computed from. `kind` is an OPEN set; clients must ignore kinds they do not recognize. Every number is computed server-side; nothing here moves money or changes state.
+      operationId: getCustomerInsights
+      parameters:
+        - name: customer_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The customer's insight report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InsightReport'
+              example:
+                customer_id: 2vWxCustomer0000000000000000
+                generated_at: 1783075200
+                snapshot:
+                  total_usd: '3100.25'
+                  balances:
+                    - wallet_id: 2vWxWallet000000000000000000
+                      name: Operating
+                      network_id: base-mainnet
+                      asset: USDC
+                      amount_usd: '3100.25'
+                  upcoming:
+                    days: 14
+                    count: 3
+                    totals:
+                      USDC: '5200'
+                  open_scheduled_payments: 5
+                  active_mandates: 2
+                insights:
+                  - kind: upcoming_payments
+                    severity: info
+                    message: 3 payment(s) scheduled in the next 14 days (5200 USDC).
+                    detail:
+                      count: 3
+                      window_days: 14
+                    evidence:
+                      - type: scheduled_payment
+                        id: 2vWxPayment00000000000000000
+                suggestions:
+                  - kind: funding_shortfall
+                    severity: critical
+                    message: A funding wallet shows $3100.25 of USDC but 5200 USDC of payments fire from it on base-mainnet in the next 7 days — top up at least ~2099.75 USDC by 2026-07-14 or 3 payment(s) may fail.
+                    detail:
+                      wallet_id: 2vWxWallet000000000000000000
+                      shortfall_estimate: '2099.75'
+                    evidence:
+                      - type: wallet
+                        id: 2vWxWallet000000000000000000
+                      - type: scheduled_payment
+                        id: 2vWxPayment00000000000000000
+        '400':
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#invalid-identifier
+                title: Invalid Identifier
+                status: 400
+                detail: invalid customer id
+        '404':
+          description: Agentic payments not enabled, or the customer was not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#not-found
+                title: Not Found
+                status: 404
+                detail: customer not found
+  /customers/{customer_id}/insights/chat:
+    x-alpha: true
+    post:
+      tags:
+        - Insights
+      summary: Ask about the customer's account (ALPHA)
+      description: |
+        > **Alpha** — early access.
+
+        A read-only, advisory conversation over the customer's account. Stateless: send the conversation so far in `messages` on each call; the response is the assistant's next plain-text `reply`. The assistant narrates the same deterministic report `GET /customers/{customer_id}/insights` returns (plus the customer's payments and mandates) — it never originates a number, never proposes, and never moves money. Requires the LLM layer to be configured server-side.
+      operationId: chatCustomerInsights
+      parameters:
+        - name: customer_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/InsightChatRequest'
+            example:
+              messages:
+                - role: user
+                  content: Anything I should know about my account this week?
+      responses:
+        '200':
+          description: The assistant's reply
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/InsightChatResponse'
+              example:
+                reply: You have 3 payments (5200 USDC) due in the next two weeks, and your Operating wallet shows $3100.25 — about 2100 USDC short. Consider topping it up before July 14.
+        '400':
+          description: Invalid request, or the insight chat layer is not configured
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#invalid-request
+                title: Invalid Request
+                status: 400
+                detail: insight chat is not enabled (no LLM configured)
+        '404':
+          description: Agentic payments not enabled, or the customer was not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#not-found
+                title: Not Found
+                status: 404
+                detail: customer not found
+        '429':
+          description: |
+            The per-customer insight-chat rate limit was exceeded (an hourly burst window and a daily window). Back off and retry later.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#rate-limited
+                title: Rate Limited
+                status: 429
+                detail: insight chat rate limit reached for this customer (hour window) — retry later
+  /payment-agents:
+    x-alpha: true
+    post:
+      tags:
+        - Agentic Payments
+      summary: Create a hosted payment agent (ALPHA)
+      description: >
+        Creates a payment agent with a real signer row for its derived key
+        (an agent is an ordinary signer). Wallet access is granted separately
+        through the endorsed signer-group / policy attach flow.
+      operationId: createPaymentAgent
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePaymentAgentRequest"
+            example:
+              customer_id: 2vWxCustomer0000000000000000
+              name: My Bill Pay
+              hosted: true
+      responses:
+        "201":
+          description: Agent created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentAgentResponse"
+              example:
+                id: 2vWxAgent0000000000000000000
+                name: My Bill Pay
+                customer_id: 2vWxCustomer0000000000000000
+                hosted: true
+                signer_id: 2vWxSigner000000000000000000
+                signer_public_key: BHkExampleKeyQm
+                wallet_ids: []
+                state: active
+        "400":
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#invalid-request
+                title: Invalid Request
+                status: 400
+                detail: name is required
+        "404":
+          description: Agentic payments not enabled, or the resource was not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#not-found
+                title: Not Found
+                status: 404
+                detail: agentic payments are not enabled
+  /payment-agents/{payment_agent_id}:
+    x-alpha: true
+    get:
+      tags:
+        - Agentic Payments
+      summary: Get a hosted payment agent (ALPHA)
+      description: >
+        Returns the agent together with the wallets it can currently spend
+        from. The wallet_ids are DERIVED at query time from the agent signer's
+        live signer-group membership (recognition over the policy-engine truth
+        mirror), so they reflect the agent's access right now — not just at
+        creation time. Use this to read an agent back and reconcile which
+        wallets it is authorized on. The derived state folds the same
+        recognition in (a non-revoked agent recognized on no wallet is pending).
+      operationId: getPaymentAgent
+      parameters:
+        - name: payment_agent_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Agent found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentAgentResponse"
+              example:
+                id: 2vWxAgent0000000000000000000
+                name: My Bill Pay
+                customer_id: 2vWxCustomer0000000000000000
+                hosted: true
+                signer_id: 2vWxSigner000000000000000000
+                signer_public_key: BHkExampleKeyQm
+                wallet_ids:
+                  - 2vWxWalletEvm000000000000000
+                  - 2vWxWalletSol000000000000000
+                state: active
+        "404":
+          description: Agentic payments not enabled, or the agent was not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#not-found
+                title: Not Found
+                status: 404
+                detail: agent not found
+  /payment-agents/{payment_agent_id}/revoke:
+    x-alpha: true
+    post:
+      tags:
+        - Agentic Payments
+      summary: Revoke a hosted agent (ALPHA)
+      description: >
+        Revokes an agent: it can no longer be used, and its signing key is
+        destroyed in the isolated signer service (best-effort — the revoked
+        state is authoritative). Idempotent.
+      operationId: revokePaymentAgent
+      parameters:
+        - name: payment_agent_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Agent revoked
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentAgentResponse"
+              example:
+                id: 2vWxAgent0000000000000000000
+                name: My Bill Pay
+                customer_id: 2vWxCustomer0000000000000000
+                hosted: true
+                signer_id: 2vWxSigner000000000000000000
+                signer_public_key: BHkExampleKeyQm
+                wallet_ids: []
+                state: revoked
+        "404":
+          description: Agentic payments not enabled, or the agent was not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#not-found
+                title: Not Found
+                status: 404
+                detail: agent not found
+  /payment-agents/{payment_agent_id}/proposals:
+    x-alpha: true
+    post:
+      tags:
+        - Agentic Payments
+      summary: Draft payment proposals from a conversation (ALPHA)
+      description: >
+        Pure cognition, no side effects: turn a customer's natural-language
+        request into reviewable PROPOSALS — the same action-series shape POST
+        /instructions accepts. Stateless: send the conversation so far in
+        `messages` (and/or a `prompt` appended as the latest user turn) on each
+        call, and the response carries either a clarifying/confirming reply,
+        or — only at high confidence — validated proposals (sometimes both).
+        The agent may consult the customer's existing payees and this agent's
+        payment history; it never guesses amounts, assets, networks, or
+        addresses, and proposals still only take effect via the instructions +
+        mandate-signature flow. Requires the freeform LLM layer to be
+        configured server-side.
+      operationId: createPaymentAgentProposals
+      parameters:
+        - name: payment_agent_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateProposalsRequest"
+            example:
+              prompt: Pay Alice 10 USDC on base-sepolia 0xa11ce00000000000000000000000000000000001 every month on the 15th until Dec 26
+      responses:
+        "200":
+          description: The agent's next step — a reply, proposals, or both
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgenticProposalsResult"
+              example:
+                reply: Drafting a monthly payment to Alice — review and sign below.
+                proposals:
+                  - summary: Pay Alice 10 USDC on base-sepolia, on the 15th of every month until Dec 2026 (7 payments)
+                    actions:
+                      - type: create_recipient
+                        create_recipient:
+                          name: Alice
+                      - type: create_crypto_destination
+                        create_crypto_destination:
+                          address: "0xa11ce00000000000000000000000000000000001"
+                          network_id: base-sepolia
+                      - type: create_mandate
+                        create_mandate:
+                          rule:
+                            target_type: recipient
+                            targets: [Alice]
+                            network_id: base-sepolia
+                            asset: USDC
+                            max_per_tx: "10"
+                            window: MONTHLY
+                            max_count_per_target_in_window: 1
+                          valid_until: 1798675200
+                      - type: create_scheduled_payments
+                        create_scheduled_payments:
+                          destination_id: ""
+                          amount: "10"
+                          asset: USDC
+                          dates: [1782864000, 1785542400]
+        "400":
+          description: Invalid request, or the freeform conversation layer is not configured
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#invalid-request
+                title: Invalid request
+                status: 400
+                detail: freeform proposals are not enabled (no LLM configured)
+        "404":
+          description: Agentic payments not enabled, or the agent was not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#not-found
+                title: Not Found
+                status: 404
+                detail: agent not found
+        "429":
+          description: >
+            The per-customer proposal-drafting rate limit was exceeded (an
+            hourly burst window and a daily window). Back off and retry later.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#rate-limited
+                title: Rate Limited
+                status: 429
+                detail: proposal rate limit reached for this customer (hour window) — retry later
+  /instructions:
+    x-alpha: true
+    post:
+      tags:
+        - Agentic Payments
+      summary: Accept instructions — actuate proposals (ALPHA)
+      description: >
+        Each accepted proposal becomes one persisted instruction whose action
+        series is actuated deterministically. Every proposal must instruct a
+        payment. Returns only the instruction ids.
+      operationId: createInstructions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateInstructionsRequest"
+            example:
+              payment_agent_id: 2vWxAgent0000000000000000000
+              proposals:
+                - actions:
+                    - type: create_recipient
+                      create_recipient:
+                        name: Alice
+                    - type: create_crypto_destination
+                      create_crypto_destination:
+                        address: "0xa11ce00000000000000000000000000000000001"
+                        network_id: base-sepolia
+                    - type: create_mandate
+                      create_mandate:
+                        rule:
+                          target_type: recipient
+                          targets: [Alice]
+                          network_id: base-sepolia
+                          asset: USDC
+                          max_per_tx: "10000"
+                          window: MONTHLY
+                          max_count_per_target_in_window: 1
+                    - type: create_scheduled_payments
+                      create_scheduled_payments:
+                        amount: "10000"
+                        asset: USDC
+                        dates: [1781481600]
+      responses:
+        "201":
+          description: Created instructions
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgenticInstructionsResult"
+              example:
+                instruction_ids:
+                  - 2vWxInstruction0000000000000
+        "400":
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#invalid-request
+                title: Invalid Request
+                status: 400
+                detail: a proposal must instruct a payment
+        "404":
+          description: Agentic payments not enabled, or the resource was not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#not-found
+                title: Not Found
+                status: 404
+                detail: agentic payments are not enabled
+  /mandates/{mandate_id}/approve:
+    x-alpha: true
+    post:
+      tags:
+        - Mandates
+      summary: Approve a mandate (ALPHA)
+      description: >
+        A recognized signer OTHER than the bound one signs the mandate
+        payload to activate it; arms its scheduled payments.
+      operationId: approveMandate
+      parameters:
+        - name: mandate_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ApproveMandateRequest"
+            example:
+              approver_public_key: BHkApproverKeyQm
+              signature: MEUCIQExampleSignature
+      responses:
+        "200":
+          description: Mandate activated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MandateResponse"
+              example:
+                id: 2vWxMandate00000000000000000
+                status: active
+                approved_by_signer_id: 2vWxApprover0000000000000000
+        "400":
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#invalid-request
+                title: Invalid Request
+                status: 400
+                detail: approver must differ from the bound signer
+        "404":
+          description: Agentic payments not enabled, or the resource was not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#not-found
+                title: Not Found
+                status: 404
+                detail: agentic payments are not enabled
+  /mandates/{mandate_id}/cancel:
+    x-alpha: true
+    post:
+      tags:
+        - Mandates
+      summary: Cancel a mandate (ALPHA)
+      description: >
+        Revokes a pending or active mandate. The canceller must be a
+        recognized signer OTHER than the bound one, with a valid signature
+        over the mandate payload — the bound signer can never mutate its own
+        mandate (§8 applies to every mutation, including authority-reducing
+        ones).
+      operationId: cancelMandate
+      parameters:
+        - name: mandate_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CancelMandateRequest"
+            example:
+              signer_public_key: BHkSignerKeyQm
+              signature: MEUCIQExampleSignature
+      responses:
+        "200":
+          description: Mandate revoked; outstanding payments cancelled
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MandateResponse"
+              example:
+                id: 2vWxMandate00000000000000000
+                status: revoked
+        "400":
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#invalid-request
+                title: Invalid Request
+                status: 400
+                detail: mandate is done, not cancellable
+        "404":
+          description: Agentic payments not enabled, or the resource was not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#not-found
+                title: Not Found
+                status: 404
+                detail: agentic payments are not enabled
+  /scheduled-payments:
+    x-alpha: true
+    get:
+      tags:
+        - Agentic Payments
+      summary: List the calling client's scheduled payments (ALPHA)
+      description: >
+        Returns the calling client's scheduled payments (the ScheduledPayment
+        primitive — all statuses, not just future ones), oldest due first.
+        Each shows its funding wallet (the customer's choice at acceptance);
+        once executed, a row also carries the covering mandate and money-path
+        transaction as audit. Narrow the collection with the optional
+        customer_id, signer_id, wallet_id, mandate_id, and status filters; omit them all for
+        the full client collection. The mandate_id filter naturally matches
+        executed rows only (a row carries no mandate until it fires).
+      operationId: listScheduledPayments
+      parameters:
+        - name: customer_id
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Only payments for this customer (the signer's owning agent's customer).
+        - name: signer_id
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Only payments bound to this signer.
+        - name: wallet_id
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Only payments funded from this wallet.
+        - name: mandate_id
+          in: query
+          required: false
+          schema:
+            type: string
+          description: >
+            Only payments that executed under this mandate (mandate_id is
+            stamped at fire time, so this matches executed rows only).
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+          description: >
+            Comma-separated statuses to include, e.g. "scheduled,executed".
+            Allowed values: scheduled, cancelled, executed, failed. Omit for
+            all.
+      responses:
+        "200":
+          description: Scheduled payments, oldest due first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ScheduledPaymentResponse"
+              example:
+                - id: 2vWxScheduled000000000000000
+                  wallet_id: 2vWxWallet000000000000000000
+                  amount: "10000"
+                  asset: USDC
+                  address: "0xa11ce00000000000000000000000000000000001"
+                  network_id: base-sepolia
+                  status: scheduled
+                  scheduled_at: 1781481600
+        "400":
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#invalid-identifier
+                title: Invalid Identifier
+                status: 400
+                detail: invalid signer_id
+        "404":
+          description: Agentic payments not enabled, or the resource was not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#not-found
+                title: Not Found
+                status: 404
+                detail: agentic payments are not enabled
+    post:
+      tags:
+        - Agentic Payments
+      summary: Schedule a payment directly (ALPHA)
+      description: >
+        Creates one or more scheduled payments for a signer WITHOUT the proposal
+        flow — schedule directly under an existing active mandate (coverage is
+        matched at fire time, so no new signature is needed here). The payments
+        bind the given signer and funding wallet. The signer must be permitted to
+        spend on that wallet, the wallet must belong to the calling client, and
+        the destination must be a crypto destination of the wallet's customer. The
+        schedule is explicit `dates` (one payment per timestamp) OR `count` ×
+        `interval_seconds` from `start_at` (0 ⇒ now); dates are unix SECONDS and
+        are rejected if in the past or implausibly far ahead. Whether a mandate
+        covers each payment is decided at fire time by the money-path gate — a
+        scheduled payment with no covering active mandate fails at fire, it is
+        not rejected here.
+      operationId: createScheduledPayment
+      parameters:
+        - $ref: "#/components/parameters/IdempotencyKeyHeader"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateScheduledPaymentRequest"
+            example:
+              signer_id: 2vWxSigner000000000000000000
+              wallet_id: 2vWxWallet000000000000000000
+              destination_id: 2vWxDestination00000000000000
+              amount: "10000"
+              asset: USDC
+              dates:
+                - 1781481600
+      responses:
+        "201":
+          description: The scheduled payments that were created (one row per date)
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ScheduledPaymentResponse"
+              example:
+                - id: 2vWxScheduled000000000000000
+                  signer_id: 2vWxSigner000000000000000000
+                  wallet_id: 2vWxWallet000000000000000000
+                  amount: "10000"
+                  asset: USDC
+                  address: "0xa11ce00000000000000000000000000000000001"
+                  network_id: base-sepolia
+                  status: scheduled
+                  scheduled_at: 1781481600
+        "400":
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#invalid-identifier
+                title: Invalid Identifier
+                status: 400
+                detail: exactly one of destination_id or address+network_id is required
+        "404":
+          description: Agentic payments not enabled, or the resource was not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#not-found
+                title: Not Found
+                status: 404
+                detail: agentic payments are not enabled
+  /mandates:
+    x-alpha: true
+    get:
+      tags:
+        - Mandates
+      summary: List the calling client's mandates (ALPHA)
+      description: >
+        Returns the calling client's mandates, newest first, with the
+        EFFECTIVE status - a pending or active mandate past its valid_until
+        reads "expired" (derived on read; the stored status and audit columns
+        are unchanged). Narrow the collection with the optional customer_id,
+        signer_id, and status filters; omit them all for the full client collection.
+      operationId: listMandates
+      parameters:
+        - name: customer_id
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Only mandates whose bound signer belongs to this customer's agent.
+        - name: signer_id
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Only mandates bound to this signer.
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+          description: >
+            Comma-separated effective statuses to include, e.g.
+            "active,expired". Allowed values: pending, active, expired,
+            rejected, revoked, done. Omit for all.
+      responses:
+        "200":
+          description: Mandates, newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Mandate"
+              example:
+                - id: 2vWxMandate00000000000000000
+                  status: active
+                  bound_signer_id: 2vWxSigner000000000000000000
+                  target_names: [Alice]
+                  rule:
+                    target_type: recipient
+                    targets: [2vWxRecipient000000000000000]
+                    network_id: base-sepolia
+                    asset: USDC
+                    max_per_tx: "10000"
+                    window: MONTHLY
+                    max_count_per_target_in_window: 1
+                  valid_until: 1812931200
+                  approved_by_signer_id: 2vWxApprover0000000000000000
+                  approved_at: 1781280000
+        "400":
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#invalid-request
+                title: Invalid Request
+                status: 400
+                detail: "unknown status \"frozen\" (want pending|active|expired|rejected|revoked|done)"
+        "404":
+          description: Agentic payments not enabled, or the resource was not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#not-found
+                title: Not Found
+                status: 404
+                detail: agentic payments are not enabled
+    post:
+      tags:
+        - Mandates
+      summary: Create a mandate directly (ALPHA)
+      description: >
+        Drafts a PENDING mandate from a direct user interaction - no
+        instruction back-link. Exactly one binding form names the signer the
+        mandate binds: payment_agent_id (the hosted convenience - binds that
+        agent's signer and anchors the mandate to the agent's customer), or
+        signer_id together with customer_id (any of the client's signers, BYO
+        keys included; the customer anchors the recipient-target scope and
+        the §8 approver set). The rule is the one the customer will approve
+        (POST /mandates/{mandate_id}/approve, a recognized signer other than
+        the bound one, §8). Recipient targets may be recipient ids or payee
+        names - names resolve to the mandate's customer's existing recipients
+        before anything is stored. Schedule payments under it by mandate_id;
+        they arm the moment it activates.
+      operationId: createMandate
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateMandateRequest"
+            example:
+              payment_agent_id: 2vWxAgent0000000000000000000
+              rule:
+                target_type: recipient
+                targets: [Alice]
+                network_id: base-sepolia
+                asset: USDC
+                max_per_tx: "100"
+                window: MONTHLY
+                max_count_per_target_in_window: 1
+              valid_until: 1798761599
+      responses:
+        "201":
+          description: The pending mandate, targets resolved to ids.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Mandate"
+              example:
+                id: 2vWxMandate00000000000000000
+                status: pending
+                bound_signer_id: 2vWxSigner000000000000000000
+                rule:
+                  target_type: recipient
+                  targets: [2vWxRecipient000000000000000]
+                  network_id: base-sepolia
+                  asset: USDC
+                  max_per_tx: "100"
+                  window: MONTHLY
+                  max_count_per_target_in_window: 1
+                valid_until: 1798761599
+        "400":
+          description: Unresolvable target or invalid rule.
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#invalid-request
+                title: Invalid Request
+                status: 400
+                detail: 'target "Bob": recipient not found for this customer'
+        "404":
+          description: Agentic payments not enabled, or the resource was not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#not-found
+                title: Not Found
+                status: 404
+                detail: agent not found
+  /scheduled-payments/{scheduled_payment_id}/cancel:
+    x-alpha: true
+    post:
+      tags:
+        - Agentic Payments
+      summary: Cancel one scheduled payment (ALPHA)
+      description: >
+        Finalizes a single still-scheduled payment as cancelled. No signature
+        is required - schedule rows are bookkeeping, not authorization (they
+        are created by a plain API-key call); the signed grant is the MANDATE,
+        which this does not touch. New payments can be instructed under the
+        same mandate at any time. Executed, failed, and already-cancelled rows
+        are not
+        cancellable; a cancel racing the cron at the exact fire moment loses
+        cleanly (the status guard never overwrites an executed payment).
+      operationId: cancelScheduledPayment
+      parameters:
+        - name: scheduled_payment_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: The cancelled scheduled payment.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ScheduledPaymentResponse"
+              example:
+                id: 2vWxScheduled000000000000000
+                wallet_id: 2vWxWallet000000000000000000
+                amount: "10000"
+                asset: USDC
+                address: "0xa11ce00000000000000000000000000000000001"
+                network_id: base-sepolia
+                status: cancelled
+                scheduled_at: 1781481600
+        "400":
+          description: Unknown payment or not cancellable (executed, failed, or already cancelled).
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#invalid-request
+                title: Invalid Request
+                status: 400
+                detail: scheduled payment is executed, not cancellable
+        "404":
+          description: Agentic payments not enabled, or the resource was not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#not-found
+                title: Not Found
+                status: 404
+                detail: agentic payments are not enabled
+  /instructions/{instruction_id}:
+    x-alpha: true
+    get:
+      tags:
+        - Agentic Payments
+      summary: Get an instruction (ALPHA)
+      description: >
+        Returns the accepted proposal - its action series and the per-action
+        downstream artifacts actuation produced.
+      operationId: getInstruction
+      parameters:
+        - name: instruction_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Intent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AgenticInstruction"
+              example:
+                id: 2vWxInstruction0000000000000
+                payment_agent_id: 2vWxAgent0000000000000000000
+                status: executed
+                actions:
+                  - type: create_recipient
+                    create_recipient:
+                      name: Alice
+                downstream:
+                  - recipient_id: 2vWxRecipient000000000000000
+        "400":
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#invalid-identifier
+                title: Invalid Identifier
+                status: 400
+                detail: invalid instruction id
+        "404":
+          description: Agentic payments not enabled, or the resource was not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#not-found
+                title: Not Found
+                status: 404
+                detail: agentic payments are not enabled
+  /mandates/{mandate_id}:
+    x-alpha: true
+    get:
+      tags:
+        - Mandates
+      summary: Get a mandate (ALPHA)
+      description: >
+        Returns the mandate - the signer it binds, its rule exactly as the
+        customer approves it, validity, and status.
+      operationId: getMandate
+      parameters:
+        - name: mandate_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Mandate
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Mandate"
+              example:
+                id: 2vWxMandate00000000000000000
+                status: pending
+                bound_signer_id: 2vWxSigner000000000000000000
+                instruction_id: 2vWxInstruction0000000000000
+                rule:
+                  target_type: recipient
+                  targets:
+                    - 2vWxRecipient000000000000000
+                  network_id: base-sepolia
+                  asset: USDC
+                  max_per_tx: "10000"
+                  window: MONTHLY
+                  max_count_per_target_in_window: 1
+                valid_until: 1798761599
+        "400":
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#invalid-identifier
+                title: Invalid Identifier
+                status: 400
+                detail: invalid mandate id
+        "404":
+          description: Agentic payments not enabled, or the resource was not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: "#/components/schemas/ProblemDetails"
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#not-found
+                title: Not Found
+                status: 404
+                detail: agentic payments are not enabled
 components:
   parameters:
     IdempotencyKeyHeader:
@@ -13378,6 +14487,7 @@ components:
         - customer.kyb_status.created
         - customer.kyb_status.updated
         - customer.kyb_application.submitted
+        - customer.capability_status.updated
         - auto_account.created
         - auto_account.updated
         - auto_account.deleted
@@ -13406,6 +14516,9 @@ components:
         - wallet.transaction.created
         - wallet.transaction.updated
         - wallet.deposit
+        - fee_payout_destination.updated
+        - fee_payout_destination.deleted
+        - scheduled_payment.failed
       example: transaction.auto.updated
     EventRequest:
       type: object
@@ -14108,7 +15221,10 @@ components:
     AccountUpdateRequest:
       type: object
       title: Account Update Request
-      description: Unified account update request for onramp/offramp/swap.
+      description: >
+        Unified account update request for onramp/offramp/swap.
+        `developer_fee_bps` is also updatable and applies to future
+        transactions only; existing transactions are unaffected.
       required:
         - account_type
       properties:
@@ -14118,6 +15234,17 @@ components:
           $ref: '#/components/schemas/KSUID'
         fiat_destination_id:
           $ref: '#/components/schemas/KSUID'
+        developer_fee_bps:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 10000
+          description: >-
+            Developer fee (client revenue share) in basis points. When set,
+            updates the fee applied to FUTURE transactions on this account;
+            existing transactions are unaffected. Routing fields remain
+            immutable.
+          example: 50
         destination_network_id:
           $ref: '#/components/schemas/NetworkId'
         destination_asset:
@@ -18422,6 +19549,847 @@ components:
           type: string
           description: When risk labels were created
           example: '2024-01-15T10:30:00Z'
+    # --- Agentic Payments (ported from platform spec, ENG-2484 Phase 0) ---
+    PaymentAgentResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        customer_id:
+          type: string
+        hosted:
+          type: boolean
+        signer_id:
+          type: string
+        signer_public_key:
+          type: string
+          description: base64 P-256 SPKI
+        wallet_ids:
+          type: array
+          items:
+            type: string
+          description: DERIVED - wallets whose attached signer groups contain the agent's signer. Empty until the customer's endorsed attaches land.
+        state:
+          type: string
+          enum: [pending, active, revoked]
+          description: pending is DERIVED - a non-revoked agent recognized on no wallet. It cannot accept instructions until a wallet attach is endorsed.
+        signer_group_cleanup:
+          type: array
+          description: >
+            Present on revoke: the signer groups the (now-revoked) agent's signer
+            still belongs to. A revoked signer can't sign, but its group
+            membership lingers — remove signer_id from each (DELETE
+            /signer-groups/{signer_group_id}/signers/{signer_id}) to finish
+            de-provisioning. Absent when there is nothing to clean up.
+          items:
+            $ref: "#/components/schemas/PaymentAgentSignerGroupRef"
+
+    PaymentAgentSignerGroupRef:
+      type: object
+      description: A signer-group reference (id + display name).
+      required: [signer_group_id, name]
+      properties:
+        signer_group_id:
+          type: string
+        name:
+          type: string
+
+    AgenticAction:
+      type: object
+      description: Tagged union - exactly one payload field matching `type` is set.
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [create_recipient, create_crypto_destination, create_bank_destination, create_mandate, create_scheduled_payments, create_auto_account]
+        create_recipient:
+          $ref: "#/components/schemas/RecipientRequest"
+        create_crypto_destination:
+          $ref: "#/components/schemas/CreateCryptoDestinationAction"
+        create_bank_destination:
+          $ref: "#/components/schemas/CreateBankDestinationAction"
+        create_mandate:
+          $ref: "#/components/schemas/CreateMandateAction"
+        create_scheduled_payments:
+          $ref: "#/components/schemas/CreateScheduledPaymentsAction"
+        create_auto_account:
+          $ref: "#/components/schemas/CreateAutoAccountAction"
+
+    AgenticActionDownstream:
+      type: object
+      properties:
+        recipient_id:
+          type: string
+        destination_id:
+          type: string
+        mandate_id:
+          type: string
+        scheduled_payment_ids:
+          type: array
+          items:
+            type: string
+        auto_account_id:
+          type: string
+          description: The provisioned auto-account (set for a create_auto_account action).
+
+    AgenticAttachment:
+      type: object
+      description: >
+        An input artifact attached to a conversation turn. Tagged union: exactly
+        one payload field matching `type` is set. Extensible — further kinds
+        (e.g. an email stream) are added as new `type` enum values + payload
+        fields, additively, without breaking this shape.
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [document]
+          description: The attachment kind — `document` (a PDF or image) today; further sources are added additively.
+        document:
+          $ref: "#/components/schemas/AgenticDocumentAttachment"
+
+    InsightEvidence:
+      type: object
+      required:
+        - type
+        - id
+      description: One typed reference to the platform object an insight item was computed from.
+      properties:
+        type:
+          type: string
+          description: |
+            Platform resource name — the kind of object `id` refers to. OPEN set (like `InsightItem.kind`): new resource types may be referenced without a breaking change, so a client MUST handle an unrecognized type gracefully (e.g. show the item without a deep-link), never error. `transaction` is reserved (advertised and client-handled, but not emitted today).
+          x-extensible-enum:
+            - wallet
+            - scheduled_payment
+            - mandate
+            - recipient
+            - transaction
+        id:
+          type: string
+    InsightItem:
+      type: object
+      required:
+        - kind
+        - severity
+        - message
+        - evidence
+      description: |
+        One observation (in `insights`) or advisory recommendation (in `suggestions`) — the same schema in both arrays. `kind` is an OPEN set: new kinds appear without notice and clients must ignore kinds they do not recognize.
+      properties:
+        kind:
+          type: string
+          description: |
+            Machine-readable item type. This is an OPEN set — the values below are the kinds emitted TODAY, but new kinds may be added at any time without a breaking change, so it is documented as an extensible enum rather than a closed one. A client MUST render an unrecognized kind generically from `message` + `severity` (and `evidence`), never drop it. Kinds emitted today, by array:
+            Observations (`insights[]`):
+              * `upcoming_payments` — open payments due within the horizon (count + per-asset totals).
+              * `payment_failures_clustered` — ≥2 recent failures to the same payee sharing one reason (root cause).
+              * `payments_failed` — remaining recent singleton failures, summarized.
+              * `account_activity` — executed volume over the window + mandates awaiting signature.
+              * `new_counterparty` — first open payments to a recently-added payee.
+              * `counterparty_concentration` — one payee dominates recent executed outflow.
+
+            Suggestions (`suggestions[]`, advisory — acting is a separate human-gated step):
+              * `payment_at_risk` — an open payment is past its scheduled time.
+              * `funding_shortfall` — a funding wallet's indexed balance is below its near-term payment needs.
+              * `mandate_expiring` — an active mandate ends soon (warn when open payments depend on it).
+              * `mandate_headroom` — a mandate's window budget is nearly or already over-consumed.
+          x-extensible-enum:
+            - upcoming_payments
+            - payment_failures_clustered
+            - payments_failed
+            - account_activity
+            - new_counterparty
+            - counterparty_concentration
+            - payment_at_risk
+            - funding_shortfall
+            - mandate_expiring
+            - mandate_headroom
+        severity:
+          type: string
+          enum:
+            - info
+            - warn
+            - critical
+        message:
+          type: string
+          description: Human-readable, self-contained statement of the finding, with exact amounts and dates.
+        detail:
+          type: object
+          additionalProperties: true
+          description: Machine-readable facts behind the message (decimal strings, counts, unix timestamps). Keys vary by kind.
+        evidence:
+          type: array
+          items:
+            $ref: '#/components/schemas/InsightEvidence'
+          description: The platform objects this item is computed from (capped; may be empty when the claim is an aggregate).
+    InsightSnapshotBalance:
+      type: object
+      required:
+        - wallet_id
+        - network_id
+        - asset
+        - amount_usd
+      description: One funding wallet's indexed holding of one asset on one network. The balance index prices holdings in USD; values may lag the chain.
+      properties:
+        wallet_id:
+          type: string
+        name:
+          type: string
+        network_id:
+          type: string
+        asset:
+          type: string
+        amount_usd:
+          type: string
+    InsightSnapshotUpcoming:
+      type: object
+      required:
+        - days
+        - count
+      description: Open scheduled payments due within the window.
+      properties:
+        days:
+          type: integer
+        count:
+          type: integer
+        totals:
+          type: object
+          additionalProperties:
+            type: string
+          description: Asset → total amount due in the window (decimal strings).
+    InsightSnapshot:
+      type: object
+      required:
+        - upcoming
+        - open_scheduled_payments
+        - active_mandates
+      description: |
+        Typed FACTS about the account — rendered directly by clients, not narrated. `balances`/`total_usd` cover the wallets the customer's open payments spend from and are present only when the balance index is configured; they degrade to absent, never to an error.
+      properties:
+        total_usd:
+          type: string
+        balances:
+          type: array
+          items:
+            $ref: '#/components/schemas/InsightSnapshotBalance'
+        upcoming:
+          $ref: '#/components/schemas/InsightSnapshotUpcoming'
+        open_scheduled_payments:
+          type: integer
+        active_mandates:
+          type: integer
+    InsightReport:
+      type: object
+      required:
+        - customer_id
+        - generated_at
+        - snapshot
+        - insights
+        - suggestions
+      description: The deterministic, read-only insight report for a customer. Computed on demand; nothing is stored.
+      properties:
+        customer_id:
+          type: string
+        generated_at:
+          type: integer
+          format: int64
+        snapshot:
+          $ref: '#/components/schemas/InsightSnapshot'
+        insights:
+          type: array
+          items:
+            $ref: '#/components/schemas/InsightItem'
+          description: Observations about the account (always present, possibly empty).
+        suggestions:
+          type: array
+          items:
+            $ref: '#/components/schemas/InsightItem'
+          description: Advisory recommendations (always present, possibly empty). Non-binding — acting on one is a separate, human-gated step.
+    InsightChatMessage:
+      type: object
+      required:
+        - role
+        - content
+      properties:
+        role:
+          type: string
+          enum:
+            - user
+            - assistant
+        content:
+          type: string
+          maxLength: 4000
+    InsightChatRequest:
+      type: object
+      required:
+        - messages
+      properties:
+        messages:
+          type: array
+          minItems: 1
+          maxItems: 40
+          items:
+            $ref: '#/components/schemas/InsightChatMessage'
+          description: The conversation so far, oldest first.
+    InsightChatResponse:
+      type: object
+      required:
+        - reply
+      properties:
+        reply:
+          type: string
+          description: The assistant's plain-text answer. Advisory only — the assistant cannot execute anything.
+        conversation_status:
+          type: string
+          enum:
+            - ok
+            - warned
+            - blocked
+          description: How the boundary screen treated this turn. `ok` is a normal turn; `warned` means the request was off-topic and the customer was warned but may continue; `blocked` means the conversation has been terminated (repeated off-topic turns or a manipulation attempt) — the client should stop serving it and offer a fresh chat.
+    AgenticChatMessage:
+      type: object
+      required: [role, content]
+      properties:
+        role:
+          type: string
+          enum: [user, assistant]
+        content:
+          type: string
+        attachments:
+          type: array
+          description: >
+            Input artifacts attached to this turn for the agent to investigate —
+            e.g. an invoice PDF to draft a payment from. Optional. Document
+            attachments (PDF or image) are accepted up to 8 MiB per document and
+            16 MiB per request, measured on the decoded payload.
+          items:
+            $ref: "#/components/schemas/AgenticAttachment"
+
+    AgenticDocumentAttachment:
+      type: object
+      required: [media_type, data]
+      properties:
+        media_type:
+          type: string
+          enum: [application/pdf, image/png, image/jpeg, image/webp, image/gif]
+          description: MIME type of the attached document.
+        data:
+          type: string
+          format: byte
+          description: The document bytes, base64-encoded.
+        filename:
+          type: string
+          description: Optional original filename, for display and audit.
+
+    AgenticInstruction:
+      type: object
+      properties:
+        id:
+          type: string
+        payment_agent_id:
+          type: string
+        status:
+          type: string
+          enum: [proposed, executed, failed]
+        actions:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgenticAction"
+        downstream:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgenticActionDownstream"
+
+    AgenticInstructionsResult:
+      type: object
+      properties:
+        mandates:
+          type: array
+          description: Every mandate this batch DRAFTED, in full wire shape (identical to GET /mandates/{mandate_id}) — sign the §8 approval immediately, no follow-up fetch or polling. Pending until a signer other than the bound one approves.
+          items:
+            $ref: "#/components/schemas/Mandate"
+        instruction_ids:
+          type: array
+          items:
+            type: string
+
+    AgenticProposal:
+      type: object
+      description: >
+        A self-contained series of actions. Cross-action links are <entity>_id
+        fields - empty binds to the artifact created in this proposal, a real
+        id reuses an existing one. Every proposal must instruct a payment or
+        draft a mandate - a mandate-only proposal is a standing authorization
+        (sign now, schedule under it later by mandate_id with no new
+        signature).
+      required: [actions]
+      properties:
+        summary:
+          type: string
+        actions:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgenticAction"
+
+    AgenticProposalsResult:
+      type: object
+      description: >
+        The agent's next step. At least one of `proposals` or `reply` is always
+        present in a successful response — `proposals` at high confidence
+        (optionally with a short `reply` note), or `reply` alone when the agent
+        needs more from the user.
+      properties:
+        proposals:
+          type: array
+          description: Validated action-series proposals, ready to accept via POST /instructions. Present only at high confidence.
+          items:
+            $ref: "#/components/schemas/AgenticProposal"
+        reply:
+          type: string
+          description: The agent's conversational reply — a clarifying question or confirmation. Present without proposals when the agent needs more from the user; may accompany proposals as a short note.
+        conversation_status:
+          type: string
+          enum: [ok, warned, blocked]
+          description: "How the boundary screen treated this turn: `ok` is a normal payments turn; `warned` means the request was off-topic and the customer was warned but may continue; `blocked` means the conversation has been terminated (repeated off-topic turns or a manipulation attempt) — the client should stop serving it and offer a fresh chat."
+
+    ApproveMandateRequest:
+      type: object
+      required: [approver_public_key, signature]
+      properties:
+        approver_public_key:
+          type: string
+        signature:
+          type: string
+
+    CancelMandateRequest:
+      type: object
+      required: [signer_public_key, signature]
+      properties:
+        signer_public_key:
+          type: string
+        signature:
+          type: string
+
+    CreatePaymentAgentRequest:
+      type: object
+      required: [customer_id, name, hosted]
+      properties:
+        customer_id:
+          type: string
+        name:
+          type: string
+        hosted:
+          type: boolean
+          description: Must be true. Only hosted agents (signing keys custodied by the isolated agent-signer service) are supported today; bring-your-own-signer agents are not yet available, so the API rejects hosted=false.
+
+    CreateBankDestinationAction:
+      type: object
+      properties:
+        recipient_id:
+          type: string
+        account_holder_name:
+          type: string
+        account_number:
+          type: string
+        routing_number:
+          type: string
+        account_type:
+          type: string
+          enum: [checking, savings]
+        iban:
+          type: string
+        bic:
+          type: string
+        bank_name:
+          type: string
+
+    CreateCryptoDestinationAction:
+      type: object
+      required: [address, network_id]
+      properties:
+        recipient_id:
+          type: string
+          description: "recipient reference: empty = the recipient created in this proposal; a recipient id or name = an existing recipient"
+        address:
+          type: string
+        network_id:
+          $ref: "#/components/schemas/NetworkId"
+
+    CreateInstructionsRequest:
+      type: object
+      required: [payment_agent_id, proposals]
+      properties:
+        payment_agent_id:
+          type: string
+        proposals:
+          type: array
+          items:
+            $ref: "#/components/schemas/AgenticProposal"
+
+    CreateMandateAction:
+      type: object
+      required: [rule]
+      properties:
+        rule:
+          $ref: "#/components/schemas/MandateRule"
+        valid_from:
+          type: integer
+          format: int64
+        valid_until:
+          type: integer
+          format: int64
+
+    CreateMandateRequest:
+      type: object
+      required: [rule]
+      description: >
+        Exactly one binding form is required - payment_agent_id alone, or
+        signer_id together with customer_id. Any other combination is
+        rejected with 400.
+      properties:
+        payment_agent_id:
+          type: string
+          description: >
+            Binding form A (hosted convenience) - the mandate binds this
+            agent's signer and anchors to the agent's customer. Mutually
+            exclusive with signer_id/customer_id.
+        signer_id:
+          type: string
+          description: >
+            Binding form B - the mandate binds this signer directly (any of
+            the client's signers, not only an agent's). Requires customer_id.
+        customer_id:
+          type: string
+          description: >
+            Binding form B - the customer the mandate is anchored to; must
+            belong to the calling client. Defines the recipient-target scope
+            and the §8 approver set (approval requires a recognized signer of
+            THIS customer other than the bound one). Requires signer_id.
+        rule:
+          $ref: "#/components/schemas/MandateRule"
+        valid_from:
+          type: integer
+          format: int64
+        valid_until:
+          type: integer
+          format: int64
+
+    CreateProposalsRequest:
+      type: object
+      description: >
+        A freeform proposals conversation. The server is stateless — send the
+        whole history in `messages` on each call. `prompt` is a convenience for
+        a single-shot turn (or the latest user message); it is appended after
+        `messages`. At least one of `prompt` or `messages` must be non-empty.
+        Supplying both is valid only when `messages` does not already end with a
+        user turn; otherwise the request is rejected with 400 (two consecutive
+        user turns are not allowed).
+      properties:
+        prompt:
+          type: string
+          description: Single-shot input, appended as the latest user turn.
+        messages:
+          type: array
+          description: The conversation so far, oldest first.
+          items:
+            $ref: "#/components/schemas/AgenticChatMessage"
+
+    CreateScheduledPaymentsAction:
+      type: object
+      required: [amount, asset]
+      properties:
+        destination_id:
+          type: string
+        wallet_id:
+          type: string
+          description: The funding wallet for these payments — one the agent recognizes. Optional only when the agent recognizes exactly one wallet (used by default); otherwise required, since a signer can recognize several and the choice cannot be deferred to fire time. Its chain family must match the payment network.
+        amount:
+          type: string
+        asset:
+          type: string
+        dates:
+          type: array
+          maxItems: 366
+          items:
+            type: integer
+            format: int64
+        count:
+          type: integer
+          maximum: 366
+        interval_seconds:
+          type: integer
+          format: int64
+        start_at:
+          type: integer
+          format: int64
+
+    CreateScheduledPaymentRequest:
+      type: object
+      required: [signer_id, wallet_id, amount, asset]
+      description: >
+        Direct (signer-first) schedule create. The signer + funding wallet are the
+        caller's choice; the schedule is explicit `dates`, or `count` ×
+        `interval_seconds` from `start_at`. Name the payee EITHER with
+        `destination_id` (an existing crypto destination of the wallet's customer)
+        OR with a direct `address` + `network_id` (a raw crypto address, no
+        recipient — matched on the address at fire time, like a mandate address
+        target) — exactly one of the two.
+      properties:
+        signer_id:
+          type: string
+          description: The signer the payments bind to; its hosted agent signs at fire time.
+        wallet_id:
+          type: string
+          description: >
+            The funding wallet these payments spend from. Required — the signer
+            must be permitted to spend on it, and its chain family must match the
+            payment network.
+        destination_id:
+          type: string
+          description: An existing crypto destination of the wallet's customer to pay. Omit to pay a direct address (address + network_id).
+        address:
+          type: string
+          description: A direct crypto address to pay — an alternative to destination_id (no recipient). Requires network_id; the wallet's chain family must match.
+        network_id:
+          type: string
+          description: The network for a direct-address payment (required together with address).
+        amount:
+          type: string
+          description: Decimal string, at the destination asset.
+        asset:
+          type: string
+        dates:
+          type: array
+          maxItems: 366
+          items:
+            type: integer
+            format: int64
+          description: Explicit per-payment unix times (one payment each). Win over count × interval_seconds.
+        count:
+          type: integer
+          maximum: 366
+          description: Number of payments when using count × interval_seconds (default 1).
+        interval_seconds:
+          type: integer
+          format: int64
+          description: Cadence in seconds between payments when using count.
+        start_at:
+          type: integer
+          format: int64
+          description: First due time (0 ⇒ now).
+
+    CreateAutoAccountAction:
+      type: object
+      description: >
+        Provision a provider-managed convert-and-forward "auto-account" so a
+        payment can cross chain families (crypto→crypto swap) or exit to a bank
+        (crypto→bank offramp). The agent pays the auto-account's crypto DEPOSIT on
+        source_network_id (on the funding wallet's own family) and the provider
+        converts source_asset→output_asset and forwards to destination_id. A
+        scheduled payment then targets the deposit; the mandate still targets the
+        real recipient.
+      required: [source_asset, source_network_id, output_asset]
+      properties:
+        destination_id:
+          type: string
+          description: "The REAL destination the auto-account forwards to: a crypto destination (⇒ swap) or a bank destination (⇒ offramp). Empty = the destination created in this proposal."
+        source_asset:
+          type: string
+          description: The asset the agent deposits and the scheduled payment sends (may be the ANY wildcard).
+        source_network_id:
+          $ref: "#/components/schemas/NetworkId"
+        output_asset:
+          type: string
+          description: The asset the recipient receives (a currency such as USD for a bank offramp).
+        rail:
+          type: string
+          description: Outbound rail — REQUIRED for a bank offramp (e.g. ach, fedwire, swift, sepa); omit for a crypto swap.
+        routing_preference:
+          type: string
+          enum: [fastest, cheapest]
+        fee_bps:
+          type: integer
+          format: int32
+          description: Optional developer fee in basis points (0–10000).
+
+    Mandate:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum: [pending, active, expired, rejected, revoked, done]
+          description: >
+            expired is DERIVED, never stored - a pending or active mandate
+            whose valid_until has passed. It cannot authorize payments and
+            cannot be approved; it can still be cancelled.
+        bound_signer_id:
+          type: string
+        customer_id:
+          type: string
+          description: >
+            The customer this mandate is anchored to - approval requires a
+            recognized signer of this customer other than the bound one (§8),
+            and recipient targets belong to it. Absent only on rows created
+            before the anchor existed.
+        target_names:
+          type: array
+          items:
+            type: string
+          description: >
+            DERIVED, display-only - the rule's recipient targets resolved to
+            names, parallel to rule.targets (raw id on a miss). Absent for
+            address/any target kinds. The ids in the rule remain the grant.
+        instruction_id:
+          type: string
+        rule:
+          $ref: "#/components/schemas/MandateRule"
+        valid_from:
+          type: integer
+          format: int64
+        valid_until:
+          type: integer
+          format: int64
+        approved_by_signer_id:
+          type: string
+        approved_at:
+          type: integer
+          format: int64
+          description: Unix time of the §8 approval; absent until approved.
+        rejected_by_signer_id:
+          type: string
+          description: The signer that cancelled the mandate while it was still pending (§8); absent otherwise.
+        revoked_by_signer_id:
+          type: string
+          description: The signer that cancelled the mandate after activation (§8); absent otherwise.
+    # ---- Agentic payments ----
+
+    MandateResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum: [pending, active, rejected, revoked, done]
+        approved_by_signer_id:
+          type: string
+        rejected_by_signer_id:
+          type: string
+          description: The signer that cancelled the mandate while it was still pending (§8); absent otherwise.
+        revoked_by_signer_id:
+          type: string
+          description: The signer that cancelled the mandate after activation (§8); absent otherwise.
+
+    MandateRule:
+      type: object
+      required: [target_type, asset]
+      properties:
+        target_type:
+          type: string
+          enum: [any, recipient, address]
+        targets:
+          type: array
+          items:
+            type: string
+          description: One or more targets of the declared kind (recipient ids or addresses; empty for any). Max 32.
+        network_id:
+          type: string
+          description: >
+            The network the funding wallet pays on (e.g. base-sepolia). Empty
+            authorizes any network — the other dimensions still apply.
+        asset:
+          type: string
+          description: >
+            The asset the funding wallet SENDS — deposit-denominated, e.g. USDC —
+            compared case-insensitively against the firing payment. Write the
+            crypto deposit asset even when the recipient ultimately receives fiat
+            via a bank offramp (stablecoin conversion is 1:1): a fiat symbol such
+            as USD can never match a send, so the mandate would deny every payment.
+        max_per_tx:
+          type: string
+          description: >
+            Per-payment cap — a decimal string in the rule's (deposit) asset.
+            Empty means no per-payment cap; the window caps may still bound total
+            spend.
+        window:
+          type: string
+          enum: [NONE, WEEKLY, MONTHLY]
+          description: >
+            Spend-cap window for the per-target limits (calendar, not rolling).
+            NONE = lifetime; WEEKLY = calendar week from Monday 00:00 UTC;
+            MONTHLY = calendar month from the 1st, 00:00 UTC.
+        max_amount_per_target_in_window:
+          type: string
+          description: Cumulative cap over the window, PER TARGET (never shared across targets).
+        max_count_per_target_in_window:
+          type: integer
+          description: Up to N times PER TARGET in the window (window NONE = lifetime).
+
+    ScheduledPaymentResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        signer_id:
+          type: string
+          description: The signer (hosted agent) this payment fires under. Updatable via PATCH while scheduled.
+        wallet_id:
+          type: string
+          description: The funding wallet this payment spends from (the customer's choice at acceptance; updatable via PATCH while scheduled).
+        mandate_id:
+          type: string
+          description: AUDIT — the mandate that covered this payment at fire time. Absent until the payment executes (coverage is decided at fire time, not bound at rest).
+        wallet_transaction_id:
+          type: string
+          description: AUDIT — the money-path transaction created when this payment fired. Absent until the payment executes.
+        amount:
+          type: string
+        asset:
+          type: string
+        failure_reason:
+          type: string
+          description: Why the payment failed (e.g. the mandate gate's denied dimensions); absent unless status is failed.
+        recipient_id:
+          type: string
+          description: The recipient this payment pays, when created from a destination. Absent for a direct-address payment. Use this — NOT the address — to resolve the payee (two payees can share a destination address).
+        destination_id:
+          type: string
+          description: The REAL destination this settles to (a bank for an offramp, a crypto destination otherwise). For an auto-account payment the address is the crypto DEPOSIT while this names the bank/crypto target.
+        destination_type:
+          type: string
+          enum: [bank, crypto]
+          description: The kind of the REAL destination. `bank` marks an offramp (crypto converts to fiat, forwarded via a bank rail); `crypto` a direct or cross-family crypto payout.
+        destination_label:
+          type: string
+          description: A human label for the real destination — e.g. "Chase ••••5432" for a bank, or a shortened address for crypto — so a client shows which account the payment settles to without a second lookup.
+        destination_rail:
+          type: string
+          description: For a bank destination, the payout rail (e.g. ach, fedwire, swift, sepa). Absent for crypto.
+        output_asset:
+          type: string
+          description: The asset the recipient ULTIMATELY receives — the fiat currency (e.g. USD) for an offramp, else equal to `asset`. Stablecoin conversion is 1:1, so the output amount equals `amount`.
+        output_network:
+          type: string
+          description: For a crypto destination, the network the recipient receives on — differs from `network_id` (the deposit network) for a cross-family swap (e.g. solana-devnet vs base-sepolia); equals `network_id` for a direct crypto payment; absent for a bank offramp.
+        address:
+          type: string
+        network_id:
+          type: string
+        status:
+          type: string
+          enum: [scheduled, cancelled, executed, failed]
+        executed_at:
+          type: integer
+          format: int64
+        scheduled_at:
+          type: integer
+          format: int64
+
 x-tagGroups:
   - name: Core Resources
     tags:

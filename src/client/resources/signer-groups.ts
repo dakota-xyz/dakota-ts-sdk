@@ -7,6 +7,7 @@ import { PaginatedIterator } from '../pagination.js';
 import type {
   SignerGroup,
   SignerGroupCreateRequest,
+  SignerGroupSignerAddRequest,
   Signer,
   SignerCreateRequest,
   AttachedWallet,
@@ -57,18 +58,22 @@ export class SignerGroupsResource extends BaseResource {
   }
 
   /**
-   * Add a signer to a group.
+   * Add an existing signer's public key to a group.
+   *
+   * The endpoint takes `{ member_key }` — the base64 PKIX (SPKI) public
+   * key of an existing signer resource — not a fresh signer definition.
+   * Returns the updated group (with the new member included).
    *
    * @param signerGroupId - Signer group ID
-   * @param data - Signer creation data
-   * @returns Created signer
+   * @param data - `{ member_key }` (the signer's base64 PKIX public key)
+   * @returns The updated signer group
    */
   async addSigner(
     signerGroupId: string,
-    data: SignerCreateRequest,
+    data: SignerGroupSignerAddRequest,
     options?: RequestOptions
-  ): Promise<Signer> {
-    return this.transport.request<Signer>({
+  ): Promise<SignerGroup> {
+    return this.transport.request<SignerGroup>({
       method: 'POST',
       path: `/signer-groups/${signerGroupId}/signers`,
       body: data,
@@ -81,11 +86,18 @@ export class SignerGroupsResource extends BaseResource {
    *
    * @param signerGroupId - Signer group ID
    * @param signerId - Signer ID
+   * @param options - Optional request options (e.g. an explicit idempotency
+   *   key — the platform requires one on this DELETE)
    */
-  async removeSigner(signerGroupId: string, signerId: string): Promise<void> {
+  async removeSigner(
+    signerGroupId: string,
+    signerId: string,
+    options?: RequestOptions
+  ): Promise<void> {
     await this.transport.request<void>({
       method: 'DELETE',
       path: `/signer-groups/${signerGroupId}/signers/${signerId}`,
+      idempotencyKey: options?.idempotencyKey,
     });
   }
 

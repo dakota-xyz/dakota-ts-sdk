@@ -169,6 +169,76 @@ console.log(`Send ${tx.send_amount} USDC to: ${tx.crypto_address}`);
 console.log(`Status: ${tx.status}`);
 ```
 
+## Agentic Payments (Alpha)
+
+> ⚠️ **Alpha.** The hosted payment-agent surface is `x-alpha` and flag-gated on the platform (endpoints return `404` unless enabled for your key). The SDK helpers below may change — or be removed — without a major-version bump. Not recommended for production.
+
+A **payment agent** is a named, customer-scoped signer Dakota can drive: you provision it, endorse it onto a wallet, then it drafts and — once a **mandate** is signed — fires payments, bounded by that customer-approved mandate.
+
+### 1. Provision an agent and endorse it onto a wallet
+
+```typescript
+// Create a hosted payment agent (Dakota custodies its signing key).
+const agent = await client.paymentAgents.create({
+  customer_id: customerId,
+  name: 'Bill Pay',
+  hosted: true,
+});
+
+// Grant it spend permission on a wallet by adding its signer to the wallet's
+// spending group (idempotent) — the customer-endorsed attach. Pass an
+// options.idempotencyKey to make the whole helper safely retryable.
+await client.attachUserToWallet(walletId, agent.signer_public_key!, spendingGroupId);
+```
+
+### 2. Draft payments from natural language
+
+```typescript
+const conv = client.newAgentConversation(agent.id!);
+const turn = await conv.send('Pay Alice 100 USDC on base-mainnet every month until December');
+
+if (turn.hasProposals) {
+  // Review turn.proposals, then accept them through the instructions flow.
+  console.log(`agent drafted ${turn.proposals.length} proposal(s)`);
+} else {
+  console.log('agent needs more detail:', turn.reply);
+}
+```
+
+### 3. Sign and approve a mandate (§8)
+
+The caller holds the keys; the SDK never does. `P256MandateSigner` is a ready in-memory signer for sandbox/tests — implement the `MandateSigner` interface over your HSM/KMS in production.
+
+```typescript
+import { P256MandateSigner, mandateSignPayload } from '@dakota-xyz/ts-sdk';
+
+const signer = P256MandateSigner.generate(); // or P256MandateSigner.fromPrivateKey(yourKey)
+
+// `mandate` comes from client.mandates.get / client.mandates.list.
+const payload = mandateSignPayload(mandate, 'approve');
+const signature = signer.sign(payload);
+
+await client.mandates.approve(mandate.id!, {
+  approver_public_key: signer.publicKeyBase64(),
+  signature,
+});
+```
+
+### 4. Account insights (read-only)
+
+```typescript
+// Deterministic report: balances, upcoming payments, mandate headroom, risks.
+const report = await client.insights.get(customerId);
+
+// Advisory chat over the same report — stateless; never moves money.
+const answer = await client.insights.chat(customerId, {
+  messages: [{ role: 'user', content: 'Anything I should know about my account this week?' }],
+});
+console.log(answer.reply);
+```
+
+The full agentic surface is reachable via `client.paymentAgents`, `client.mandates`, `client.instructions`, `client.scheduledPayments`, and `client.insights`.
+
 ## Handling Webhooks
 
 Dakota sends webhooks for all status changes. Set up a handler:
@@ -597,6 +667,58 @@ Test simulations (sandbox environment only).
 | `sandbox.getSimulation(id)` | Get simulation by ID |
 | `sandbox.advanceSimulation(id)` | Advance simulation state |
 | `sandbox.listScenarios(params?)` | List available scenarios |
+
+### Payment Agents (Alpha)
+
+Hosted signing agents that draft payments (`x-alpha`, flag-gated).
+
+| Method | Description |
+|--------|-------------|
+| `paymentAgents.create(data)` | Create a payment agent (hosted or key-supplied) |
+| `paymentAgents.get(id)` | Get payment agent by ID |
+| `paymentAgents.revoke(id)` | Revoke the agent's key (kill switch) |
+| `paymentAgents.createProposals(id, data)` | One-shot proposals turn (see `newAgentConversation`) |
+
+### Mandates (Alpha)
+
+The §8 authorizations that arm scheduled payments.
+
+| Method | Description |
+|--------|-------------|
+| `mandates.create(data)` | Draft a mandate from a direct user interaction |
+| `mandates.list(params?)` | List mandates (filter by customer/signer/status) |
+| `mandates.get(id)` | Get mandate by ID (full wire shape for signing) |
+| `mandates.approve(id, data)` | Activate with a customer signature |
+| `mandates.cancel(id, data)` | Cancel a mandate |
+
+### Instructions (Alpha)
+
+Accept and inspect actuated proposals.
+
+| Method | Description |
+|--------|-------------|
+| `instructions.create(data)` | Accept proposals — actuate into persisted instructions |
+| `instructions.get(id)` | Get an instruction + its downstream artifacts |
+
+### Scheduled Payments (Alpha)
+
+Schedule rows created from instructions (or directly).
+
+| Method | Description |
+|--------|-------------|
+| `scheduledPayments.create(data)` | Create a schedule directly (signer-first) |
+| `scheduledPayments.list(params?)` | List scheduled payments |
+| `scheduledPayments.get(id)` | Get scheduled payment by ID |
+| `scheduledPayments.cancel(id)` | Cancel an open scheduled payment |
+
+### Insights (Alpha)
+
+Read-only advisory reporting over a customer's agentic activity.
+
+| Method | Description |
+|--------|-------------|
+| `insights.get(customerId)` | Deterministic account insight report |
+| `insights.chat(customerId, data)` | Stateless advisory chat over the report |
 
 ---
 

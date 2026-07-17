@@ -21,6 +21,20 @@ export {
   DEFAULT_TIMESTAMP_TOLERANCE,
 } from './signature.js';
 
-export { parseEvent, matchesEventType, WebhookEventType, type WebhookEvent } from './events.js';
+export {
+  parseEvent,
+  matchesEventType,
+  WebhookEventType,
+  type WebhookEvent,
+  type WebhookEventData,
+  type WebhookEventRequest,
+  type KybLinkData,
+  type KybApplicationSubmittedData,
+  type CustomerDeletedData,
+  type CapabilityRequirement,
+  type CustomerCapabilityStatusUpdatedData,
+  type FeePayoutDestinationUpdatedData,
+  type ScheduledPaymentFailedData,
+} from './events.js';
 
 export { MemoryIdempotencyStore, type IdempotencyStore } from './idempotency.js';

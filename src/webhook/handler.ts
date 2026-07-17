@@ -52,13 +52,13 @@ export interface WebhookHeaders {
  *   publicKey: process.env.WEBHOOK_PUBLIC_KEY!,
  * });
  *
- * // Register event handlers
+ * // Register event handlers. The resource lives under event.data.object.
  * handler.on(WebhookEventType.CustomerCreated, async (event) => {
- *   console.log('Customer created:', event.data);
+ *   console.log('Customer created:', event.data.object);
  * });
  *
  * handler.on('transaction.*', async (event) => {
- *   console.log('Transaction event:', event.type, event.data);
+ *   console.log('Transaction event:', event.type, event.data.object);
  * });
  *
  * handler.onDefault(async (event) => {

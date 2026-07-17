@@ -533,6 +533,56 @@ for await (const scenario of client.sandbox.listScenarios()) {
 }
 ```
 
+### Agentic Payments (Alpha)
+
+> `x-alpha`, flag-gated: endpoints 404 unless enabled for your key. May change without a major-version bump.
+
+```typescript
+// Provision a hosted agent and endorse it onto a wallet.
+const agent = await client.paymentAgents.create({
+  customer_id: customerId,
+  name: 'Bill Pay',
+  hosted: true,
+});
+await client.attachUserToWallet(walletId, agent.signer_public_key!, spendingGroupId);
+// Inverse (revoke spend permission from the one group you attached):
+await client.detachUserFromWallet(walletId, agent.signer_public_key!, spendingGroupId);
+// Both accept { idempotencyKey } as a final options arg for durable retries.
+
+// Draft payments from natural language (stateless multi-turn chat).
+const conv = client.newAgentConversation(agent.id!);
+const turn = await conv.send('Pay Alice 100 USDC on base-mainnet every month');
+if (turn.hasProposals) {
+  // Accept proposals -> persisted instructions (+ drafted mandates to sign).
+  const result = await client.instructions.create({
+    payment_agent_id: agent.id!,
+    proposals: turn.proposals,
+  });
+
+  // Sign + approve each drafted mandate (§8). The SDK never holds keys.
+  const signer = P256MandateSigner.generate(); // HSM/KMS in production
+  for (const mandate of result.mandates ?? []) {
+    await client.mandates.approve(mandate.id!, {
+      approver_public_key: signer.publicKeyBase64(),
+      signature: signer.sign(mandateSignPayload(mandate, 'approve')),
+    });
+  }
+}
+
+// Inspect schedules; cancel one.
+for await (const sp of client.scheduledPayments.list({ customer_id: customerId })) {
+  console.log(sp.status, sp.amount, sp.asset);
+}
+
+// Read-only account insights + advisory chat.
+const report = await client.insights.get(customerId);
+const answer = await client.insights.chat(customerId, {
+  messages: [{ role: 'user', content: 'Anything I should know this week?' }],
+});
+```
+
+Failures of scheduled payments surface as the `scheduled_payment.failed` webhook (`ScheduledPaymentFailedData`); successful fires emit the standard `wallet.transaction.created`.
+
 ## Webhook Handling
 
 ```typescript
@@ -545,11 +595,11 @@ const handler = new WebhookHandler({
 
 // Register handlers
 handler.on(WebhookEventType.CustomerCreated, async (event) => {
-  console.log('Customer created:', event.data);
+  console.log('Customer created:', event.data.object);
 });
 
 handler.on('transaction.*', async (event) => {
-  console.log('Transaction event:', event.type, event.data);
+  console.log('Transaction event:', event.type, event.data.object);
 });
 
 handler.onDefault(async (event) => {
@@ -649,7 +699,7 @@ const handler = new WebhookHandler({
 
 // Transaction created (deposit detected)
 handler.on('auto_transaction.created', async (event) => {
-  const tx = event.data;
+  const tx = event.data.object;
   await db.transactions.create({
     dakota_tx_id: tx.id,
     account_id: tx.account_id,
@@ -660,7 +710,7 @@ handler.on('auto_transaction.created', async (event) => {
 
 // Transaction updated (status changed)
 handler.on('auto_transaction.updated', async (event) => {
-  const tx = event.data;
+  const tx = event.data.object;
   await db.transactions.update({
     where: { dakota_tx_id: tx.id },
     data: { status: tx.status }, // 'processing' -> 'completed'

@@ -19,3 +19,8 @@ export { WebhooksResource } from './webhooks.js';
 export { InfoResource } from './info.js';
 export { SandboxResource } from './sandbox.js';
 export { SelfServeResource } from './self-serve.js';
+export { PaymentAgentsResource } from './payment-agents.js';
+export { InstructionsResource } from './instructions.js';
+export { MandatesResource } from './mandates.js';
+export { ScheduledPaymentsResource } from './scheduled-payments.js';
+export { InsightsResource } from './insights.js';

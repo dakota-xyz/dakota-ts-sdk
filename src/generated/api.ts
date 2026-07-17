@@ -1784,6 +1784,298 @@ export type paths = {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/customers/{customer_id}/insights": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Get the customer's account insight report (ALPHA)
+         * @description > **Alpha** — early access.
+         *
+         *     A deterministic, read-only report over the customer's agentic activity: a snapshot of typed facts (funding-wallet balances, upcoming totals, open payments, active mandates), observations (`insights`), and advisory recommendations (`suggestions`). Observations and suggestions share one item schema — `{kind, severity, message, detail, evidence}` — and every item carries `evidence`: typed references to the platform objects it was computed from. `kind` is an OPEN set; clients must ignore kinds they do not recognize. Every number is computed server-side; nothing here moves money or changes state.
+         */
+        readonly get: operations["getCustomerInsights"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/customers/{customer_id}/insights/chat": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Ask about the customer's account (ALPHA)
+         * @description > **Alpha** — early access.
+         *
+         *     A read-only, advisory conversation over the customer's account. Stateless: send the conversation so far in `messages` on each call; the response is the assistant's next plain-text `reply`. The assistant narrates the same deterministic report `GET /customers/{customer_id}/insights` returns (plus the customer's payments and mandates) — it never originates a number, never proposes, and never moves money. Requires the LLM layer to be configured server-side.
+         */
+        readonly post: operations["chatCustomerInsights"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/payment-agents": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Create a hosted payment agent (ALPHA)
+         * @description Creates a payment agent with a real signer row for its derived key (an agent is an ordinary signer). Wallet access is granted separately through the endorsed signer-group / policy attach flow.
+         */
+        readonly post: operations["createPaymentAgent"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/payment-agents/{payment_agent_id}": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Get a hosted payment agent (ALPHA)
+         * @description Returns the agent together with the wallets it can currently spend from. The wallet_ids are DERIVED at query time from the agent signer's live signer-group membership (recognition over the policy-engine truth mirror), so they reflect the agent's access right now — not just at creation time. Use this to read an agent back and reconcile which wallets it is authorized on. The derived state folds the same recognition in (a non-revoked agent recognized on no wallet is pending).
+         */
+        readonly get: operations["getPaymentAgent"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/payment-agents/{payment_agent_id}/revoke": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Revoke a hosted agent (ALPHA)
+         * @description Revokes an agent: it can no longer be used, and its signing key is destroyed in the isolated signer service (best-effort — the revoked state is authoritative). Idempotent.
+         */
+        readonly post: operations["revokePaymentAgent"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/payment-agents/{payment_agent_id}/proposals": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Draft payment proposals from a conversation (ALPHA)
+         * @description Pure cognition, no side effects: turn a customer's natural-language request into reviewable PROPOSALS — the same action-series shape POST /instructions accepts. Stateless: send the conversation so far in `messages` (and/or a `prompt` appended as the latest user turn) on each call, and the response carries either a clarifying/confirming reply, or — only at high confidence — validated proposals (sometimes both). The agent may consult the customer's existing payees and this agent's payment history; it never guesses amounts, assets, networks, or addresses, and proposals still only take effect via the instructions + mandate-signature flow. Requires the freeform LLM layer to be configured server-side.
+         */
+        readonly post: operations["createPaymentAgentProposals"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/instructions": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Accept instructions — actuate proposals (ALPHA)
+         * @description Each accepted proposal becomes one persisted instruction whose action series is actuated deterministically. Every proposal must instruct a payment. Returns only the instruction ids.
+         */
+        readonly post: operations["createInstructions"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/mandates/{mandate_id}/approve": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Approve a mandate (ALPHA)
+         * @description A recognized signer OTHER than the bound one signs the mandate payload to activate it; arms its scheduled payments.
+         */
+        readonly post: operations["approveMandate"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/mandates/{mandate_id}/cancel": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Cancel a mandate (ALPHA)
+         * @description Revokes a pending or active mandate. The canceller must be a recognized signer OTHER than the bound one, with a valid signature over the mandate payload — the bound signer can never mutate its own mandate (§8 applies to every mutation, including authority-reducing ones).
+         */
+        readonly post: operations["cancelMandate"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/scheduled-payments": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * List the calling client's scheduled payments (ALPHA)
+         * @description Returns the calling client's scheduled payments (the ScheduledPayment primitive — all statuses, not just future ones), oldest due first. Each shows its funding wallet (the customer's choice at acceptance); once executed, a row also carries the covering mandate and money-path transaction as audit. Narrow the collection with the optional customer_id, signer_id, wallet_id, mandate_id, and status filters; omit them all for the full client collection. The mandate_id filter naturally matches executed rows only (a row carries no mandate until it fires).
+         */
+        readonly get: operations["listScheduledPayments"];
+        readonly put?: never;
+        /**
+         * Schedule a payment directly (ALPHA)
+         * @description Creates one or more scheduled payments for a signer WITHOUT the proposal flow — schedule directly under an existing active mandate (coverage is matched at fire time, so no new signature is needed here). The payments bind the given signer and funding wallet. The signer must be permitted to spend on that wallet, the wallet must belong to the calling client, and the destination must be a crypto destination of the wallet's customer. The schedule is explicit `dates` (one payment per timestamp) OR `count` × `interval_seconds` from `start_at` (0 ⇒ now); dates are unix SECONDS and are rejected if in the past or implausibly far ahead. Whether a mandate covers each payment is decided at fire time by the money-path gate — a scheduled payment with no covering active mandate fails at fire, it is not rejected here.
+         */
+        readonly post: operations["createScheduledPayment"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/mandates": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * List the calling client's mandates (ALPHA)
+         * @description Returns the calling client's mandates, newest first, with the EFFECTIVE status - a pending or active mandate past its valid_until reads "expired" (derived on read; the stored status and audit columns are unchanged). Narrow the collection with the optional customer_id, signer_id, and status filters; omit them all for the full client collection.
+         */
+        readonly get: operations["listMandates"];
+        readonly put?: never;
+        /**
+         * Create a mandate directly (ALPHA)
+         * @description Drafts a PENDING mandate from a direct user interaction - no instruction back-link. Exactly one binding form names the signer the mandate binds: payment_agent_id (the hosted convenience - binds that agent's signer and anchors the mandate to the agent's customer), or signer_id together with customer_id (any of the client's signers, BYO keys included; the customer anchors the recipient-target scope and the §8 approver set). The rule is the one the customer will approve (POST /mandates/{mandate_id}/approve, a recognized signer other than the bound one, §8). Recipient targets may be recipient ids or payee names - names resolve to the mandate's customer's existing recipients before anything is stored. Schedule payments under it by mandate_id; they arm the moment it activates.
+         */
+        readonly post: operations["createMandate"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/scheduled-payments/{scheduled_payment_id}/cancel": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Cancel one scheduled payment (ALPHA)
+         * @description Finalizes a single still-scheduled payment as cancelled. No signature is required - schedule rows are bookkeeping, not authorization (they are created by a plain API-key call); the signed grant is the MANDATE, which this does not touch. New payments can be instructed under the same mandate at any time. Executed, failed, and already-cancelled rows are not cancellable; a cancel racing the cron at the exact fire moment loses cleanly (the status guard never overwrites an executed payment).
+         */
+        readonly post: operations["cancelScheduledPayment"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/instructions/{instruction_id}": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Get an instruction (ALPHA)
+         * @description Returns the accepted proposal - its action series and the per-action downstream artifacts actuation produced.
+         */
+        readonly get: operations["getInstruction"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/mandates/{mandate_id}": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Get a mandate (ALPHA)
+         * @description Returns the mandate - the signer it binds, its rule exactly as the customer approves it, validity, and status.
+         */
+        readonly get: operations["getMandate"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
 };
 export type webhooks = Record<string, never>;
 export type components = {
@@ -2249,7 +2541,7 @@ export type components = {
          * @example transaction.auto.updated
          * @enum {string}
          */
-        readonly EventType: "user.created" | "user.updated" | "user.deleted" | "api_key.created" | "api_key.deleted" | "customer.created" | "customer.updated" | "customer.kyb_link.created" | "customer.kyb_link.updated" | "customer.kyb_status.created" | "customer.kyb_status.updated" | "customer.kyb_application.submitted" | "auto_account.created" | "auto_account.updated" | "auto_account.deleted" | "transaction.auto.created" | "transaction.auto.updated" | "transaction.one_off.created" | "transaction.one_off.updated" | "recipient.created" | "recipient.updated" | "recipient.deleted" | "destination.created" | "destination.deleted" | "target.created" | "target.updated" | "target.deleted" | "exception.created" | "exception.cleared" | "bvnk.onboarding.created" | "bvnk.onboarding.updated" | "wallet.created" | "wallet.updated" | "wallet.signer_group.created" | "wallet.signer_group.updated" | "wallet.policy.created" | "wallet.policy.updated" | "wallet.transaction.created" | "wallet.transaction.updated" | "wallet.deposit";
+        readonly EventType: "user.created" | "user.updated" | "user.deleted" | "api_key.created" | "api_key.deleted" | "customer.created" | "customer.updated" | "customer.kyb_link.created" | "customer.kyb_link.updated" | "customer.kyb_status.created" | "customer.kyb_status.updated" | "customer.kyb_application.submitted" | "customer.capability_status.updated" | "auto_account.created" | "auto_account.updated" | "auto_account.deleted" | "transaction.auto.created" | "transaction.auto.updated" | "transaction.one_off.created" | "transaction.one_off.updated" | "recipient.created" | "recipient.updated" | "recipient.deleted" | "destination.created" | "destination.deleted" | "target.created" | "target.updated" | "target.deleted" | "exception.created" | "exception.cleared" | "bvnk.onboarding.created" | "bvnk.onboarding.updated" | "wallet.created" | "wallet.updated" | "wallet.signer_group.created" | "wallet.signer_group.updated" | "wallet.policy.created" | "wallet.policy.updated" | "wallet.transaction.created" | "wallet.transaction.updated" | "wallet.deposit" | "fee_payout_destination.updated" | "fee_payout_destination.deleted" | "scheduled_payment.failed";
         /** @description Request metadata for the original operation that emitted the event, when available. */
         readonly EventRequest: {
             /**
@@ -2765,12 +3057,18 @@ export type components = {
         };
         /**
          * Account Update Request
-         * @description Unified account update request for onramp/offramp/swap.
+         * @description Unified account update request for onramp/offramp/swap. `developer_fee_bps` is also updatable and applies to future transactions only; existing transactions are unaffected.
          */
         readonly AccountUpdateRequest: {
             readonly account_type: components["schemas"]["AccountType"];
             readonly crypto_destination_id?: components["schemas"]["KSUID"];
             readonly fiat_destination_id?: components["schemas"]["KSUID"];
+            /**
+             * Format: int32
+             * @description Developer fee (client revenue share) in basis points. When set, updates the fee applied to FUTURE transactions on this account; existing transactions are unaffected. Routing fields remain immutable.
+             * @example 50
+             */
+            readonly developer_fee_bps?: number;
             readonly destination_network_id?: components["schemas"]["NetworkId"];
             /**
              * @description Asset to receive at the destination.
@@ -6036,6 +6334,423 @@ export type components = {
              * @example 2024-01-15T10:30:00Z
              */
             readonly created_at?: string;
+        };
+        readonly PaymentAgentResponse: {
+            readonly id?: string;
+            readonly name?: string;
+            readonly customer_id?: string;
+            readonly hosted?: boolean;
+            readonly signer_id?: string;
+            /** @description base64 P-256 SPKI */
+            readonly signer_public_key?: string;
+            /** @description DERIVED - wallets whose attached signer groups contain the agent's signer. Empty until the customer's endorsed attaches land. */
+            readonly wallet_ids?: readonly string[];
+            /**
+             * @description pending is DERIVED - a non-revoked agent recognized on no wallet. It cannot accept instructions until a wallet attach is endorsed.
+             * @enum {string}
+             */
+            readonly state?: "pending" | "active" | "revoked";
+            /** @description Present on revoke: the signer groups the (now-revoked) agent's signer still belongs to. A revoked signer can't sign, but its group membership lingers — remove signer_id from each (DELETE /signer-groups/{signer_group_id}/signers/{signer_id}) to finish de-provisioning. Absent when there is nothing to clean up. */
+            readonly signer_group_cleanup?: readonly components["schemas"]["PaymentAgentSignerGroupRef"][];
+        };
+        /** @description A signer-group reference (id + display name). */
+        readonly PaymentAgentSignerGroupRef: {
+            readonly signer_group_id: string;
+            readonly name: string;
+        };
+        /** @description Tagged union - exactly one payload field matching `type` is set. */
+        readonly AgenticAction: {
+            /** @enum {string} */
+            readonly type: "create_recipient" | "create_crypto_destination" | "create_bank_destination" | "create_mandate" | "create_scheduled_payments" | "create_auto_account";
+            readonly create_recipient?: components["schemas"]["RecipientRequest"];
+            readonly create_crypto_destination?: components["schemas"]["CreateCryptoDestinationAction"];
+            readonly create_bank_destination?: components["schemas"]["CreateBankDestinationAction"];
+            readonly create_mandate?: components["schemas"]["CreateMandateAction"];
+            readonly create_scheduled_payments?: components["schemas"]["CreateScheduledPaymentsAction"];
+            readonly create_auto_account?: components["schemas"]["CreateAutoAccountAction"];
+        };
+        readonly AgenticActionDownstream: {
+            readonly recipient_id?: string;
+            readonly destination_id?: string;
+            readonly mandate_id?: string;
+            readonly scheduled_payment_ids?: readonly string[];
+            /** @description The provisioned auto-account (set for a create_auto_account action). */
+            readonly auto_account_id?: string;
+        };
+        /** @description An input artifact attached to a conversation turn. Tagged union: exactly one payload field matching `type` is set. Extensible — further kinds (e.g. an email stream) are added as new `type` enum values + payload fields, additively, without breaking this shape. */
+        readonly AgenticAttachment: {
+            /**
+             * @description The attachment kind — `document` (a PDF or image) today; further sources are added additively.
+             * @enum {string}
+             */
+            readonly type: "document";
+            readonly document?: components["schemas"]["AgenticDocumentAttachment"];
+        };
+        /** @description One typed reference to the platform object an insight item was computed from. */
+        readonly InsightEvidence: {
+            /** @description Platform resource name — the kind of object `id` refers to. OPEN set (like `InsightItem.kind`): new resource types may be referenced without a breaking change, so a client MUST handle an unrecognized type gracefully (e.g. show the item without a deep-link), never error. `transaction` is reserved (advertised and client-handled, but not emitted today). */
+            readonly type: string;
+            readonly id: string;
+        };
+        /** @description One observation (in `insights`) or advisory recommendation (in `suggestions`) — the same schema in both arrays. `kind` is an OPEN set: new kinds appear without notice and clients must ignore kinds they do not recognize. */
+        readonly InsightItem: {
+            /**
+             * @description Machine-readable item type. This is an OPEN set — the values below are the kinds emitted TODAY, but new kinds may be added at any time without a breaking change, so it is documented as an extensible enum rather than a closed one. A client MUST render an unrecognized kind generically from `message` + `severity` (and `evidence`), never drop it. Kinds emitted today, by array:
+             *     Observations (`insights[]`):
+             *       * `upcoming_payments` — open payments due within the horizon (count + per-asset totals).
+             *       * `payment_failures_clustered` — ≥2 recent failures to the same payee sharing one reason (root cause).
+             *       * `payments_failed` — remaining recent singleton failures, summarized.
+             *       * `account_activity` — executed volume over the window + mandates awaiting signature.
+             *       * `new_counterparty` — first open payments to a recently-added payee.
+             *       * `counterparty_concentration` — one payee dominates recent executed outflow.
+             *
+             *     Suggestions (`suggestions[]`, advisory — acting is a separate human-gated step):
+             *       * `payment_at_risk` — an open payment is past its scheduled time.
+             *       * `funding_shortfall` — a funding wallet's indexed balance is below its near-term payment needs.
+             *       * `mandate_expiring` — an active mandate ends soon (warn when open payments depend on it).
+             *       * `mandate_headroom` — a mandate's window budget is nearly or already over-consumed.
+             */
+            readonly kind: string;
+            /** @enum {string} */
+            readonly severity: "info" | "warn" | "critical";
+            /** @description Human-readable, self-contained statement of the finding, with exact amounts and dates. */
+            readonly message: string;
+            /** @description Machine-readable facts behind the message (decimal strings, counts, unix timestamps). Keys vary by kind. */
+            readonly detail?: {
+                readonly [key: string]: unknown;
+            };
+            /** @description The platform objects this item is computed from (capped; may be empty when the claim is an aggregate). */
+            readonly evidence: readonly components["schemas"]["InsightEvidence"][];
+        };
+        /** @description One funding wallet's indexed holding of one asset on one network. The balance index prices holdings in USD; values may lag the chain. */
+        readonly InsightSnapshotBalance: {
+            readonly wallet_id: string;
+            readonly name?: string;
+            readonly network_id: string;
+            readonly asset: string;
+            readonly amount_usd: string;
+        };
+        /** @description Open scheduled payments due within the window. */
+        readonly InsightSnapshotUpcoming: {
+            readonly days: number;
+            readonly count: number;
+            /** @description Asset → total amount due in the window (decimal strings). */
+            readonly totals?: {
+                readonly [key: string]: string;
+            };
+        };
+        /** @description Typed FACTS about the account — rendered directly by clients, not narrated. `balances`/`total_usd` cover the wallets the customer's open payments spend from and are present only when the balance index is configured; they degrade to absent, never to an error. */
+        readonly InsightSnapshot: {
+            readonly total_usd?: string;
+            readonly balances?: readonly components["schemas"]["InsightSnapshotBalance"][];
+            readonly upcoming: components["schemas"]["InsightSnapshotUpcoming"];
+            readonly open_scheduled_payments: number;
+            readonly active_mandates: number;
+        };
+        /** @description The deterministic, read-only insight report for a customer. Computed on demand; nothing is stored. */
+        readonly InsightReport: {
+            readonly customer_id: string;
+            /** Format: int64 */
+            readonly generated_at: number;
+            readonly snapshot: components["schemas"]["InsightSnapshot"];
+            /** @description Observations about the account (always present, possibly empty). */
+            readonly insights: readonly components["schemas"]["InsightItem"][];
+            /** @description Advisory recommendations (always present, possibly empty). Non-binding — acting on one is a separate, human-gated step. */
+            readonly suggestions: readonly components["schemas"]["InsightItem"][];
+        };
+        readonly InsightChatMessage: {
+            /** @enum {string} */
+            readonly role: "user" | "assistant";
+            readonly content: string;
+        };
+        readonly InsightChatRequest: {
+            /** @description The conversation so far, oldest first. */
+            readonly messages: readonly components["schemas"]["InsightChatMessage"][];
+        };
+        readonly InsightChatResponse: {
+            /** @description The assistant's plain-text answer. Advisory only — the assistant cannot execute anything. */
+            readonly reply: string;
+            /**
+             * @description How the boundary screen treated this turn. `ok` is a normal turn; `warned` means the request was off-topic and the customer was warned but may continue; `blocked` means the conversation has been terminated (repeated off-topic turns or a manipulation attempt) — the client should stop serving it and offer a fresh chat.
+             * @enum {string}
+             */
+            readonly conversation_status?: "ok" | "warned" | "blocked";
+        };
+        readonly AgenticChatMessage: {
+            /** @enum {string} */
+            readonly role: "user" | "assistant";
+            readonly content: string;
+            /** @description Input artifacts attached to this turn for the agent to investigate — e.g. an invoice PDF to draft a payment from. Optional. Document attachments (PDF or image) are accepted up to 8 MiB per document and 16 MiB per request, measured on the decoded payload. */
+            readonly attachments?: readonly components["schemas"]["AgenticAttachment"][];
+        };
+        readonly AgenticDocumentAttachment: {
+            /**
+             * @description MIME type of the attached document.
+             * @enum {string}
+             */
+            readonly media_type: "application/pdf" | "image/png" | "image/jpeg" | "image/webp" | "image/gif";
+            /**
+             * Format: byte
+             * @description The document bytes, base64-encoded.
+             */
+            readonly data: string;
+            /** @description Optional original filename, for display and audit. */
+            readonly filename?: string;
+        };
+        readonly AgenticInstruction: {
+            readonly id?: string;
+            readonly payment_agent_id?: string;
+            /** @enum {string} */
+            readonly status?: "proposed" | "executed" | "failed";
+            readonly actions?: readonly components["schemas"]["AgenticAction"][];
+            readonly downstream?: readonly components["schemas"]["AgenticActionDownstream"][];
+        };
+        readonly AgenticInstructionsResult: {
+            /** @description Every mandate this batch DRAFTED, in full wire shape (identical to GET /mandates/{mandate_id}) — sign the §8 approval immediately, no follow-up fetch or polling. Pending until a signer other than the bound one approves. */
+            readonly mandates?: readonly components["schemas"]["Mandate"][];
+            readonly instruction_ids?: readonly string[];
+        };
+        /** @description A self-contained series of actions. Cross-action links are <entity>_id fields - empty binds to the artifact created in this proposal, a real id reuses an existing one. Every proposal must instruct a payment or draft a mandate - a mandate-only proposal is a standing authorization (sign now, schedule under it later by mandate_id with no new signature). */
+        readonly AgenticProposal: {
+            readonly summary?: string;
+            readonly actions: readonly components["schemas"]["AgenticAction"][];
+        };
+        /** @description The agent's next step. At least one of `proposals` or `reply` is always present in a successful response — `proposals` at high confidence (optionally with a short `reply` note), or `reply` alone when the agent needs more from the user. */
+        readonly AgenticProposalsResult: {
+            /** @description Validated action-series proposals, ready to accept via POST /instructions. Present only at high confidence. */
+            readonly proposals?: readonly components["schemas"]["AgenticProposal"][];
+            /** @description The agent's conversational reply — a clarifying question or confirmation. Present without proposals when the agent needs more from the user; may accompany proposals as a short note. */
+            readonly reply?: string;
+            /**
+             * @description How the boundary screen treated this turn: `ok` is a normal payments turn; `warned` means the request was off-topic and the customer was warned but may continue; `blocked` means the conversation has been terminated (repeated off-topic turns or a manipulation attempt) — the client should stop serving it and offer a fresh chat.
+             * @enum {string}
+             */
+            readonly conversation_status?: "ok" | "warned" | "blocked";
+        };
+        readonly ApproveMandateRequest: {
+            readonly approver_public_key: string;
+            readonly signature: string;
+        };
+        readonly CancelMandateRequest: {
+            readonly signer_public_key: string;
+            readonly signature: string;
+        };
+        readonly CreatePaymentAgentRequest: {
+            readonly customer_id: string;
+            readonly name: string;
+            /** @description Must be true. Only hosted agents (signing keys custodied by the isolated agent-signer service) are supported today; bring-your-own-signer agents are not yet available, so the API rejects hosted=false. */
+            readonly hosted: boolean;
+        };
+        readonly CreateBankDestinationAction: {
+            readonly recipient_id?: string;
+            readonly account_holder_name?: string;
+            readonly account_number?: string;
+            readonly routing_number?: string;
+            /** @enum {string} */
+            readonly account_type?: "checking" | "savings";
+            readonly iban?: string;
+            readonly bic?: string;
+            readonly bank_name?: string;
+        };
+        readonly CreateCryptoDestinationAction: {
+            /** @description recipient reference: empty = the recipient created in this proposal; a recipient id or name = an existing recipient */
+            readonly recipient_id?: string;
+            readonly address: string;
+            readonly network_id: components["schemas"]["NetworkId"];
+        };
+        readonly CreateInstructionsRequest: {
+            readonly payment_agent_id: string;
+            readonly proposals: readonly components["schemas"]["AgenticProposal"][];
+        };
+        readonly CreateMandateAction: {
+            readonly rule: components["schemas"]["MandateRule"];
+            /** Format: int64 */
+            readonly valid_from?: number;
+            /** Format: int64 */
+            readonly valid_until?: number;
+        };
+        /** @description Exactly one binding form is required - payment_agent_id alone, or signer_id together with customer_id. Any other combination is rejected with 400. */
+        readonly CreateMandateRequest: {
+            /** @description Binding form A (hosted convenience) - the mandate binds this agent's signer and anchors to the agent's customer. Mutually exclusive with signer_id/customer_id. */
+            readonly payment_agent_id?: string;
+            /** @description Binding form B - the mandate binds this signer directly (any of the client's signers, not only an agent's). Requires customer_id. */
+            readonly signer_id?: string;
+            /** @description Binding form B - the customer the mandate is anchored to; must belong to the calling client. Defines the recipient-target scope and the §8 approver set (approval requires a recognized signer of THIS customer other than the bound one). Requires signer_id. */
+            readonly customer_id?: string;
+            readonly rule: components["schemas"]["MandateRule"];
+            /** Format: int64 */
+            readonly valid_from?: number;
+            /** Format: int64 */
+            readonly valid_until?: number;
+        };
+        /** @description A freeform proposals conversation. The server is stateless — send the whole history in `messages` on each call. `prompt` is a convenience for a single-shot turn (or the latest user message); it is appended after `messages`. At least one of `prompt` or `messages` must be non-empty. Supplying both is valid only when `messages` does not already end with a user turn; otherwise the request is rejected with 400 (two consecutive user turns are not allowed). */
+        readonly CreateProposalsRequest: {
+            /** @description Single-shot input, appended as the latest user turn. */
+            readonly prompt?: string;
+            /** @description The conversation so far, oldest first. */
+            readonly messages?: readonly components["schemas"]["AgenticChatMessage"][];
+        };
+        readonly CreateScheduledPaymentsAction: {
+            readonly destination_id?: string;
+            /** @description The funding wallet for these payments — one the agent recognizes. Optional only when the agent recognizes exactly one wallet (used by default); otherwise required, since a signer can recognize several and the choice cannot be deferred to fire time. Its chain family must match the payment network. */
+            readonly wallet_id?: string;
+            readonly amount: string;
+            readonly asset: string;
+            readonly dates?: readonly number[];
+            readonly count?: number;
+            /** Format: int64 */
+            readonly interval_seconds?: number;
+            /** Format: int64 */
+            readonly start_at?: number;
+        };
+        /** @description Direct (signer-first) schedule create. The signer + funding wallet are the caller's choice; the schedule is explicit `dates`, or `count` × `interval_seconds` from `start_at`. Name the payee EITHER with `destination_id` (an existing crypto destination of the wallet's customer) OR with a direct `address` + `network_id` (a raw crypto address, no recipient — matched on the address at fire time, like a mandate address target) — exactly one of the two. */
+        readonly CreateScheduledPaymentRequest: {
+            /** @description The signer the payments bind to; its hosted agent signs at fire time. */
+            readonly signer_id: string;
+            /** @description The funding wallet these payments spend from. Required — the signer must be permitted to spend on it, and its chain family must match the payment network. */
+            readonly wallet_id: string;
+            /** @description An existing crypto destination of the wallet's customer to pay. Omit to pay a direct address (address + network_id). */
+            readonly destination_id?: string;
+            /** @description A direct crypto address to pay — an alternative to destination_id (no recipient). Requires network_id; the wallet's chain family must match. */
+            readonly address?: string;
+            /** @description The network for a direct-address payment (required together with address). */
+            readonly network_id?: string;
+            /** @description Decimal string, at the destination asset. */
+            readonly amount: string;
+            readonly asset: string;
+            /** @description Explicit per-payment unix times (one payment each). Win over count × interval_seconds. */
+            readonly dates?: readonly number[];
+            /** @description Number of payments when using count × interval_seconds (default 1). */
+            readonly count?: number;
+            /**
+             * Format: int64
+             * @description Cadence in seconds between payments when using count.
+             */
+            readonly interval_seconds?: number;
+            /**
+             * Format: int64
+             * @description First due time (0 ⇒ now).
+             */
+            readonly start_at?: number;
+        };
+        /** @description Provision a provider-managed convert-and-forward "auto-account" so a payment can cross chain families (crypto→crypto swap) or exit to a bank (crypto→bank offramp). The agent pays the auto-account's crypto DEPOSIT on source_network_id (on the funding wallet's own family) and the provider converts source_asset→output_asset and forwards to destination_id. A scheduled payment then targets the deposit; the mandate still targets the real recipient. */
+        readonly CreateAutoAccountAction: {
+            /** @description The REAL destination the auto-account forwards to: a crypto destination (⇒ swap) or a bank destination (⇒ offramp). Empty = the destination created in this proposal. */
+            readonly destination_id?: string;
+            /** @description The asset the agent deposits and the scheduled payment sends (may be the ANY wildcard). */
+            readonly source_asset: string;
+            readonly source_network_id: components["schemas"]["NetworkId"];
+            /** @description The asset the recipient receives (a currency such as USD for a bank offramp). */
+            readonly output_asset: string;
+            /** @description Outbound rail — REQUIRED for a bank offramp (e.g. ach, fedwire, swift, sepa); omit for a crypto swap. */
+            readonly rail?: string;
+            /** @enum {string} */
+            readonly routing_preference?: "fastest" | "cheapest";
+            /**
+             * Format: int32
+             * @description Optional developer fee in basis points (0–10000).
+             */
+            readonly fee_bps?: number;
+        };
+        readonly Mandate: {
+            readonly id?: string;
+            /**
+             * @description expired is DERIVED, never stored - a pending or active mandate whose valid_until has passed. It cannot authorize payments and cannot be approved; it can still be cancelled.
+             * @enum {string}
+             */
+            readonly status?: "pending" | "active" | "expired" | "rejected" | "revoked" | "done";
+            readonly bound_signer_id?: string;
+            /** @description The customer this mandate is anchored to - approval requires a recognized signer of this customer other than the bound one (§8), and recipient targets belong to it. Absent only on rows created before the anchor existed. */
+            readonly customer_id?: string;
+            /** @description DERIVED, display-only - the rule's recipient targets resolved to names, parallel to rule.targets (raw id on a miss). Absent for address/any target kinds. The ids in the rule remain the grant. */
+            readonly target_names?: readonly string[];
+            readonly instruction_id?: string;
+            readonly rule?: components["schemas"]["MandateRule"];
+            /** Format: int64 */
+            readonly valid_from?: number;
+            /** Format: int64 */
+            readonly valid_until?: number;
+            readonly approved_by_signer_id?: string;
+            /**
+             * Format: int64
+             * @description Unix time of the §8 approval; absent until approved.
+             */
+            readonly approved_at?: number;
+            /** @description The signer that cancelled the mandate while it was still pending (§8); absent otherwise. */
+            readonly rejected_by_signer_id?: string;
+            /** @description The signer that cancelled the mandate after activation (§8); absent otherwise. */
+            readonly revoked_by_signer_id?: string;
+        };
+        readonly MandateResponse: {
+            readonly id?: string;
+            /** @enum {string} */
+            readonly status?: "pending" | "active" | "rejected" | "revoked" | "done";
+            readonly approved_by_signer_id?: string;
+            /** @description The signer that cancelled the mandate while it was still pending (§8); absent otherwise. */
+            readonly rejected_by_signer_id?: string;
+            /** @description The signer that cancelled the mandate after activation (§8); absent otherwise. */
+            readonly revoked_by_signer_id?: string;
+        };
+        readonly MandateRule: {
+            /** @enum {string} */
+            readonly target_type: "any" | "recipient" | "address";
+            /** @description One or more targets of the declared kind (recipient ids or addresses; empty for any). Max 32. */
+            readonly targets?: readonly string[];
+            /** @description The network the funding wallet pays on (e.g. base-sepolia). Empty authorizes any network — the other dimensions still apply. */
+            readonly network_id?: string;
+            /** @description The asset the funding wallet SENDS — deposit-denominated, e.g. USDC — compared case-insensitively against the firing payment. Write the crypto deposit asset even when the recipient ultimately receives fiat via a bank offramp (stablecoin conversion is 1:1): a fiat symbol such as USD can never match a send, so the mandate would deny every payment. */
+            readonly asset: string;
+            /** @description Per-payment cap — a decimal string in the rule's (deposit) asset. Empty means no per-payment cap; the window caps may still bound total spend. */
+            readonly max_per_tx?: string;
+            /**
+             * @description Spend-cap window for the per-target limits (calendar, not rolling). NONE = lifetime; WEEKLY = calendar week from Monday 00:00 UTC; MONTHLY = calendar month from the 1st, 00:00 UTC.
+             * @enum {string}
+             */
+            readonly window?: "NONE" | "WEEKLY" | "MONTHLY";
+            /** @description Cumulative cap over the window, PER TARGET (never shared across targets). */
+            readonly max_amount_per_target_in_window?: string;
+            /** @description Up to N times PER TARGET in the window (window NONE = lifetime). */
+            readonly max_count_per_target_in_window?: number;
+        };
+        readonly ScheduledPaymentResponse: {
+            readonly id?: string;
+            /** @description The signer (hosted agent) this payment fires under. Updatable via PATCH while scheduled. */
+            readonly signer_id?: string;
+            /** @description The funding wallet this payment spends from (the customer's choice at acceptance; updatable via PATCH while scheduled). */
+            readonly wallet_id?: string;
+            /** @description AUDIT — the mandate that covered this payment at fire time. Absent until the payment executes (coverage is decided at fire time, not bound at rest). */
+            readonly mandate_id?: string;
+            /** @description AUDIT — the money-path transaction created when this payment fired. Absent until the payment executes. */
+            readonly wallet_transaction_id?: string;
+            readonly amount?: string;
+            readonly asset?: string;
+            /** @description Why the payment failed (e.g. the mandate gate's denied dimensions); absent unless status is failed. */
+            readonly failure_reason?: string;
+            /** @description The recipient this payment pays, when created from a destination. Absent for a direct-address payment. Use this — NOT the address — to resolve the payee (two payees can share a destination address). */
+            readonly recipient_id?: string;
+            /** @description The REAL destination this settles to (a bank for an offramp, a crypto destination otherwise). For an auto-account payment the address is the crypto DEPOSIT while this names the bank/crypto target. */
+            readonly destination_id?: string;
+            /**
+             * @description The kind of the REAL destination. `bank` marks an offramp (crypto converts to fiat, forwarded via a bank rail); `crypto` a direct or cross-family crypto payout.
+             * @enum {string}
+             */
+            readonly destination_type?: "bank" | "crypto";
+            /** @description A human label for the real destination — e.g. "Chase ••••5432" for a bank, or a shortened address for crypto — so a client shows which account the payment settles to without a second lookup. */
+            readonly destination_label?: string;
+            /** @description For a bank destination, the payout rail (e.g. ach, fedwire, swift, sepa). Absent for crypto. */
+            readonly destination_rail?: string;
+            /** @description The asset the recipient ULTIMATELY receives — the fiat currency (e.g. USD) for an offramp, else equal to `asset`. Stablecoin conversion is 1:1, so the output amount equals `amount`. */
+            readonly output_asset?: string;
+            /** @description For a crypto destination, the network the recipient receives on — differs from `network_id` (the deposit network) for a cross-family swap (e.g. solana-devnet vs base-sepolia); equals `network_id` for a direct crypto payment; absent for a bank offramp. */
+            readonly output_network?: string;
+            readonly address?: string;
+            readonly network_id?: string;
+            /** @enum {string} */
+            readonly status?: "scheduled" | "cancelled" | "executed" | "failed";
+            /** Format: int64 */
+            readonly executed_at?: number;
+            /** Format: int64 */
+            readonly scheduled_at?: number;
         };
     };
     responses: never;
@@ -21418,6 +22133,1368 @@ export interface operations {
                     readonly [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    readonly getCustomerInsights: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                readonly customer_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The customer's insight report */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "customer_id": "2vWxCustomer0000000000000000",
+                     *       "generated_at": 1783075200,
+                     *       "snapshot": {
+                     *         "total_usd": "3100.25",
+                     *         "balances": [
+                     *           {
+                     *             "wallet_id": "2vWxWallet000000000000000000",
+                     *             "name": "Operating",
+                     *             "network_id": "base-mainnet",
+                     *             "asset": "USDC",
+                     *             "amount_usd": "3100.25"
+                     *           }
+                     *         ],
+                     *         "upcoming": {
+                     *           "days": 14,
+                     *           "count": 3,
+                     *           "totals": {
+                     *             "USDC": "5200"
+                     *           }
+                     *         },
+                     *         "open_scheduled_payments": 5,
+                     *         "active_mandates": 2
+                     *       },
+                     *       "insights": [
+                     *         {
+                     *           "kind": "upcoming_payments",
+                     *           "severity": "info",
+                     *           "message": "3 payment(s) scheduled in the next 14 days (5200 USDC).",
+                     *           "detail": {
+                     *             "count": 3,
+                     *             "window_days": 14
+                     *           },
+                     *           "evidence": [
+                     *             {
+                     *               "type": "scheduled_payment",
+                     *               "id": "2vWxPayment00000000000000000"
+                     *             }
+                     *           ]
+                     *         }
+                     *       ],
+                     *       "suggestions": [
+                     *         {
+                     *           "kind": "funding_shortfall",
+                     *           "severity": "critical",
+                     *           "message": "A funding wallet shows $3100.25 of USDC but 5200 USDC of payments fire from it on base-mainnet in the next 7 days — top up at least ~2099.75 USDC by 2026-07-14 or 3 payment(s) may fail.",
+                     *           "detail": {
+                     *             "wallet_id": "2vWxWallet000000000000000000",
+                     *             "shortfall_estimate": "2099.75"
+                     *           },
+                     *           "evidence": [
+                     *             {
+                     *               "type": "wallet",
+                     *               "id": "2vWxWallet000000000000000000"
+                     *             },
+                     *             {
+                     *               "type": "scheduled_payment",
+                     *               "id": "2vWxPayment00000000000000000"
+                     *             }
+                     *           ]
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["InsightReport"];
+                };
+            };
+            /** @description Invalid request */
+            readonly 400: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#invalid-identifier",
+                     *       "title": "Invalid Identifier",
+                     *       "status": 400,
+                     *       "detail": "invalid customer id"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Agentic payments not enabled, or the customer was not found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#not-found",
+                     *       "title": "Not Found",
+                     *       "status": 404,
+                     *       "detail": "customer not found"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    readonly chatCustomerInsights: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header: {
+                /** @description Unique key to ensure request idempotency. If the same key is used within a certain time window, the original response will be returned instead of executing the request again. */
+                readonly "x-idempotency-key": components["parameters"]["IdempotencyKeyHeader"];
+            };
+            readonly path: {
+                readonly customer_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                /**
+                 * @example {
+                 *       "messages": [
+                 *         {
+                 *           "role": "user",
+                 *           "content": "Anything I should know about my account this week?"
+                 *         }
+                 *       ]
+                 *     }
+                 */
+                readonly "application/json": components["schemas"]["InsightChatRequest"];
+            };
+        };
+        readonly responses: {
+            /** @description The assistant's reply */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "reply": "You have 3 payments (5200 USDC) due in the next two weeks, and your Operating wallet shows $3100.25 — about 2100 USDC short. Consider topping it up before July 14."
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["InsightChatResponse"];
+                };
+            };
+            /** @description Invalid request, or the insight chat layer is not configured */
+            readonly 400: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#invalid-request",
+                     *       "title": "Invalid Request",
+                     *       "status": 400,
+                     *       "detail": "insight chat is not enabled (no LLM configured)"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Agentic payments not enabled, or the customer was not found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#not-found",
+                     *       "title": "Not Found",
+                     *       "status": 404,
+                     *       "detail": "customer not found"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description The per-customer insight-chat rate limit was exceeded (an hourly burst window and a daily window). Back off and retry later. */
+            readonly 429: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#rate-limited",
+                     *       "title": "Rate Limited",
+                     *       "status": 429,
+                     *       "detail": "insight chat rate limit reached for this customer (hour window) — retry later"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    readonly createPaymentAgent: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                /**
+                 * @example {
+                 *       "customer_id": "2vWxCustomer0000000000000000",
+                 *       "name": "My Bill Pay",
+                 *       "hosted": true
+                 *     }
+                 */
+                readonly "application/json": components["schemas"]["CreatePaymentAgentRequest"];
+            };
+        };
+        readonly responses: {
+            /** @description Agent created */
+            readonly 201: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "id": "2vWxAgent0000000000000000000",
+                     *       "name": "My Bill Pay",
+                     *       "customer_id": "2vWxCustomer0000000000000000",
+                     *       "hosted": true,
+                     *       "signer_id": "2vWxSigner000000000000000000",
+                     *       "signer_public_key": "BHkExampleKeyQm",
+                     *       "wallet_ids": [],
+                     *       "state": "active"
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["PaymentAgentResponse"];
+                };
+            };
+            /** @description Invalid request */
+            readonly 400: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#invalid-request",
+                     *       "title": "Invalid Request",
+                     *       "status": 400,
+                     *       "detail": "name is required"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Agentic payments not enabled, or the resource was not found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#not-found",
+                     *       "title": "Not Found",
+                     *       "status": 404,
+                     *       "detail": "agentic payments are not enabled"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    readonly getPaymentAgent: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                readonly payment_agent_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Agent found */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "id": "2vWxAgent0000000000000000000",
+                     *       "name": "My Bill Pay",
+                     *       "customer_id": "2vWxCustomer0000000000000000",
+                     *       "hosted": true,
+                     *       "signer_id": "2vWxSigner000000000000000000",
+                     *       "signer_public_key": "BHkExampleKeyQm",
+                     *       "wallet_ids": [
+                     *         "2vWxWalletEvm000000000000000",
+                     *         "2vWxWalletSol000000000000000"
+                     *       ],
+                     *       "state": "active"
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["PaymentAgentResponse"];
+                };
+            };
+            /** @description Agentic payments not enabled, or the agent was not found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#not-found",
+                     *       "title": "Not Found",
+                     *       "status": 404,
+                     *       "detail": "agent not found"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    readonly revokePaymentAgent: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                readonly payment_agent_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Agent revoked */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "id": "2vWxAgent0000000000000000000",
+                     *       "name": "My Bill Pay",
+                     *       "customer_id": "2vWxCustomer0000000000000000",
+                     *       "hosted": true,
+                     *       "signer_id": "2vWxSigner000000000000000000",
+                     *       "signer_public_key": "BHkExampleKeyQm",
+                     *       "wallet_ids": [],
+                     *       "state": "revoked"
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["PaymentAgentResponse"];
+                };
+            };
+            /** @description Agentic payments not enabled, or the agent was not found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#not-found",
+                     *       "title": "Not Found",
+                     *       "status": 404,
+                     *       "detail": "agent not found"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    readonly createPaymentAgentProposals: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                readonly payment_agent_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                /**
+                 * @example {
+                 *       "prompt": "Pay Alice 10 USDC on base-sepolia 0xa11ce00000000000000000000000000000000001 every month on the 15th until Dec 26"
+                 *     }
+                 */
+                readonly "application/json": components["schemas"]["CreateProposalsRequest"];
+            };
+        };
+        readonly responses: {
+            /** @description The agent's next step — a reply, proposals, or both */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "reply": "Drafting a monthly payment to Alice — review and sign below.",
+                     *       "proposals": [
+                     *         {
+                     *           "summary": "Pay Alice 10 USDC on base-sepolia, on the 15th of every month until Dec 2026 (7 payments)",
+                     *           "actions": [
+                     *             {
+                     *               "type": "create_recipient",
+                     *               "create_recipient": {
+                     *                 "name": "Alice"
+                     *               }
+                     *             },
+                     *             {
+                     *               "type": "create_crypto_destination",
+                     *               "create_crypto_destination": {
+                     *                 "address": "0xa11ce00000000000000000000000000000000001",
+                     *                 "network_id": "base-sepolia"
+                     *               }
+                     *             },
+                     *             {
+                     *               "type": "create_mandate",
+                     *               "create_mandate": {
+                     *                 "rule": {
+                     *                   "target_type": "recipient",
+                     *                   "targets": [
+                     *                     "Alice"
+                     *                   ],
+                     *                   "network_id": "base-sepolia",
+                     *                   "asset": "USDC",
+                     *                   "max_per_tx": "10",
+                     *                   "window": "MONTHLY",
+                     *                   "max_count_per_target_in_window": 1
+                     *                 },
+                     *                 "valid_until": 1798675200
+                     *               }
+                     *             },
+                     *             {
+                     *               "type": "create_scheduled_payments",
+                     *               "create_scheduled_payments": {
+                     *                 "destination_id": "",
+                     *                 "amount": "10",
+                     *                 "asset": "USDC",
+                     *                 "dates": [
+                     *                   1782864000,
+                     *                   1785542400
+                     *                 ]
+                     *               }
+                     *             }
+                     *           ]
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["AgenticProposalsResult"];
+                };
+            };
+            /** @description Invalid request, or the freeform conversation layer is not configured */
+            readonly 400: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#invalid-request",
+                     *       "title": "Invalid request",
+                     *       "status": 400,
+                     *       "detail": "freeform proposals are not enabled (no LLM configured)"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Agentic payments not enabled, or the agent was not found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#not-found",
+                     *       "title": "Not Found",
+                     *       "status": 404,
+                     *       "detail": "agent not found"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description The per-customer proposal-drafting rate limit was exceeded (an hourly burst window and a daily window). Back off and retry later. */
+            readonly 429: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#rate-limited",
+                     *       "title": "Rate Limited",
+                     *       "status": 429,
+                     *       "detail": "proposal rate limit reached for this customer (hour window) — retry later"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    readonly createInstructions: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                /**
+                 * @example {
+                 *       "payment_agent_id": "2vWxAgent0000000000000000000",
+                 *       "proposals": [
+                 *         {
+                 *           "actions": [
+                 *             {
+                 *               "type": "create_recipient",
+                 *               "create_recipient": {
+                 *                 "name": "Alice"
+                 *               }
+                 *             },
+                 *             {
+                 *               "type": "create_crypto_destination",
+                 *               "create_crypto_destination": {
+                 *                 "address": "0xa11ce00000000000000000000000000000000001",
+                 *                 "network_id": "base-sepolia"
+                 *               }
+                 *             },
+                 *             {
+                 *               "type": "create_mandate",
+                 *               "create_mandate": {
+                 *                 "rule": {
+                 *                   "target_type": "recipient",
+                 *                   "targets": [
+                 *                     "Alice"
+                 *                   ],
+                 *                   "network_id": "base-sepolia",
+                 *                   "asset": "USDC",
+                 *                   "max_per_tx": "10000",
+                 *                   "window": "MONTHLY",
+                 *                   "max_count_per_target_in_window": 1
+                 *                 }
+                 *               }
+                 *             },
+                 *             {
+                 *               "type": "create_scheduled_payments",
+                 *               "create_scheduled_payments": {
+                 *                 "amount": "10000",
+                 *                 "asset": "USDC",
+                 *                 "dates": [
+                 *                   1781481600
+                 *                 ]
+                 *               }
+                 *             }
+                 *           ]
+                 *         }
+                 *       ]
+                 *     }
+                 */
+                readonly "application/json": components["schemas"]["CreateInstructionsRequest"];
+            };
+        };
+        readonly responses: {
+            /** @description Created instructions */
+            readonly 201: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "instruction_ids": [
+                     *         "2vWxInstruction0000000000000"
+                     *       ]
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["AgenticInstructionsResult"];
+                };
+            };
+            /** @description Invalid request */
+            readonly 400: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#invalid-request",
+                     *       "title": "Invalid Request",
+                     *       "status": 400,
+                     *       "detail": "a proposal must instruct a payment"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Agentic payments not enabled, or the resource was not found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#not-found",
+                     *       "title": "Not Found",
+                     *       "status": 404,
+                     *       "detail": "agentic payments are not enabled"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    readonly approveMandate: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                readonly mandate_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                /**
+                 * @example {
+                 *       "approver_public_key": "BHkApproverKeyQm",
+                 *       "signature": "MEUCIQExampleSignature"
+                 *     }
+                 */
+                readonly "application/json": components["schemas"]["ApproveMandateRequest"];
+            };
+        };
+        readonly responses: {
+            /** @description Mandate activated */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "id": "2vWxMandate00000000000000000",
+                     *       "status": "active",
+                     *       "approved_by_signer_id": "2vWxApprover0000000000000000"
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["MandateResponse"];
+                };
+            };
+            /** @description Invalid request */
+            readonly 400: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#invalid-request",
+                     *       "title": "Invalid Request",
+                     *       "status": 400,
+                     *       "detail": "approver must differ from the bound signer"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Agentic payments not enabled, or the resource was not found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#not-found",
+                     *       "title": "Not Found",
+                     *       "status": 404,
+                     *       "detail": "agentic payments are not enabled"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    readonly cancelMandate: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                readonly mandate_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                /**
+                 * @example {
+                 *       "signer_public_key": "BHkSignerKeyQm",
+                 *       "signature": "MEUCIQExampleSignature"
+                 *     }
+                 */
+                readonly "application/json": components["schemas"]["CancelMandateRequest"];
+            };
+        };
+        readonly responses: {
+            /** @description Mandate revoked; outstanding payments cancelled */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "id": "2vWxMandate00000000000000000",
+                     *       "status": "revoked"
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["MandateResponse"];
+                };
+            };
+            /** @description Invalid request */
+            readonly 400: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#invalid-request",
+                     *       "title": "Invalid Request",
+                     *       "status": 400,
+                     *       "detail": "mandate is done, not cancellable"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Agentic payments not enabled, or the resource was not found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#not-found",
+                     *       "title": "Not Found",
+                     *       "status": 404,
+                     *       "detail": "agentic payments are not enabled"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    readonly listScheduledPayments: {
+        readonly parameters: {
+            readonly query?: {
+                /** @description Only payments for this customer (the signer's owning agent's customer). */
+                readonly customer_id?: string;
+                /** @description Only payments bound to this signer. */
+                readonly signer_id?: string;
+                /** @description Only payments funded from this wallet. */
+                readonly wallet_id?: string;
+                /** @description Only payments that executed under this mandate (mandate_id is stamped at fire time, so this matches executed rows only). */
+                readonly mandate_id?: string;
+                /** @description Comma-separated statuses to include, e.g. "scheduled,executed". Allowed values: scheduled, cancelled, executed, failed. Omit for all. */
+                readonly status?: string;
+            };
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Scheduled payments, oldest due first */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "id": "2vWxScheduled000000000000000",
+                     *         "wallet_id": "2vWxWallet000000000000000000",
+                     *         "amount": "10000",
+                     *         "asset": "USDC",
+                     *         "address": "0xa11ce00000000000000000000000000000000001",
+                     *         "network_id": "base-sepolia",
+                     *         "status": "scheduled",
+                     *         "scheduled_at": 1781481600
+                     *       }
+                     *     ]
+                     */
+                    readonly "application/json": readonly components["schemas"]["ScheduledPaymentResponse"][];
+                };
+            };
+            /** @description Invalid request */
+            readonly 400: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#invalid-identifier",
+                     *       "title": "Invalid Identifier",
+                     *       "status": 400,
+                     *       "detail": "invalid signer_id"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Agentic payments not enabled, or the resource was not found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#not-found",
+                     *       "title": "Not Found",
+                     *       "status": 404,
+                     *       "detail": "agentic payments are not enabled"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    readonly createScheduledPayment: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header: {
+                /** @description Unique key to ensure request idempotency. If the same key is used within a certain time window, the original response will be returned instead of executing the request again. */
+                readonly "x-idempotency-key": components["parameters"]["IdempotencyKeyHeader"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                /**
+                 * @example {
+                 *       "signer_id": "2vWxSigner000000000000000000",
+                 *       "wallet_id": "2vWxWallet000000000000000000",
+                 *       "destination_id": "2vWxDestination00000000000000",
+                 *       "amount": "10000",
+                 *       "asset": "USDC",
+                 *       "dates": [
+                 *         1781481600
+                 *       ]
+                 *     }
+                 */
+                readonly "application/json": components["schemas"]["CreateScheduledPaymentRequest"];
+            };
+        };
+        readonly responses: {
+            /** @description The scheduled payments that were created (one row per date) */
+            readonly 201: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "id": "2vWxScheduled000000000000000",
+                     *         "signer_id": "2vWxSigner000000000000000000",
+                     *         "wallet_id": "2vWxWallet000000000000000000",
+                     *         "amount": "10000",
+                     *         "asset": "USDC",
+                     *         "address": "0xa11ce00000000000000000000000000000000001",
+                     *         "network_id": "base-sepolia",
+                     *         "status": "scheduled",
+                     *         "scheduled_at": 1781481600
+                     *       }
+                     *     ]
+                     */
+                    readonly "application/json": readonly components["schemas"]["ScheduledPaymentResponse"][];
+                };
+            };
+            /** @description Invalid request */
+            readonly 400: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#invalid-identifier",
+                     *       "title": "Invalid Identifier",
+                     *       "status": 400,
+                     *       "detail": "exactly one of destination_id or address+network_id is required"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Agentic payments not enabled, or the resource was not found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#not-found",
+                     *       "title": "Not Found",
+                     *       "status": 404,
+                     *       "detail": "agentic payments are not enabled"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    readonly listMandates: {
+        readonly parameters: {
+            readonly query?: {
+                /** @description Only mandates whose bound signer belongs to this customer's agent. */
+                readonly customer_id?: string;
+                /** @description Only mandates bound to this signer. */
+                readonly signer_id?: string;
+                /** @description Comma-separated effective statuses to include, e.g. "active,expired". Allowed values: pending, active, expired, rejected, revoked, done. Omit for all. */
+                readonly status?: string;
+            };
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Mandates, newest first */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example [
+                     *       {
+                     *         "id": "2vWxMandate00000000000000000",
+                     *         "status": "active",
+                     *         "bound_signer_id": "2vWxSigner000000000000000000",
+                     *         "target_names": [
+                     *           "Alice"
+                     *         ],
+                     *         "rule": {
+                     *           "target_type": "recipient",
+                     *           "targets": [
+                     *             "2vWxRecipient000000000000000"
+                     *           ],
+                     *           "network_id": "base-sepolia",
+                     *           "asset": "USDC",
+                     *           "max_per_tx": "10000",
+                     *           "window": "MONTHLY",
+                     *           "max_count_per_target_in_window": 1
+                     *         },
+                     *         "valid_until": 1812931200,
+                     *         "approved_by_signer_id": "2vWxApprover0000000000000000",
+                     *         "approved_at": 1781280000
+                     *       }
+                     *     ]
+                     */
+                    readonly "application/json": readonly components["schemas"]["Mandate"][];
+                };
+            };
+            /** @description Invalid request */
+            readonly 400: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#invalid-request",
+                     *       "title": "Invalid Request",
+                     *       "status": 400,
+                     *       "detail": "unknown status \"frozen\" (want pending|active|expired|rejected|revoked|done)"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Agentic payments not enabled, or the resource was not found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#not-found",
+                     *       "title": "Not Found",
+                     *       "status": 404,
+                     *       "detail": "agentic payments are not enabled"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    readonly createMandate: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                /**
+                 * @example {
+                 *       "payment_agent_id": "2vWxAgent0000000000000000000",
+                 *       "rule": {
+                 *         "target_type": "recipient",
+                 *         "targets": [
+                 *           "Alice"
+                 *         ],
+                 *         "network_id": "base-sepolia",
+                 *         "asset": "USDC",
+                 *         "max_per_tx": "100",
+                 *         "window": "MONTHLY",
+                 *         "max_count_per_target_in_window": 1
+                 *       },
+                 *       "valid_until": 1798761599
+                 *     }
+                 */
+                readonly "application/json": components["schemas"]["CreateMandateRequest"];
+            };
+        };
+        readonly responses: {
+            /** @description The pending mandate, targets resolved to ids. */
+            readonly 201: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "id": "2vWxMandate00000000000000000",
+                     *       "status": "pending",
+                     *       "bound_signer_id": "2vWxSigner000000000000000000",
+                     *       "rule": {
+                     *         "target_type": "recipient",
+                     *         "targets": [
+                     *           "2vWxRecipient000000000000000"
+                     *         ],
+                     *         "network_id": "base-sepolia",
+                     *         "asset": "USDC",
+                     *         "max_per_tx": "100",
+                     *         "window": "MONTHLY",
+                     *         "max_count_per_target_in_window": 1
+                     *       },
+                     *       "valid_until": 1798761599
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["Mandate"];
+                };
+            };
+            /** @description Unresolvable target or invalid rule. */
+            readonly 400: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#invalid-request",
+                     *       "title": "Invalid Request",
+                     *       "status": 400,
+                     *       "detail": "target \"Bob\": recipient not found for this customer"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Agentic payments not enabled, or the resource was not found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#not-found",
+                     *       "title": "Not Found",
+                     *       "status": 404,
+                     *       "detail": "agent not found"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    readonly cancelScheduledPayment: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                readonly scheduled_payment_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The cancelled scheduled payment. */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "id": "2vWxScheduled000000000000000",
+                     *       "wallet_id": "2vWxWallet000000000000000000",
+                     *       "amount": "10000",
+                     *       "asset": "USDC",
+                     *       "address": "0xa11ce00000000000000000000000000000000001",
+                     *       "network_id": "base-sepolia",
+                     *       "status": "cancelled",
+                     *       "scheduled_at": 1781481600
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["ScheduledPaymentResponse"];
+                };
+            };
+            /** @description Unknown payment or not cancellable (executed, failed, or already cancelled). */
+            readonly 400: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#invalid-request",
+                     *       "title": "Invalid Request",
+                     *       "status": 400,
+                     *       "detail": "scheduled payment is executed, not cancellable"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Agentic payments not enabled, or the resource was not found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#not-found",
+                     *       "title": "Not Found",
+                     *       "status": 404,
+                     *       "detail": "agentic payments are not enabled"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    readonly getInstruction: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                readonly instruction_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Intent */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "id": "2vWxInstruction0000000000000",
+                     *       "payment_agent_id": "2vWxAgent0000000000000000000",
+                     *       "status": "executed",
+                     *       "actions": [
+                     *         {
+                     *           "type": "create_recipient",
+                     *           "create_recipient": {
+                     *             "name": "Alice"
+                     *           }
+                     *         }
+                     *       ],
+                     *       "downstream": [
+                     *         {
+                     *           "recipient_id": "2vWxRecipient000000000000000"
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["AgenticInstruction"];
+                };
+            };
+            /** @description Invalid request */
+            readonly 400: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#invalid-identifier",
+                     *       "title": "Invalid Identifier",
+                     *       "status": 400,
+                     *       "detail": "invalid instruction id"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Agentic payments not enabled, or the resource was not found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#not-found",
+                     *       "title": "Not Found",
+                     *       "status": 404,
+                     *       "detail": "agentic payments are not enabled"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    readonly getMandate: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                readonly mandate_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Mandate */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "id": "2vWxMandate00000000000000000",
+                     *       "status": "pending",
+                     *       "bound_signer_id": "2vWxSigner000000000000000000",
+                     *       "instruction_id": "2vWxInstruction0000000000000",
+                     *       "rule": {
+                     *         "target_type": "recipient",
+                     *         "targets": [
+                     *           "2vWxRecipient000000000000000"
+                     *         ],
+                     *         "network_id": "base-sepolia",
+                     *         "asset": "USDC",
+                     *         "max_per_tx": "10000",
+                     *         "window": "MONTHLY",
+                     *         "max_count_per_target_in_window": 1
+                     *       },
+                     *       "valid_until": 1798761599
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["Mandate"];
+                };
+            };
+            /** @description Invalid request */
+            readonly 400: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#invalid-identifier",
+                     *       "title": "Invalid Identifier",
+                     *       "status": 400,
+                     *       "detail": "invalid mandate id"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Agentic payments not enabled, or the resource was not found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#not-found",
+                     *       "title": "Not Found",
+                     *       "status": 404,
+                     *       "detail": "agentic payments are not enabled"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
             };
         };
     };

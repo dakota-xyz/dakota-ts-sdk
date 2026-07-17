@@ -402,8 +402,14 @@ export type SignerGroupCreateRequest = components['schemas']['SignerGroupCreateR
 /** Signer */
 export type Signer = components['schemas']['Signer'];
 
-/** Signer creation request */
+/** Signer creation request (POST /signers — creates a signer resource) */
 export type SignerCreateRequest = components['schemas']['SignerCreateRequest'];
+
+/**
+ * Signer group signer add request (POST /signer-groups/{id}/signers —
+ * adds an EXISTING signer's public key to a group).
+ */
+export type SignerGroupSignerAddRequest = components['schemas']['CreateSignerGroupSignerRequest'];
 
 // ============================================================================
 // API Key Types
@@ -903,10 +909,11 @@ export interface SelfServeCreditsLedgerParams {
  *
  * @example
  * ```typescript
- * // Use a custom idempotency key for replay safety
+ * // Use a custom idempotency key for replay safety (must be a valid UUID —
+ * // the platform rejects other formats with 400)
  * const tx = await client.transactions.create(
  *   { customer_id: '...', amount: '100.00', ... },
- *   { idempotencyKey: 'my-unique-key-123' }
+ *   { idempotencyKey: randomUUID() }
  * );
  * ```
  */
@@ -989,4 +996,113 @@ export interface TransactionListParams extends ListParams {
 /** Event list parameters */
 export interface EventListParams extends ListParams {
   event_type?: string;
+}
+
+// ============================================================================
+// Agentic Payments (ALPHA)
+// ============================================================================
+//
+// Agentic payments is an alpha surface (x-alpha, flag-gated on the platform)
+// and may change without a major-version bump.
+
+/** Payment agent (hosted signer that drafts payments on a customer's behalf) */
+export type PaymentAgent = components['schemas']['PaymentAgentResponse'];
+
+/** Payment agent creation request */
+export type PaymentAgentCreateRequest = components['schemas']['CreatePaymentAgentRequest'];
+
+/** Slim reference to a signer group an agent's signer still belongs to (returned by revoke). */
+export type PaymentAgentSignerGroupRef = components['schemas']['PaymentAgentSignerGroupRef'];
+
+/** A single reviewable action series drafted by an agent. */
+export type AgenticProposal = components['schemas']['AgenticProposal'];
+
+/** One tagged action inside an AgenticProposal. */
+export type AgenticAction = components['schemas']['AgenticAction'];
+
+/** Per-action downstream artifacts produced by actuation. */
+export type AgenticActionDownstream = components['schemas']['AgenticActionDownstream'];
+
+/** The result of POST /payment-agents/{id}/proposals. */
+export type AgenticProposalsResult = components['schemas']['AgenticProposalsResult'];
+
+/** Request body for POST /payment-agents/{id}/proposals. */
+export type CreateProposalsRequest = components['schemas']['CreateProposalsRequest'];
+
+/** Request body for POST /instructions. */
+export type CreateInstructionsRequest = components['schemas']['CreateInstructionsRequest'];
+
+/** A persisted, actuated instruction (the accepted proposal). */
+export type AgenticInstruction = components['schemas']['AgenticInstruction'];
+
+/** The result of POST /instructions — instruction_ids + the mandates the batch drafted. */
+export type AgenticInstructionsResult = components['schemas']['AgenticInstructionsResult'];
+
+/** A mandate — the §8 authorization a customer signs to arm scheduled payments. */
+export type Mandate = components['schemas']['Mandate'];
+
+/** Mandate rule — the spend authorization the customer approves. */
+export type MandateRule = components['schemas']['MandateRule'];
+
+/** Slim mandate response (approve/cancel). */
+export type MandateResponse = components['schemas']['MandateResponse'];
+
+/** Request body for POST /mandates — draft a mandate from a direct user interaction. */
+export type CreateMandateRequest = components['schemas']['CreateMandateRequest'];
+
+/** Request body for POST /mandates/{id}/approve. */
+export type ApproveMandateRequest = components['schemas']['ApproveMandateRequest'];
+
+/** Request body for POST /mandates/{id}/cancel. */
+export type CancelMandateRequest = components['schemas']['CancelMandateRequest'];
+
+/** A scheduled payment — bookkeeping row created by accepting an instruction. */
+export type ScheduledPayment = components['schemas']['ScheduledPaymentResponse'];
+
+/** Request body for POST /scheduled-payments — direct (signer-first) schedule create. */
+export type CreateScheduledPaymentRequest = components['schemas']['CreateScheduledPaymentRequest'];
+
+/** The customer's account insight report (deterministic, read-only). */
+export type InsightReport = components['schemas']['InsightReport'];
+
+/** One observation or suggestion inside an InsightReport. `kind` is an OPEN set. */
+export type InsightItem = components['schemas']['InsightItem'];
+
+/** Typed reference to the platform object an insight was computed from. */
+export type InsightEvidence = components['schemas']['InsightEvidence'];
+
+/** The typed-facts snapshot inside an InsightReport. */
+export type InsightSnapshot = components['schemas']['InsightSnapshot'];
+
+/** One conversation turn for the insight chat. */
+export type InsightChatMessage = components['schemas']['InsightChatMessage'];
+
+/** Request body for POST /customers/{id}/insights/chat (stateless; send the whole conversation). */
+export type InsightChatRequest = components['schemas']['InsightChatRequest'];
+
+/** The insight-chat assistant's reply. */
+export type InsightChatResponse = components['schemas']['InsightChatResponse'];
+
+/** Parameters for listing mandates. */
+export interface MandateListParams extends ListParams {
+  customer_id?: string;
+  signer_id?: string;
+  /**
+   * Effective status(es) to include. Accepts a single status or a
+   * comma-separated combination, e.g. 'active,expired'. Omit for all.
+   */
+  status?: NonNullable<Mandate['status']> | (string & NonNullable<unknown>);
+}
+
+/** Parameters for listing scheduled payments. */
+export interface ScheduledPaymentListParams extends ListParams {
+  customer_id?: string;
+  signer_id?: string;
+  wallet_id?: string;
+  mandate_id?: string;
+  /**
+   * Status(es) to include. Accepts a single status or a comma-separated
+   * combination, e.g. 'scheduled,executed'. Omit for all.
+   */
+  status?: NonNullable<ScheduledPayment['status']> | (string & NonNullable<unknown>);
 }

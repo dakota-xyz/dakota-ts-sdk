@@ -14,10 +14,12 @@ const SAFE_METHODS = new Set(['GET', 'HEAD', 'PUT', 'DELETE', 'OPTIONS']);
 /**
  * HTTP methods that accept an idempotency key. Dakota's spec marks
  * `IdempotencyKeyHeader` as required on every mutating endpoint, so the
- * SDK must forward it for POST, PUT, and PATCH. Earlier versions only
- * attached the header on POST and silently dropped it on PUT/PATCH.
+ * SDK must forward it for POST, PUT, PATCH, and DELETE. Earlier versions
+ * only attached the header on POST and silently dropped it on PUT/PATCH.
+ * DELETE is included because the platform's agentic detach endpoints
+ * (e.g. DELETE /signer-groups/{id}/signers/{signer_id}) 400 without one.
  */
-const IDEMPOTENT_METHODS = new Set(['POST', 'PUT', 'PATCH']);
+const IDEMPOTENT_METHODS = new Set(['POST', 'PUT', 'PATCH', 'DELETE']);
 
 /**
  * Request options for the transport layer.
