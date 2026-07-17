@@ -1087,7 +1087,11 @@ export type InsightChatResponse = components['schemas']['InsightChatResponse'];
 export interface MandateListParams extends ListParams {
   customer_id?: string;
   signer_id?: string;
-  status?: NonNullable<Mandate['status']>;
+  /**
+   * Effective status(es) to include. Accepts a single status or a
+   * comma-separated combination, e.g. 'active,expired'. Omit for all.
+   */
+  status?: NonNullable<Mandate['status']> | (string & NonNullable<unknown>);
 }
 
 /** Parameters for listing scheduled payments. */
@@ -1096,5 +1100,9 @@ export interface ScheduledPaymentListParams extends ListParams {
   signer_id?: string;
   wallet_id?: string;
   mandate_id?: string;
-  status?: NonNullable<ScheduledPayment['status']>;
+  /**
+   * Status(es) to include. Accepts a single status or a comma-separated
+   * combination, e.g. 'scheduled,executed'. Omit for all.
+   */
+  status?: NonNullable<ScheduledPayment['status']> | (string & NonNullable<unknown>);
 }
