@@ -2,7 +2,38 @@
 
 All notable changes to the Dakota TypeScript SDK are documented in this file.
 
-## [Unreleased]
+## [2.0.0] - 2026-07-17
+
+### ⚠️ Breaking — webhook envelope
+
+`WebhookEvent<T>` now mirrors the platform's real outbound envelope
+(`core.PublicEvent`): the resource lives under `data.object` (with
+optional `data.previous_attributes`), and the envelope carries `request`
+and `metadata`. Previously the SDK typed the payload flat under `data`,
+a shape the platform never sent — real deliveries could not be decoded
+as typed.
+
+Migration: read `event.data.object` where you read `event.data`.
+
+```typescript
+// before                       // after
+handler.on('customer.created',  handler.on('customer.created',
+  (e) => use(e.data));            (e) => use(e.data.object));
+```
+
+Also corrected to match the wire (verified against the platform event
+builders): `KybApplicationSubmittedData` (`type` → `application_type`,
+added `application_id`) and `KybLinkData` (added `link_type`, `status`;
+`expires_at` optional).
+
+### Added — webhooks
+
+- New event types + typed payloads: `scheduled_payment.failed`
+  (`ScheduledPaymentFailedData`), `customer.deleted`,
+  `customer.capability_status.updated` (+ `CapabilityRequirement`),
+  `fee_payout_destination.updated` / `.deleted`.
+- `parseEvent` treats an absent `data` / `data.object` as an empty object
+  instead of throwing.
 
 ### Added
 
