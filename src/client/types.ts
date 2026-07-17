@@ -909,10 +909,11 @@ export interface SelfServeCreditsLedgerParams {
  *
  * @example
  * ```typescript
- * // Use a custom idempotency key for replay safety
+ * // Use a custom idempotency key for replay safety (must be a valid UUID —
+ * // the platform rejects other formats with 400)
  * const tx = await client.transactions.create(
  *   { customer_id: '...', amount: '100.00', ... },
- *   { idempotencyKey: 'my-unique-key-123' }
+ *   { idempotencyKey: randomUUID() }
  * );
  * ```
  */

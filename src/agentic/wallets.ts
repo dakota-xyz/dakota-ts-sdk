@@ -51,10 +51,11 @@ import type { DakotaClient } from '../client/client.js';
  *   `paymentAgents.create` for a hosted agent
  * @param spendingGroupId - The signer group whose attached policies should
  *   govern the principal; must already be attached to `walletId`
- * @param options - Optional. Supply `idempotencyKey` to make the WHOLE
- *   helper safely retryable — a crashed or partitioned call replayed with
- *   the same key dedupes the underlying write server-side. Defaults to a
- *   fresh random key per call.
+ * @param options - Optional. Supply `idempotencyKey` (a valid UUID — the
+ *   platform rejects other formats with 400) to make the WHOLE helper
+ *   safely retryable — a crashed or partitioned call replayed with the
+ *   same key dedupes the underlying write server-side. Defaults to a
+ *   fresh random UUID per call.
  * @returns `{ alreadyMember }` — true when the signer was already a member
  *   (no write performed)
  */
@@ -118,9 +119,9 @@ export async function attachUserToWallet(
  * can authorize nothing even while still listed) and use this for
  * membership hygiene.
  *
- * @param options - Optional. Supply `idempotencyKey` to make the WHOLE
- *   helper safely retryable across crashes/partitions; defaults to a fresh
- *   random key per call.
+ * @param options - Optional. Supply `idempotencyKey` (a valid UUID) to
+ *   make the WHOLE helper safely retryable across crashes/partitions;
+ *   defaults to a fresh random UUID per call.
  */
 export async function detachUserFromWallet(
   client: DakotaClient,
