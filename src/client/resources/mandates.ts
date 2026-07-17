@@ -50,11 +50,14 @@ export class MandatesResource extends BaseResource {
    * Create a mandate directly.
    *
    * Drafts a PENDING mandate from a direct user interaction — no instruction
-   * back-link. The mandate binds the agent's signer; the rule is the one
-   * the customer will approve (via `approve`, a recognized signer other
-   * than the bound one, §8).
+   * back-link. Exactly one binding form names the signer the mandate binds:
+   * `payment_agent_id` (hosted convenience — binds that agent's signer and
+   * anchors to the agent's customer), or `signer_id` together with
+   * `customer_id` (any of the client's signers, BYO keys included). The rule
+   * is the one the customer will approve (via `approve`, a recognized signer
+   * other than the bound one, §8).
    *
-   * @param data - Payment agent id + rule + optional validity window
+   * @param data - One binding form + rule + optional validity window
    * @returns The drafted (pending) mandate
    */
   async create(data: CreateMandateRequest, options?: RequestOptions): Promise<Mandate> {

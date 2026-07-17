@@ -13486,13 +13486,17 @@ paths:
       summary: Create a mandate directly (ALPHA)
       description: >
         Drafts a PENDING mandate from a direct user interaction - no
-        instruction back-link. The mandate binds the agent's signer; the rule
-        is the one the customer will approve (POST
-        /mandates/{mandate_id}/approve, a recognized signer other than
+        instruction back-link. Exactly one binding form names the signer the
+        mandate binds: payment_agent_id (the hosted convenience - binds that
+        agent's signer and anchors the mandate to the agent's customer), or
+        signer_id together with customer_id (any of the client's signers, BYO
+        keys included; the customer anchors the recipient-target scope and
+        the §8 approver set). The rule is the one the customer will approve
+        (POST /mandates/{mandate_id}/approve, a recognized signer other than
         the bound one, §8). Recipient targets may be recipient ids or payee
-        names - names resolve to the customer's existing recipients before
-        anything is stored. Schedule payments under it by mandate_id; they
-        arm the moment it activates.
+        names - names resolve to the mandate's customer's existing recipients
+        before anything is stored. Schedule payments under it by mandate_id;
+        they arm the moment it activates.
       operationId: createMandate
       requestBody:
         required: true
@@ -15217,7 +15221,10 @@ components:
     AccountUpdateRequest:
       type: object
       title: Account Update Request
-      description: Unified account update request for onramp/offramp/swap.
+      description: >
+        Unified account update request for onramp/offramp/swap.
+        `developer_fee_bps` is also updatable and applies to future
+        transactions only; existing transactions are unaffected.
       required:
         - account_type
       properties:
@@ -15227,6 +15234,17 @@ components:
           $ref: '#/components/schemas/KSUID'
         fiat_destination_id:
           $ref: '#/components/schemas/KSUID'
+        developer_fee_bps:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 10000
+          description: >-
+            Developer fee (client revenue share) in basis points. When set,
+            updates the fee applied to FUTURE transactions on this account;
+            existing transactions are unaffected. Routing fields remain
+            immutable.
+          example: 50
         destination_network_id:
           $ref: '#/components/schemas/NetworkId'
         destination_asset:
@@ -20026,11 +20044,30 @@ components:
 
     CreateMandateRequest:
       type: object
-      required: [payment_agent_id, rule]
+      required: [rule]
+      description: >
+        Exactly one binding form is required - payment_agent_id alone, or
+        signer_id together with customer_id. Any other combination is
+        rejected with 400.
       properties:
         payment_agent_id:
           type: string
-          description: The mandate binds this agent's signer.
+          description: >
+            Binding form A (hosted convenience) - the mandate binds this
+            agent's signer and anchors to the agent's customer. Mutually
+            exclusive with signer_id/customer_id.
+        signer_id:
+          type: string
+          description: >
+            Binding form B - the mandate binds this signer directly (any of
+            the client's signers, not only an agent's). Requires customer_id.
+        customer_id:
+          type: string
+          description: >
+            Binding form B - the customer the mandate is anchored to; must
+            belong to the calling client. Defines the recipient-target scope
+            and the §8 approver set (approval requires a recognized signer of
+            THIS customer other than the bound one). Requires signer_id.
         rule:
           $ref: "#/components/schemas/MandateRule"
         valid_from:
@@ -20192,6 +20229,13 @@ components:
             cannot be approved; it can still be cancelled.
         bound_signer_id:
           type: string
+        customer_id:
+          type: string
+          description: >
+            The customer this mandate is anchored to - approval requires a
+            recognized signer of this customer other than the bound one (§8),
+            and recipient targets belong to it. Absent only on rows created
+            before the anchor existed.
         target_names:
           type: array
           items:

@@ -259,7 +259,7 @@ export interface CustomerCapabilityStatusUpdatedData {
  * Fee Payout Destination Updated event data.
  */
 export interface FeePayoutDestinationUpdatedData {
-  /** The destination kind, e.g. 'us_bank_account' or 'usdc_wallet' */
+  /** The destination kind — 'usdc_wallet' (developer-fee payouts are crypto-only) */
   type: string;
 }
 
