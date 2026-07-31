@@ -4,7 +4,7 @@
  * These types provide a cleaner interface over the generated OpenAPI types.
  */
 
-import type { components } from '../generated/api.js';
+import type { components, operations } from '../generated/api.js';
 
 // ============================================================================
 // Core Types
@@ -92,6 +92,67 @@ export interface BulkImportSumsubTokensResponse {
   failed?: number;
   results?: BulkImportSumsubTokensResult[];
 }
+
+/**
+ * Request body for importing customers from Persona Connect share tokens.
+ *
+ * Up to 5,000 tokens per request — split larger migrations into multiple
+ * batches, each of which returns its own job.
+ */
+export interface ImportPersonaTokensRequest {
+  /** Persona Connect share tokens (`cnst_...`) to import */
+  tokens: string[];
+}
+
+/**
+ * The queued job returned by `importPersonaTokens`.
+ *
+ * `skipped` entries are token STRINGS that could not be queued (malformed,
+ * duplicated within the batch, or already imported) — never a compliance
+ * decision about a person or application.
+ */
+export type ImportPersonaTokensResponse =
+  operations['importPersonaTokens']['responses'][202]['content']['application/json'];
+
+/** Summary row for a Persona share-token import job. */
+export type PersonaImportJobSummary = components['schemas']['PersonaImportJobSummary'];
+
+/** One page of Persona import jobs (this endpoint pages on its own cursor). */
+export type PersonaImportJobsPage =
+  operations['listPersonaImportJobs']['responses'][200]['content']['application/json'];
+
+/** Per-token outcome inside a Persona import job. */
+export type PersonaImportRowResult = components['schemas']['PersonaImportRowResult'];
+
+/** A Persona import job with its per-token results (one page of rows). */
+export type PersonaImportJob =
+  operations['getPersonaImportJob']['responses'][200]['content']['application/json'];
+
+/** Parameters for listing Persona import jobs (newest first). */
+export interface PersonaImportJobListParams {
+  limit?: number;
+  /** Job ID cursor; returns jobs created before it */
+  starting_after?: string;
+}
+
+/** Parameters for paging the result rows of a single Persona import job. */
+export interface PersonaImportJobParams {
+  results_limit?: number;
+  /** Row-index cursor; returns rows with a greater index */
+  results_after_index?: number;
+}
+
+/** A customer's capabilities and the outstanding requirements to unlock each. */
+export type CustomerCapabilities = components['schemas']['CustomerCapabilities'];
+
+/** One rail/capability and what the customer must do to unlock it. */
+export type Capability = components['schemas']['Capability'];
+
+/** A single outstanding requirement (terms to accept, or a document to upload). */
+export type CapabilityRequirement = components['schemas']['CapabilityRequirement'];
+
+/** A freshly minted application link for re-engaging an approved customer. */
+export type CustomerReEngagementResponse = components['schemas']['CustomerReEngagementResponse'];
 
 // ============================================================================
 // Recipient Types
@@ -410,6 +471,16 @@ export type SignerCreateRequest = components['schemas']['SignerCreateRequest'];
  * adds an EXISTING signer's public key to a group).
  */
 export type SignerGroupSignerAddRequest = components['schemas']['CreateSignerGroupSignerRequest'];
+
+/** Parameters for getting a single signer group. */
+export interface SignerGroupGetParams {
+  /**
+   * When true, the response also carries a `removed_members` array of signers
+   * that were removed from this group (each with its `removed_at`).
+   * Defaults to false — active members only.
+   */
+  include_removed?: boolean;
+}
 
 // ============================================================================
 // API Key Types
@@ -899,6 +970,24 @@ export interface SelfServeCreditsLedgerParams {
 }
 
 // ============================================================================
+// Fee Payout Destination Types
+// ============================================================================
+
+/**
+ * The destination Dakota pays accrued developer fees to.
+ *
+ * Exactly one exists per organization, and it is crypto-only (a USDC wallet).
+ */
+export type FeePayoutDestination = components['schemas']['FeePayoutDestination'];
+
+/** Request body for `PUT /fee-payout-destination` (register or replace). */
+export type PutFeePayoutDestinationRequest =
+  components['schemas']['PutFeePayoutDestinationRequest'];
+
+/** A USDC wallet payout destination — CAIP-2 chain id + address. */
+export type UsdcWalletPayoutDestination = components['schemas']['UsdcWalletPayoutDestination'];
+
+// ============================================================================
 // Request Options
 // ============================================================================
 
@@ -1055,6 +1144,26 @@ export type ApproveMandateRequest = components['schemas']['ApproveMandateRequest
 
 /** Request body for POST /mandates/{id}/cancel. */
 export type CancelMandateRequest = components['schemas']['CancelMandateRequest'];
+
+/** Request body for POST /mandates/{id}/amend — a signed NEW version of the rule. */
+export type AmendMandateRequest = components['schemas']['AmendMandateRequest'];
+
+/** One immutable, independently signed version of a mandate's rule. */
+export type MandateVersion = components['schemas']['MandateVersion'];
+
+/**
+ * A mandate's remaining spend budget at a point in time.
+ *
+ * Advisory: nothing here reserves budget, and the mandate gate remains the
+ * authority at fire time.
+ */
+export type MandateBudget = components['schemas']['MandateBudget'];
+
+/** One budget line — a window bucket, what it has spent, and what is left. */
+export type MandateBudgetLine = components['schemas']['MandateBudgetLine'];
+
+/** Live snapshot of an in-flight proposal-drafting turn (advisory display only). */
+export type AgenticProposalsProgress = components['schemas']['AgenticProposalsProgress'];
 
 /** A scheduled payment — bookkeeping row created by accepting an instruction. */
 export type ScheduledPayment = components['schemas']['ScheduledPaymentResponse'];

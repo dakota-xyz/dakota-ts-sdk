@@ -38,6 +38,7 @@ src/
 │       ├── users.ts         # Users API
 │       ├── webhooks.ts      # Webhooks API
 │       ├── info.ts          # Capabilities Info API
+│       ├── fee-payout-destination.ts # Developer-fee payout destination
 │       └── sandbox.ts       # Sandbox Simulation API
 ├── generated/
 │   └── api.ts               # Generated from OpenAPI (don't edit manually)
@@ -68,13 +69,20 @@ client.{resource}.delete(id)           // Deletes item (not all resources)
 ```
 
 **Resources WITHOUT update():** policies, signerGroups, destinations, apiKeys, autoTransactions, signers
-**Resources WITHOUT delete():** customers, transactions, autoTransactions
+**Resources WITHOUT delete():** transactions, autoTransactions
 **Read-only resources:** autoTransactions (list + get only), info (getCountries + getNetworks only)
 
 ### Additional Resources
 - `client.autoTransactions` - List and get automated transactions (created from accounts)
 - `client.signers` - Manage individual signers (create, delete)
 - `client.selfServe` - Self-serve credits (purchaseCredits, getBalance, listLedger, listTiers)
+- `client.feePayoutDestination` - Developer-fee payout destination (get, set, delete). One per
+  organization, crypto-only (USDC wallet)
+- `client.customers` also carries the onboarding-adjacent surface: `getCapabilities`, `reEngage`,
+  `bulkImportFromSumsubTokens` (synchronous) and `importPersonaTokens` /
+  `listPersonaImportJobs` / `getPersonaImportJob` (asynchronous job)
+- `client.mandates` (ALPHA) carries `amend` / `listVersions` / `getBudget` alongside
+  approve/cancel — see `mandateAmendSignPayload` for the amend signing bytes
 
 ### For Environment Questions
 - Default: Sandbox (`https://api.platform.sandbox.dakota.xyz`)

@@ -7,6 +7,7 @@
 
 export {
   AgentConversation,
+  type AgentConversationOptions,
   type Attachment,
   type AttachmentMediaType,
   type ChatMessage,
@@ -25,6 +26,7 @@ export {
   deletePolicyPayload,
   detachGroupPayload,
   detachPolicyPayload,
+  mandateAmendSignPayload,
   mandateSignPayload,
   removePolicyRulePayload,
   updatePolicyRulePayload,

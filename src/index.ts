@@ -75,6 +75,7 @@ export {
   InfoResource,
   SandboxResource,
   SelfServeResource,
+  FeePayoutDestinationResource,
   PaymentAgentsResource,
   InstructionsResource,
   MandatesResource,
@@ -86,6 +87,7 @@ export {
 // Agentic Payments (ALPHA) high-level helpers
 export {
   AgentConversation,
+  type AgentConversationOptions,
   type Attachment,
   type AttachmentMediaType,
   type ChatMessage,
@@ -101,6 +103,7 @@ export {
   deletePolicyPayload,
   detachGroupPayload,
   detachPolicyPayload,
+  mandateAmendSignPayload,
   mandateSignPayload,
   removePolicyRulePayload,
   updatePolicyRulePayload,

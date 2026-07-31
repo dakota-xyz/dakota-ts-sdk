@@ -201,8 +201,18 @@ export class ApplicationsResource extends BaseResource {
   /**
    * Submit an attestation for an application.
    *
+   * Additionally supplying `disclosure_id` (a terms key the provider
+   * declared, e.g. `partner_disclosures`) and `disclosure_version` records the
+   * attestation as a PARTNER DISCLOSURE acknowledgment instead of a standard
+   * onboarding one: acceptance is stamped `customer_online`, the
+   * partner-onboarding substatus advances, and an already-approved
+   * application is reprovisioned. The API stays partner-agnostic — callers
+   * supply a terms key and version, never a partner name. Get the outstanding
+   * ones from `customers.getCapabilities(customerId)`.
+   *
    * @param applicationId - Application ID
-   * @param data - Attestation data (type, timestamp, applicant_id)
+   * @param data - Attestation data (type, timestamp, applicant_id), plus
+   *   `disclosure_id` + `disclosure_version` to accept a partner disclosure
    */
   async submitAttestation(
     applicationId: string,

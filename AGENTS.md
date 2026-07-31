@@ -56,6 +56,69 @@ const all = await client.customers.list().toArray();
 
 // Get single customer
 const customer = await client.customers.get('cust_abc123');
+
+// Delete a customer (soft delete; 409 if it still has accounts or is
+// referenced as a sub-client)
+await client.customers.delete('cust_abc123');
+
+// What rails can this customer use, and what is still blocking each?
+// Partner-agnostic: requirements are keyed by an opaque terms id or
+// document type, never a provider or partner name.
+const { capabilities } = await client.customers.getCapabilities(customerId);
+for (const cap of capabilities) {
+  if (cap.status !== 'action_required') continue;
+  for (const req of cap.requirements) {
+    console.log(`${cap.capability}: ${req.title} → ${req.url}`);
+  }
+}
+
+// Re-engage an APPROVED customer whose onboarding token expired — mints a
+// fresh application_url for the hosted terms-acceptance flow.
+const { application_url } = await client.customers.reEngage(customerId);
+```
+
+#### Importing existing customers
+
+Two import paths, and they behave differently. Sumsub redeems synchronously
+and returns per-token results in the response. Persona redemption is
+asynchronous on Persona's side, so it returns a JOB you poll.
+
+```typescript
+// Sumsub — synchronous
+const result = await client.customers.bulkImportFromSumsubTokens({
+  tokens: ['_act-sbx-jwt-...', '_act-sbx-jwt-...'],
+});
+
+// Persona Connect share tokens (cnst_...) — asynchronous, up to 5,000/request
+const job = await client.customers.importPersonaTokens({
+  tokens: ['cnst_ABC123def456', 'cnst_GHI789jkl012'],
+});
+console.log(`${job.accepted}/${job.total} queued as ${job.job_id}`);
+
+// `skipped` is about the token STRING (malformed, duplicated in the batch,
+// or already imported) — never a compliance decision about a person.
+for (const s of job.skipped ?? []) {
+  console.warn(`token #${s.index} skipped: ${s.reason}`);
+}
+
+// Poll for per-token results. Rows page on a row-index cursor.
+let after: number | undefined;
+for (;;) {
+  const status = await client.customers.getPersonaImportJob(job.job_id!, {
+    results_after_index: after,
+  });
+  for (const row of status.results ?? []) {
+    // in flight: queued, inquiry_created, redeem_requested, redeemed, finalizing
+    // terminal:  succeeded, failed, expired, stuck, cancelled
+    if (row.state === 'succeeded') console.log(row.customer_id, row.application_id);
+    if (row.state === 'failed') console.error(row.token, row.error_code, row.error);
+    after = row.index;
+  }
+  if (!status.has_more_results) break;
+}
+
+// List past import jobs (own cursor — `starting_after` + `has_more`)
+const { jobs, has_more } = await client.customers.listPersonaImportJobs({ limit: 20 });
 ```
 
 ### Recipients
@@ -402,6 +465,16 @@ const groupWallets = await client.signerGroups.getWallets(groupId);
 for (const w of groupWallets) {
   console.log(w.id, w.name, w.family);
 }
+
+// Get a group including the signers that were REMOVED from it
+const withHistory = await client.signerGroups.get(groupId, { include_removed: true });
+for (const s of withHistory.removed_members ?? []) {
+  console.log(s.name, 'removed at', s.removed_at);
+}
+
+// Remove a signer from a group — takes the KSUID `signer_id`, NOT the
+// public key (client.signers.delete() is the one that takes a public key).
+await client.signerGroups.removeSigner(groupId, signerId);
 ```
 
 ### Signers
@@ -550,8 +623,20 @@ await client.detachUserFromWallet(walletId, agent.signer_public_key!, spendingGr
 // Both accept { idempotencyKey } as a final options arg for durable retries.
 
 // Draft payments from natural language (stateless multi-turn chat).
+// Send `timezone` on EVERY turn (the server is stateless) so "tomorrow" and
+// "10 am" resolve in the customer's local time rather than UTC.
 const conv = client.newAgentConversation(agent.id!);
-const turn = await conv.send('Pay Alice 100 USDC on base-mainnet every month');
+
+// A multi-payee turn legitimately runs minutes. Poll for a progress line to
+// show under the spinner — advisory display ONLY, never gate behaviour on it.
+const poll = setInterval(async () => {
+  const p = await client.paymentAgents.getProposalsProgress(agent.id!);
+  if (p.active) console.log(`${p.phase}: ${p.detail}`);
+}, 3000);
+
+const turn = await conv
+  .send('Pay Alice 100 USDC on base-mainnet every month')
+  .finally(() => clearInterval(poll));
 if (turn.hasProposals) {
   // Accept proposals -> persisted instructions (+ drafted mandates to sign).
   const result = await client.instructions.create({
@@ -572,6 +657,47 @@ if (turn.hasProposals) {
 // Inspect schedules; cancel one.
 for await (const sp of client.scheduledPayments.list({ customer_id: customerId })) {
   console.log(sp.status, sp.amount, sp.asset);
+  // Audit stamp: mandate_id alone no longer identifies the caps the payment
+  // was judged against — a mandate's rule can be amended — so mandate_version
+  // rides along. Resolve it via mandates.listVersions().
+  console.log(sp.mandate_id, sp.mandate_version);
+}
+
+// BEFORE scheduling: how much of the standing limit is actually left?
+// Without this, an over-budget payment is only discovered when the gate
+// denies it at its due date — days later, with the payee unpaid.
+const budget = await client.mandates.getBudget(mandateId);
+for (const line of [...budget.per_target, ...budget.aggregate]) {
+  // ABSENT remaining_* means "not capped", never "nothing left".
+  // remaining_amount === '?' means the figure could not be summed and MUST
+  // be treated as NO headroom — the gate fails closed on the same data.
+  console.log(line.target || '(all payees)', line.bucket, line.remaining_amount ?? 'uncapped');
+}
+
+// Amend a mandate: append a NEW signed version WITHOUT resetting the spend
+// already made in the current window. Usage accrues to the MANDATE, so an
+// agent that has spent 9,000 of a 10,000 monthly cap and is amended to
+// 20,000 has 11,000 left — not 20,000. (Cancel-then-create silently gave a
+// fresh budget; this is why amend exists.)
+//
+// The rule is stored and verified VERBATIM — the endpoint never normalizes
+// it. It must already be canonical: `window` present (send 'NONE' for a
+// lifetime window), `targets` as recipient ids, `asset` uppercase. And
+// target_type/window/asset/network_id must match the current version — only
+// the amount fields and targets may differ.
+const m = await client.mandates.get(mandateId);
+const nextVersion = (m.version ?? 1) + 1;
+const newRule = { ...m.rule!, max_amount_in_window: '20000' };
+await client.mandates.amend(mandateId, {
+  signer_public_key: signer.publicKeyBase64(),
+  // Commits to the VERSION, so a v2 signature can never be replayed as v3.
+  signature: signer.sign(mandateAmendSignPayload(m, nextVersion, newRule)),
+  rule: newRule,
+});
+
+// Append-only version history — what makes a payment's mandate_version legible.
+for (const v of await client.mandates.listVersions(mandateId)) {
+  console.log(v.version, v.approved_by_signer_id, v.rule?.max_amount_in_window);
 }
 
 // Read-only account insights + advisory chat.

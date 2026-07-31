@@ -72,6 +72,33 @@ describe('AgentConversation.send', () => {
     expect(messagesOf(requests[2])).toHaveLength(5);
   });
 
+  it('resends the timezone on EVERY turn (the endpoint is stateless), and omits it when unset', async () => {
+    const { fetch, requests } = createRoutedFetch({
+      [`POST ${PROPOSALS_PATH}`]: () => ({ status: 200, body: { reply: 'ok' } }),
+    });
+    const client = makeClient(fetch as unknown as typeof globalThis.fetch);
+
+    const zoned = client.newAgentConversation(AGENT_ID, { timezone: 'America/Los_Angeles' });
+    await zoned.send('pay alice tomorrow');
+    await zoned.send('make it friday');
+    expect(timezoneOf(requests[0])).toBe('America/Los_Angeles');
+    expect(timezoneOf(requests[1])).toBe('America/Los_Angeles');
+
+    // A resumed conversation carries the transcript, not the zone — so the
+    // caller must pass it again, and does.
+    const resumed = client.resumeAgentConversation(AGENT_ID, zoned.messages(), {
+      timezone: 'Europe/Berlin',
+    });
+    await resumed.send('and one on monday');
+    expect(timezoneOf(requests[2])).toBe('Europe/Berlin');
+
+    // Unset means UTC resolution server-side — the key must be absent, not
+    // sent as an empty string.
+    const plain = client.newAgentConversation(AGENT_ID);
+    await plain.send('pay alice');
+    expect(timezoneOf(requests[3])).toBeUndefined();
+  });
+
   it('rolls back the optimistic user turn on error (retry does not duplicate)', async () => {
     const { fetch } = createRoutedFetch({
       [`POST ${PROPOSALS_PATH}`]: () => ({
@@ -117,6 +144,11 @@ describe('AgentConversation.send', () => {
     expect(secondBody).not.toContain(wantBase64);
   });
 });
+
+function timezoneOf(req: RecordedRequest | undefined): string | undefined {
+  if (!req || !req.body || typeof req.body !== 'object') return undefined;
+  return (req.body as { timezone?: string }).timezone;
+}
 
 function messagesOf(req: RecordedRequest | undefined): { role: string; content: string }[] {
   if (!req || !req.body || typeof req.body !== 'object') return [];
