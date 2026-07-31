@@ -2,6 +2,90 @@
 
 All notable changes to the Dakota TypeScript SDK are documented in this file.
 
+## [2.1.0] - 2026-07-31
+
+Spec sync with platform `main` (`openapi.public.yaml`). No breaking
+changes to the SDK surface.
+
+### Added — onboarding
+
+- **Persona Connect imports.** `customers.importPersonaTokens(data)`
+  redeems `cnst_...` share tokens (up to 5,000 per request). Unlike the
+  Sumsub import, Persona redemption is asynchronous on Persona's side,
+  so this returns a JOB (HTTP 202) rather than per-token results —
+  poll it with `customers.getPersonaImportJob(jobId, params?)`, and list
+  past runs with `customers.listPersonaImportJobs(params?)`. A `skipped`
+  entry is about the token STRING (malformed, duplicated in the batch,
+  already imported), never a compliance decision about a person.
+- `customers.getCapabilities(id)` — the customer's rails and the
+  OUTSTANDING requirements gating each. Partner-agnostic: keyed by an
+  opaque terms id or document type, never a provider name.
+- `customers.reEngage(id)` — mint a fresh `application_url` for an
+  approved customer whose onboarding token expired.
+- `customers.delete(id)` — soft delete; blocked while the customer has
+  accounts or is referenced as a sub-client.
+- `applications.submitAttestation` accepts `disclosure_id` +
+  `disclosure_version` to record a partner-disclosure acknowledgment.
+
+### Added — fees
+
+- `client.feePayoutDestination` (`get` / `set` / `delete`) — where
+  Dakota pays your accrued developer fees. One per organization, and
+  crypto-only (a USDC wallet, CAIP-2 chain id). Emits
+  `fee_payout_destination.updated` / `.deleted`.
+
+### Added — agentic payments (ALPHA)
+
+- **Mandate versions.** `mandates.amend(id, data)` appends a NEW signed
+  version of the rule WITHOUT resetting the spend already made in the
+  current window — usage accrues to the mandate, so an agent that has
+  spent 9,000 of a 10,000 monthly cap and is amended to 20,000 has
+  11,000 left. `mandates.listVersions(id)` returns the append-only
+  history. Sign with the new `mandateAmendSignPayload(mandate, version,
+  rule)`, which commits to the version being created so a v2 signature
+  can never be replayed as v3. The amend endpoint does NOT normalize the
+  rule — it must already be canonical.
+- `mandates.getBudget(id)` — what has been spent, what scheduled
+  payments have earmarked, and what is left. Advisory. An absent
+  `remaining_*` means "not capped"; a `remaining_amount` of `'?'` means
+  the figure could not be summed and must be treated as no headroom.
+- `paymentAgents.getProposalsProgress(id)` — a coarse, customer-safe
+  progress snapshot to show while a multi-payee drafting turn runs.
+  Advisory display only; never gate behaviour on it.
+- `AgentConversation` takes `{ timezone }` (IANA), resent on every turn
+  since the endpoint is stateless, so "tomorrow" and "10 am" resolve in
+  the customer's local time rather than UTC. Pass it to
+  `newAgentConversation` / `resumeAgentConversation`.
+- `MandateRule` gains a `DAILY` window plus the AGGREGATE caps
+  `max_amount_in_window` / `max_count_in_window` — the ceiling across ALL
+  targets. A per-target cap alone multiplies by the number of payees.
+- `ScheduledPayment` carries `mandate_version`, the audit stamp naming
+  which version authorized the payment.
+- `conversation_status` gains `rejected_input` — the message was refused
+  wholesale and should NOT be added to the conversation history.
+
+### Added — core
+
+- `signerGroups.get(id, { include_removed: true })` returns a
+  `removed_members` array, each entry carrying its `removed_at`.
+- `accounts.create` accepts `max_transactions` (cap the number of
+  sweeps; `1` makes a one-off account) and an account-level
+  `payment_reference` carried on every outbound fiat sweep.
+- `fednow` joins the `PaymentCapability` rails, and `fednow_inbound`
+  the sandbox inbound simulations.
+- `Customer` exposes `external_id` and `rd_allowed`.
+
+### Changed
+
+- `signerGroups.removeSigner(groupId, signerId)` takes the KSUID
+  `signer_id` — `client.signers.delete()` is the one that takes a public
+  key. (Documentation only; the call was already correct.)
+- `customers.updateSubClient` is deprecated: the sub-client association
+  can only be set at creation and now 400s.
+- ACH `payment_reference` limit is 18 characters, not 10.
+- WebAuthn signer keys are restricted to ES256 (COSE `-7`) and RS256
+  (COSE `-257`).
+
 ## [2.0.0] - 2026-07-17
 
 ### ⚠️ Breaking — webhook envelope

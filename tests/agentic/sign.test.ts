@@ -16,6 +16,7 @@ import {
   deletePolicyPayload,
   detachGroupPayload,
   detachPolicyPayload,
+  mandateAmendSignPayload,
   mandateSignPayload,
   P256MandateSigner,
   removePolicyRulePayload,
@@ -27,6 +28,13 @@ import {
 // approval bytes for goldenMandate(). Must match byte-for-byte.
 const GOLDEN_MANDATE_APPROVE_PAYLOAD =
   '{"action":"approve","bound_signer":"signer_2eFgHiJkLmNoPqRsTuVwXyZabcd","id":"mandate_2cDeFgHiJkLmNoPqRsTuVwXyZab","rule":{"asset":"USDC","max_count_per_target_in_window":1,"max_per_tx":"10","network_id":"base-sepolia","target_type":"recipient","targets":["recipient_2aBcDeFgHiJkLmNoPqRsTuVwXyZ"],"window":"MONTHLY"},"valid_from":0,"valid_until":1798675200}';
+
+// Golden mandate AMEND payload (ENG-2977): the approve bytes with the verb
+// swapped and ONE extra key, `version` — the version the amend creates, which
+// is what stops a v2 signature from being replayed as v3. Captured verbatim
+// from the platform's `MandateAmendPayload` for goldenMandate() at version 2.
+const GOLDEN_MANDATE_AMEND_PAYLOAD =
+  '{"action":"amend","bound_signer":"signer_2eFgHiJkLmNoPqRsTuVwXyZabcd","id":"mandate_2cDeFgHiJkLmNoPqRsTuVwXyZab","rule":{"asset":"USDC","max_count_per_target_in_window":1,"max_per_tx":"10","network_id":"base-sepolia","target_type":"recipient","targets":["recipient_2aBcDeFgHiJkLmNoPqRsTuVwXyZ"],"window":"MONTHLY"},"valid_from":0,"valid_until":1798675200,"version":2}';
 
 function goldenMandate(): Mandate {
   return {
@@ -63,6 +71,46 @@ describe('mandateSignPayload', () => {
 
   it('rejects a mandate with no id / bound_signer / rule', () => {
     expect(() => mandateSignPayload({} as Mandate, 'approve')).toThrow();
+  });
+});
+
+describe('mandateAmendSignPayload', () => {
+  it('reproduces the platform golden amend payload byte-for-byte', () => {
+    const m = goldenMandate();
+    const bytes = mandateAmendSignPayload(m, 2, m.rule!);
+    expect(decoder.decode(bytes)).toBe(GOLDEN_MANDATE_AMEND_PAYLOAD);
+  });
+
+  it('signs the NEW rule, not the mandate’s current one', () => {
+    const m = goldenMandate();
+    const next = { ...m.rule!, max_per_tx: '25' };
+    const bytes = decoder.decode(mandateAmendSignPayload(m, 2, next));
+    expect(bytes).toContain('"max_per_tx":"25"');
+    expect(bytes).not.toContain('"max_per_tx":"10"');
+  });
+
+  it('commits to the version, so a v2 signature cannot be replayed as v3', () => {
+    const m = goldenMandate();
+    const v2 = decoder.decode(mandateAmendSignPayload(m, 2, m.rule!));
+    const v3 = decoder.decode(mandateAmendSignPayload(m, 3, m.rule!));
+    expect(v2).not.toBe(v3);
+  });
+
+  it('is never byte-identical to an approve or cancel over the same rule', () => {
+    const m = goldenMandate();
+    const amend = decoder.decode(mandateAmendSignPayload(m, 2, m.rule!));
+    expect(amend).not.toBe(decoder.decode(mandateSignPayload(m, 'approve')));
+    expect(amend).not.toBe(decoder.decode(mandateSignPayload(m, 'cancel')));
+  });
+
+  it('rejects a version below 2 — v1 is created, never amended', () => {
+    const m = goldenMandate();
+    expect(() => mandateAmendSignPayload(m, 1, m.rule!)).toThrow();
+    expect(() => mandateAmendSignPayload(m, 0, m.rule!)).toThrow();
+  });
+
+  it('rejects a mandate with no id / bound_signer', () => {
+    expect(() => mandateAmendSignPayload({} as Mandate, 2, goldenMandate().rule!)).toThrow();
   });
 });
 

@@ -8,12 +8,15 @@
 import { BaseResource } from './base.js';
 import { PaginatedIterator } from '../pagination.js';
 import type {
+  AmendMandateRequest,
   ApproveMandateRequest,
   CancelMandateRequest,
   CreateMandateRequest,
   Mandate,
+  MandateBudget,
   MandateListParams,
   MandateResponse,
+  MandateVersion,
   RequestOptions,
 } from '../types.js';
 
@@ -112,6 +115,109 @@ export class MandatesResource extends BaseResource {
       path: `/mandates/${mandateId}/cancel`,
       body: data,
       idempotencyKey: options?.idempotencyKey,
+    });
+  }
+
+  /**
+   * Amend a mandate — append a new signed version of its rule.
+   *
+   * Carries a changed rule into force with ONE signature and WITHOUT resetting
+   * the spend already made in the current window: usage accrues to the
+   * MANDATE, so an agent that has spent 9,000 of a 10,000 monthly limit and is
+   * amended to 20,000 has 11,000 left, not 20,000.
+   *
+   * The `rule` is stored and verified VERBATIM — this endpoint does not
+   * normalize it. It must already be canonical: `window` present and non-empty
+   * (send `'NONE'` for a lifetime window), `targets` as recipient ids rather
+   * than payee names, and `asset` uppercase. `target_type`, `window`, `asset`
+   * and `network_id` must also match the current version exactly; only the
+   * amount fields and `targets` may differ. Anything else is a 400 naming the
+   * offending field.
+   *
+   * Build `signature` from `mandateAmendSignPayload(mandate, version, rule)` —
+   * the amend payload commits to the version being created, so a signature for
+   * v2 can never be replayed to append v3.
+   *
+   * @param mandateId - Mandate ID
+   * @param data - Amending signer public key + signature + the complete NEW rule
+   * @returns The mandate at its new current version
+   *
+   * @example
+   * ```typescript
+   * const mandate = await client.mandates.get(mandateId);
+   * const nextVersion = (mandate.version ?? 1) + 1;
+   * const rule = { ...mandate.rule, max_amount_in_window: '20000' };
+   * const payload = mandateAmendSignPayload(mandate, nextVersion, rule);
+   *
+   * const amended = await client.mandates.amend(mandateId, {
+   *   signer_public_key: signer.publicKeyBase64(),
+   *   signature: await signer.sign(payload),
+   *   rule,
+   * });
+   * ```
+   */
+  async amend(
+    mandateId: string,
+    data: AmendMandateRequest,
+    options?: RequestOptions
+  ): Promise<Mandate> {
+    return this.transport.request<Mandate>({
+      method: 'POST',
+      path: `/mandates/${mandateId}/amend`,
+      body: data,
+      idempotencyKey: options?.idempotencyKey,
+    });
+  }
+
+  /**
+   * List a mandate's versions, oldest first.
+   *
+   * The append-only history of every rule that was ever in force under this
+   * mandate, and the §8 signer that put each one there. Versions are
+   * immutable, so a rule listed here never changes — this is what makes an
+   * executed payment's `mandate_version` audit stamp legible.
+   *
+   * @param mandateId - Mandate ID
+   * @returns Every version, oldest first
+   */
+  async listVersions(mandateId: string): Promise<MandateVersion[]> {
+    return this.transport.request<MandateVersion[]>({
+      method: 'GET',
+      path: `/mandates/${mandateId}/versions`,
+    });
+  }
+
+  /**
+   * Get a mandate's remaining budget right now.
+   *
+   * The mandate's `rule` gives the ceilings; this gives the CONSUMPTION — what
+   * has already been spent, what is earmarked by scheduled payments that have
+   * not fired yet, and therefore what is left. Read it before scheduling:
+   * otherwise an over-budget payment is only discovered when the gate denies
+   * it at its due date, days later, with the payee unpaid.
+   *
+   * Advisory — nothing here reserves budget, and the gate remains the
+   * authority at fire time. Two things to honour when reading a line:
+   * an ABSENT `remaining_amount` / `remaining_count` means "not capped", never
+   * "nothing left"; a `remaining_amount` of `'?'` means the figure could not
+   * be summed and MUST be treated as no headroom (the gate fails closed on the
+   * same data).
+   *
+   * @param mandateId - Mandate ID
+   * @returns Per-target and aggregate budget lines, as of a stated instant
+   *
+   * @example
+   * ```typescript
+   * const budget = await client.mandates.getBudget(mandateId);
+   * for (const line of budget.aggregate) {
+   *   console.log(line.bucket, line.remaining_amount ?? 'uncapped');
+   * }
+   * ```
+   */
+  async getBudget(mandateId: string): Promise<MandateBudget> {
+    return this.transport.request<MandateBudget>({
+      method: 'GET',
+      path: `/mandates/${mandateId}/budget`,
     });
   }
 }

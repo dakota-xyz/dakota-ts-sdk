@@ -73,6 +73,24 @@ export interface ConversationTurn {
   conversationStatus: string;
 }
 
+/** Options for an {@link AgentConversation}. */
+export interface AgentConversationOptions {
+  /**
+   * The customer's IANA timezone (e.g. `'America/Los_Angeles'`).
+   *
+   * When set, the agent resolves every relative date ("tomorrow", "Friday")
+   * and clock time ("10 am") in THIS zone: a date without a time is drafted
+   * for 10:00 local, and a time without a date means its next local
+   * occurrence. Left unset, times resolve as UTC and the agent says so when a
+   * specific clock time matters.
+   *
+   * The conversation resends it on every turn, since the endpoint is
+   * stateless. Note the zone's UTC offset is captured at drafting time, so a
+   * DST transition before a far-future fire date shifts it by the DST delta.
+   */
+  timezone?: string;
+}
+
 /**
  * A stateful, multi-turn proposals chat with one agent.
  *
@@ -88,11 +106,18 @@ export interface ConversationTurn {
 export class AgentConversation {
   private readonly client: DakotaClient;
   private readonly paymentAgentId: string;
+  private readonly timezone?: string;
   private history: ChatMessage[] = [];
 
-  constructor(client: DakotaClient, paymentAgentId: string, history?: ChatMessage[]) {
+  constructor(
+    client: DakotaClient,
+    paymentAgentId: string,
+    history?: ChatMessage[],
+    options?: AgentConversationOptions
+  ) {
     this.client = client;
     this.paymentAgentId = paymentAgentId;
+    this.timezone = options?.timezone;
     if (history && history.length > 0) {
       this.history = history.map(cloneMessage);
     }
@@ -147,6 +172,9 @@ export class AgentConversation {
     try {
       result = await this.client.paymentAgents.createProposals(this.paymentAgentId, {
         messages,
+        // Resent on EVERY turn — the endpoint is stateless, so a zone given
+        // once would be forgotten on the next one.
+        ...(this.timezone ? { timezone: this.timezone } : {}),
       });
     } catch (err) {
       // Roll back the optimistic user turn so a retry does not duplicate it.

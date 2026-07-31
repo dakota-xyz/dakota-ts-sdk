@@ -27,7 +27,7 @@ import {
   KeyObject,
 } from 'node:crypto';
 
-import type { Mandate } from '../client/types.js';
+import type { Mandate, MandateRule } from '../client/types.js';
 import { canonicalJSON } from './canonicalize.js';
 
 /**
@@ -85,6 +85,60 @@ export function mandateSignPayload(mandate: Mandate, action: MandateAction): Uin
     rule: mandate.rule,
     valid_from: mandate.valid_from ?? 0,
     valid_until: mandate.valid_until ?? 0,
+  });
+  return new TextEncoder().encode(encoded);
+}
+
+/**
+ * Reproduces, byte-for-byte, the canonical bytes the platform verifies for an
+ * AMEND — appending version `version`, carrying `rule`, to `mandate`.
+ *
+ * The approve/cancel bytes are frozen, so amend gets its own payload rather
+ * than an extra key on `mandateSignPayload`. It is the same JCS JSON plus one
+ * key, `version`:
+ *
+ *     {action: 'amend', id, bound_signer, rule, valid_from, valid_until, version}
+ *
+ * **`version` is what stops cross-version replay.** Without it, a signature
+ * over `{amend, rule R}` would authorize "make the current rule R" forever: a
+ * customer who signs v2 raising a limit to 20,000 and then v3 lowering it to
+ * 5,000 could have the v2 signature replayed as a v4 — a rollback of their own
+ * reduction, using their own signature. Binding the exact version number makes
+ * each amend signature usable once, at one point in the mandate's history.
+ *
+ * `rule` is the NEW rule (what the signer is agreeing to), not the outgoing
+ * one, and is taken verbatim — the amend endpoint never normalizes it, so the
+ * bytes signed here are the bytes the server verifies. Pass the SAME rule
+ * object to `mandates.amend`.
+ *
+ * @param mandate - The mandate as it is NOW (the amend is a compare-and-set on
+ *   its current version)
+ * @param version - The version this amend creates — the mandate's current
+ *   `version` + 1
+ * @param rule - The complete new rule, in canonical form
+ */
+export function mandateAmendSignPayload(
+  mandate: Mandate,
+  version: number,
+  rule: MandateRule
+): Uint8Array {
+  if (!mandate.id) {
+    throw new Error('mandate has no id');
+  }
+  if (!mandate.bound_signer_id) {
+    throw new Error('mandate has no bound_signer_id');
+  }
+  if (!Number.isInteger(version) || version < 2) {
+    throw new Error('amend version must be an integer >= 2 (the version being created)');
+  }
+  const encoded = canonicalJSON({
+    action: 'amend',
+    id: mandate.id,
+    bound_signer: mandate.bound_signer_id,
+    rule,
+    valid_from: mandate.valid_from ?? 0,
+    valid_until: mandate.valid_until ?? 0,
+    version,
   });
   return new TextEncoder().encode(encoded);
 }

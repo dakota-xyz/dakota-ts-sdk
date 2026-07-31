@@ -52,7 +52,13 @@ describe('DakotaClient', () => {
       expect(typeof client.customers.create).toBe('function');
       expect(typeof client.customers.list).toBe('function');
       expect(typeof client.customers.get).toBe('function');
+      expect(typeof client.customers.delete).toBe('function');
+      expect(typeof client.customers.getCapabilities).toBe('function');
+      expect(typeof client.customers.reEngage).toBe('function');
       expect(typeof client.customers.bulkImportFromSumsubTokens).toBe('function');
+      expect(typeof client.customers.importPersonaTokens).toBe('function');
+      expect(typeof client.customers.listPersonaImportJobs).toBe('function');
+      expect(typeof client.customers.getPersonaImportJob).toBe('function');
     });
 
     it('exposes recipients resource', () => {
@@ -187,6 +193,14 @@ describe('DakotaClient', () => {
       expect(typeof client.selfServe.getPricing).toBe('function');
     });
 
+    it('exposes feePayoutDestination resource', () => {
+      const client = new DakotaClient({ apiKey: 'test_key' });
+      expect(client.feePayoutDestination).toBeDefined();
+      expect(typeof client.feePayoutDestination.get).toBe('function');
+      expect(typeof client.feePayoutDestination.set).toBe('function');
+      expect(typeof client.feePayoutDestination.delete).toBe('function');
+    });
+
     it('exposes paymentAgents resource (ALPHA)', () => {
       const client = new DakotaClient({ apiKey: 'test_key' });
       expect(client.paymentAgents).toBeDefined();
@@ -194,6 +208,7 @@ describe('DakotaClient', () => {
       expect(typeof client.paymentAgents.get).toBe('function');
       expect(typeof client.paymentAgents.revoke).toBe('function');
       expect(typeof client.paymentAgents.createProposals).toBe('function');
+      expect(typeof client.paymentAgents.getProposalsProgress).toBe('function');
     });
 
     it('exposes instructions resource (ALPHA)', () => {
@@ -211,6 +226,9 @@ describe('DakotaClient', () => {
       expect(typeof client.mandates.create).toBe('function');
       expect(typeof client.mandates.approve).toBe('function');
       expect(typeof client.mandates.cancel).toBe('function');
+      expect(typeof client.mandates.amend).toBe('function');
+      expect(typeof client.mandates.listVersions).toBe('function');
+      expect(typeof client.mandates.getBudget).toBe('function');
     });
 
     it('exposes scheduledPayments resource (ALPHA)', () => {

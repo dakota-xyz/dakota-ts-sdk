@@ -7,6 +7,7 @@ import { PaginatedIterator } from '../pagination.js';
 import type {
   SignerGroup,
   SignerGroupCreateRequest,
+  SignerGroupGetParams,
   SignerGroupSignerAddRequest,
   Signer,
   SignerCreateRequest,
@@ -47,13 +48,27 @@ export class SignerGroupsResource extends BaseResource {
   /**
    * Get a signer group by ID.
    *
+   * Pass `{ include_removed: true }` to also get a `removed_members` array of
+   * signers that were removed from this group, each carrying its `removed_at`
+   * timestamp. Defaults to active members only.
+   *
    * @param signerGroupId - Signer group ID
+   * @param params - Optional `{ include_removed }`
    * @returns Signer group record
+   *
+   * @example
+   * ```typescript
+   * const group = await client.signerGroups.get(groupId, { include_removed: true });
+   * for (const s of group.removed_members ?? []) {
+   *   console.log(s.name, 'removed at', s.removed_at);
+   * }
+   * ```
    */
-  async get(signerGroupId: string): Promise<SignerGroup> {
+  async get(signerGroupId: string, params?: SignerGroupGetParams): Promise<SignerGroup> {
     return this.transport.request<SignerGroup>({
       method: 'GET',
       path: `/signer-groups/${signerGroupId}`,
+      query: { ...params },
     });
   }
 
@@ -85,7 +100,8 @@ export class SignerGroupsResource extends BaseResource {
    * Remove a signer from a group.
    *
    * @param signerGroupId - Signer group ID
-   * @param signerId - Signer ID
+   * @param signerId - The signer's KSUID `signer_id` — NOT its public key.
+   *   (The standalone `client.signers.delete()` takes the public key instead.)
    * @param options - Optional request options (e.g. an explicit idempotency
    *   key — the platform requires one on this DELETE)
    */

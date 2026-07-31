@@ -482,6 +482,13 @@ Manage customer entities representing businesses and organizations.
 | `customers.create(data)` | Create a customer (triggers KYB) |
 | `customers.list(params?)` | List all customers (paginated) |
 | `customers.get(id)` | Get customer by ID |
+| `customers.delete(id)` | Soft-delete a customer (blocked if it has accounts) |
+| `customers.getCapabilities(id)` | Capabilities + outstanding requirements to unlock each |
+| `customers.reEngage(id)` | Mint a fresh application link for an approved customer |
+| `customers.bulkImportFromSumsubTokens(data)` | Import from Sumsub share tokens (synchronous) |
+| `customers.importPersonaTokens(data)` | Import from Persona Connect share tokens (async job) |
+| `customers.listPersonaImportJobs(params?)` | List Persona import jobs, newest first |
+| `customers.getPersonaImportJob(jobId, params?)` | Job status + per-token results |
 
 ### Recipients
 
@@ -594,9 +601,9 @@ Manage multi-party authorization.
 |--------|-------------|
 | `signerGroups.create(data)` | Create signer group |
 | `signerGroups.list(params?)` | List signer groups |
-| `signerGroups.get(id)` | Get signer group by ID |
+| `signerGroups.get(id, params?)` | Get signer group by ID (`{ include_removed: true }` adds `removed_members`) |
 | `signerGroups.addSigner(groupId, data)` | Add signer to group |
-| `signerGroups.removeSigner(groupId, signerId)` | Remove signer |
+| `signerGroups.removeSigner(groupId, signerId)` | Remove signer (by KSUID `signer_id`, not public key) |
 | `signerGroups.attachToWallet(walletId, groupId)` | Attach to wallet |
 | `signerGroups.detachFromWallet(walletId, groupId)` | Detach from wallet |
 
@@ -668,6 +675,26 @@ Test simulations (sandbox environment only).
 | `sandbox.advanceSimulation(id)` | Advance simulation state |
 | `sandbox.listScenarios(params?)` | List available scenarios |
 
+### Fee Payout Destination
+
+Where Dakota pays your accrued developer fees. Exactly one per organization,
+and crypto-only — a USDC wallet on any supported chain.
+
+| Method | Description |
+|--------|-------------|
+| `feePayoutDestination.get()` | Get the registered destination |
+| `feePayoutDestination.set(data)` | Register or replace it (emits `fee_payout_destination.updated`) |
+| `feePayoutDestination.delete()` | Remove it (emits `fee_payout_destination.deleted`) |
+
+```typescript
+await client.feePayoutDestination.set({
+  usdc_wallet: {
+    chain: 'eip155:8453', // CAIP-2 chain id — see client.info.getNetworks()
+    address: '0x1234567890123456789012345678901234567890',
+  },
+});
+```
+
 ### Payment Agents (Alpha)
 
 Hosted signing agents that draft payments (`x-alpha`, flag-gated).
@@ -678,6 +705,7 @@ Hosted signing agents that draft payments (`x-alpha`, flag-gated).
 | `paymentAgents.get(id)` | Get payment agent by ID |
 | `paymentAgents.revoke(id)` | Revoke the agent's key (kill switch) |
 | `paymentAgents.createProposals(id, data)` | One-shot proposals turn (see `newAgentConversation`) |
+| `paymentAgents.getProposalsProgress(id)` | Live progress of an in-flight drafting turn (advisory) |
 
 ### Mandates (Alpha)
 
@@ -690,6 +718,9 @@ The §8 authorizations that arm scheduled payments.
 | `mandates.get(id)` | Get mandate by ID (full wire shape for signing) |
 | `mandates.approve(id, data)` | Activate with a customer signature |
 | `mandates.cancel(id, data)` | Cancel a mandate |
+| `mandates.amend(id, data)` | Append a signed NEW version of the rule (keeps window spend) |
+| `mandates.listVersions(id)` | Append-only version history, oldest first |
+| `mandates.getBudget(id)` | Remaining budget: spent, earmarked, left (advisory) |
 
 ### Instructions (Alpha)
 

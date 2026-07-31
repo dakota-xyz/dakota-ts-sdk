@@ -23,13 +23,18 @@ import {
   InfoResource,
   SandboxResource,
   SelfServeResource,
+  FeePayoutDestinationResource,
   PaymentAgentsResource,
   InstructionsResource,
   MandatesResource,
   ScheduledPaymentsResource,
   InsightsResource,
 } from './resources/index.js';
-import { AgentConversation, type ChatMessage } from '../agentic/chat.js';
+import {
+  AgentConversation,
+  type AgentConversationOptions,
+  type ChatMessage,
+} from '../agentic/chat.js';
 import {
   attachUserToWallet as attachUserToWalletHelper,
   detachUserFromWallet as detachUserFromWalletHelper,
@@ -102,6 +107,8 @@ export class DakotaClient {
   readonly sandbox: SandboxResource;
   /** Self-Serve Credits API - manage prepaid transfer credits */
   readonly selfServe: SelfServeResource;
+  /** Fee Payout Destination API - where Dakota pays your accrued developer fees */
+  readonly feePayoutDestination: FeePayoutDestinationResource;
   /** Payment Agents API (ALPHA) - hosted signing agents that draft payments */
   readonly paymentAgents: PaymentAgentsResource;
   /** Instructions API (ALPHA) - accept and inspect actuated proposals */
@@ -168,6 +175,7 @@ export class DakotaClient {
     this.info = new InfoResource(this.transport);
     this.sandbox = new SandboxResource(this.transport);
     this.selfServe = new SelfServeResource(this.transport);
+    this.feePayoutDestination = new FeePayoutDestinationResource(this.transport);
     this.paymentAgents = new PaymentAgentsResource(this.transport);
     this.instructions = new InstructionsResource(this.transport);
     this.mandates = new MandatesResource(this.transport);
@@ -186,18 +194,32 @@ export class DakotaClient {
   /**
    * Start a fresh multi-turn conversation with a payment agent.
    *
+   * Pass `{ timezone }` (an IANA zone) so the agent resolves "tomorrow" and
+   * "10 am" in the customer's local time rather than UTC. The conversation
+   * resends it on every turn.
+   *
    * @see AgentConversation
    */
-  newAgentConversation(paymentAgentId: string): AgentConversation {
-    return new AgentConversation(this, paymentAgentId);
+  newAgentConversation(
+    paymentAgentId: string,
+    options?: AgentConversationOptions
+  ): AgentConversation {
+    return new AgentConversation(this, paymentAgentId, undefined, options);
   }
 
   /**
    * Rebuild a conversation from a persisted transcript (oldest first) —
    * for backends that store the history between requests.
+   *
+   * A stateless backend must pass `{ timezone }` again here: the transcript
+   * carries the messages, not the zone.
    */
-  resumeAgentConversation(paymentAgentId: string, history: ChatMessage[]): AgentConversation {
-    return new AgentConversation(this, paymentAgentId, history);
+  resumeAgentConversation(
+    paymentAgentId: string,
+    history: ChatMessage[],
+    options?: AgentConversationOptions
+  ): AgentConversation {
+    return new AgentConversation(this, paymentAgentId, history, options);
   }
 
   /**

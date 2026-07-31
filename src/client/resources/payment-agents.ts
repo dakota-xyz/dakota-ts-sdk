@@ -9,6 +9,7 @@ import { BaseResource } from './base.js';
 import type {
   PaymentAgent,
   PaymentAgentCreateRequest,
+  AgenticProposalsProgress,
   AgenticProposalsResult,
   CreateProposalsRequest,
   RequestOptions,
@@ -97,6 +98,42 @@ export class PaymentAgentsResource extends BaseResource {
       path: `/payment-agents/${paymentAgentId}/proposals`,
       body: data,
       idempotencyKey: options?.idempotencyKey,
+    });
+  }
+
+  /**
+   * Live progress of an in-flight drafting turn.
+   *
+   * A multi-payee drafting turn legitimately runs minutes (several sequential
+   * model calls). While a `createProposals` call is in flight, poll this every
+   * few seconds to show the customer what the agent is doing right now.
+   *
+   * Advisory display only. `active: false` means no turn is currently
+   * publishing progress for this agent — idle, just finished, or served by
+   * another instance — so fall back to a generic spinner. Never gate any
+   * behaviour on this endpoint.
+   *
+   * The snapshot is coarse and customer-safe: a phase enum, one human
+   * sentence, and the model round. Tool counts only — never payee names,
+   * amounts, or addresses.
+   *
+   * @param paymentAgentId - Payment agent ID
+   * @returns The current progress snapshot
+   *
+   * @example
+   * ```typescript
+   * const pending = client.paymentAgents.createProposals(agentId, { prompt });
+   * const poll = setInterval(async () => {
+   *   const p = await client.paymentAgents.getProposalsProgress(agentId);
+   *   if (p.active) console.log(p.detail);
+   * }, 3000);
+   * const result = await pending.finally(() => clearInterval(poll));
+   * ```
+   */
+  async getProposalsProgress(paymentAgentId: string): Promise<AgenticProposalsProgress> {
+    return this.transport.request<AgenticProposalsProgress>({
+      method: 'GET',
+      path: `/payment-agents/${paymentAgentId}/proposals/progress`,
     });
   }
 }
