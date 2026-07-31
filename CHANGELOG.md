@@ -2,6 +2,48 @@
 
 All notable changes to the Dakota TypeScript SDK are documented in this file.
 
+## [2.1.1] - 2026-08-01
+
+### Fixed — the default timeout aborted agent conversations
+
+Agent turns ran under the ordinary 15s deadline. A turn is a sequence of
+model calls, so "what can you do?" answered in time while "schedule 0.4
+USDC to KADOTA every Friday" did not — the same conversation failing
+intermittently, reported as flakiness rather than as a deadline. The
+deadline was also client-wide and unoverridable, so the only workaround
+was a second `DakotaClient` differing by one number.
+
+- `paymentAgents.createProposals`, `AgentConversation.send` and
+  `insights.chat` now default to **180s** (`AGENTIC_MODEL_TIMEOUT_MS`)
+  instead of 15s.
+- `RequestOptions.timeout` sets a deadline for a single call, on every
+  method that takes request options.
+- `AgentConversationOptions.timeout` sets it for every turn of one
+  conversation.
+- Precedence: per-request → explicit client-wide → endpoint default →
+  15s. An explicit client `timeout` still wins over the agentic default,
+  so a deliberately-chosen deadline is never overruled — which also means
+  a short global timeout must be raised per conversation.
+- The timeout error now names the elapsed deadline and how to change it,
+  instead of a bare `Request timed out`.
+
+### Fixed — `mandates.list()` silently returned nothing
+
+`GET /mandates` answers with a bare array while most list endpoints
+return `{data, meta}`. The paginator read `response.data`, got
+`undefined`, and yielded an empty page — zero results, no error, for
+mandates that exist and that `mandates.get(id)` returns fine. The
+paginator now treats an array response as one complete page.
+
+This also fixes `signerGroups.listForWallet()`, which hits
+`GET /wallets/{id}/signer-groups` and had the same silent-empty bug.
+
+### Fixed — a caller's `AbortSignal` was reported as a timeout
+
+Aborting a request through your own signal raised `Request timed out`
+and was then retried. It now raises `Request aborted by caller` and is
+terminal.
+
 ## [2.1.0] - 2026-07-31
 
 Spec sync with platform `main` (`openapi.public.yaml`). No breaking

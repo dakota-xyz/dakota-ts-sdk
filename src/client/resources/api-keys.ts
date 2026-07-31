@@ -29,6 +29,7 @@ export class ApiKeysResource extends BaseResource {
       path: '/api-keys',
       body: data,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 
@@ -84,6 +85,7 @@ export class ApiKeysResource extends BaseResource {
       path: '/api-keys/admin',
       body: data,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 }

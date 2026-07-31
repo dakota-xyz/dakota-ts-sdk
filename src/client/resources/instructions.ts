@@ -36,6 +36,7 @@ export class InstructionsResource extends BaseResource {
       path: '/instructions',
       body: data,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 

@@ -32,6 +32,18 @@ export interface TransportRequestOptions {
   headers?: Record<string, string>;
   idempotencyKey?: string;
   signal?: AbortSignal;
+  /**
+   * Caller-supplied deadline (ms) for this one request. Beats everything —
+   * it is the most specific statement of intent available.
+   */
+  timeout?: number;
+  /**
+   * The deadline (ms) this ENDPOINT wants when nobody has said otherwise —
+   * how long its work actually takes. Used only when the caller passed no
+   * per-request timeout AND set no explicit client-wide one, so it can
+   * never override a deadline someone deliberately chose.
+   */
+  endpointTimeout?: number;
 }
 
 /**
@@ -60,12 +72,16 @@ export class Transport {
     const requestBody = body !== undefined ? JSON.stringify(body) : undefined;
 
     // Execute with retry
-    return this.executeWithRetry<T>(url, {
-      method,
-      headers: requestHeaders,
-      body: requestBody,
-      signal,
-    });
+    return this.executeWithRetry<T>(
+      url,
+      {
+        method,
+        headers: requestHeaders,
+        body: requestBody,
+        signal,
+      },
+      this.resolveTimeout(options)
+    );
   }
 
   /**
@@ -159,19 +175,52 @@ export class Transport {
   }
 
   /**
-   * Execute request with exponential backoff retry.
+   * Resolve the deadline for one request, most specific intent first:
+   *
+   *   1. the caller's per-request `timeout`
+   *   2. an explicit client-wide `timeout`
+   *   3. the endpoint's own default (slow endpoints raise their own)
+   *   4. the client-wide default
+   *
+   * (2) sits above (3) on purpose: a caller who configured a timeout chose
+   * it, and an endpoint must not quietly overrule that. (3) exists so the
+   * far more common caller — the one who configured nothing — gets a
+   * deadline that matches what the endpoint actually does.
    */
-  private async executeWithRetry<T>(url: string, init: RequestInit): Promise<T> {
+  private resolveTimeout(options: TransportRequestOptions): number {
+    if (options.timeout !== undefined) {
+      return options.timeout;
+    }
+    if (this.config.timeoutWasExplicit) {
+      return this.config.timeout;
+    }
+    return options.endpointTimeout ?? this.config.timeout;
+  }
+
+  /**
+   * Execute request with exponential backoff retry.
+   *
+   * `timeout` is per ATTEMPT, not per call: each attempt gets its own
+   * deadline, so a request that keeps timing out can take up to
+   * `timeout × maxAttempts` before it throws.
+   */
+  private async executeWithRetry<T>(url: string, init: RequestInit, timeout: number): Promise<T> {
     const { maxAttempts, initialBackoffMs, maxBackoffMs } = this.config.retryPolicy;
     const method = init.method ?? 'GET';
 
     let lastError: Error | undefined;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      // Declared outside the try so the catch can tell OUR deadline firing
+      // apart from the caller aborting.
+      let timedOut = false;
       try {
         // Create abort controller for timeout
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), this.config.timeout);
+        const timeoutId = setTimeout(() => {
+          timedOut = true;
+          controller.abort();
+        }, timeout);
 
         // Merge signals if provided
         const signal = init.signal
@@ -218,9 +267,23 @@ export class Transport {
           throw error;
         }
 
-        // Handle abort/timeout
-        if (error instanceof Error && error.name === 'AbortError') {
-          lastError = new TransportError('Request timed out', error);
+        // Handle abort/timeout. Only OUR deadline firing is a timeout — an
+        // AbortError from the caller's own signal is a cancellation, and
+        // reporting that as "timed out" sends people hunting a deadline
+        // that never elapsed.
+        if (error instanceof Error && error.name === 'AbortError' && timedOut) {
+          lastError = new TransportError(
+            `Request timed out after ${timeout}ms. ` +
+              `This is the SDK's client-side deadline, not a server error — raise it with ` +
+              `\`new DakotaClient({ timeout })\`, or per call with \`{ timeout }\` in the ` +
+              `request options. Agent conversations are the usual cause: pass ` +
+              `\`{ timeout }\` to \`newAgentConversation\`.`,
+            error
+          );
+        } else if (error instanceof Error && error.name === 'AbortError') {
+          // The caller cancelled. Retrying would re-issue a request they
+          // explicitly called off, so this is terminal.
+          throw new TransportError('Request aborted by caller', error);
         } else if (error instanceof Error) {
           lastError = new TransportError('Network error', error);
         } else {

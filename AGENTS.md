@@ -625,7 +625,15 @@ await client.detachUserFromWallet(walletId, agent.signer_public_key!, spendingGr
 // Draft payments from natural language (stateless multi-turn chat).
 // Send `timezone` on EVERY turn (the server is stateless) so "tomorrow" and
 // "10 am" resolve in the customer's local time rather than UTC.
-const conv = client.newAgentConversation(agent.id!);
+//
+// Turns default to a 180s deadline, not the client's ordinary 15s: a turn is
+// a sequence of model calls, so a multi-payee request runs minutes. Pass
+// `{ timeout }` for longer turns — and note that an explicit client-wide
+// `timeout` WINS over this default, so a client built with a short global
+// timeout must raise it here or turns will be cut off.
+const conv = client.newAgentConversation(agent.id!, {
+  timezone: 'America/Los_Angeles',
+});
 
 // A multi-payee turn legitimately runs minutes. Poll for a progress line to
 // show under the spinner — advisory display ONLY, never gate behaviour on it.

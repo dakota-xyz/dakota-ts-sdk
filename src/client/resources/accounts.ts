@@ -72,6 +72,7 @@ export class AccountsResource extends BaseResource {
       path: '/accounts',
       body: data,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 
@@ -138,6 +139,7 @@ export class AccountsResource extends BaseResource {
       path: `/accounts/${accountId}`,
       body: data,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 

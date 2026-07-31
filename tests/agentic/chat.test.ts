@@ -99,6 +99,30 @@ describe('AgentConversation.send', () => {
     expect(timezoneOf(requests[3])).toBeUndefined();
   });
 
+  it('forwards its timeout to every turn, and leaves the endpoint default alone when unset', async () => {
+    const { fetch } = createRoutedFetch({
+      [`POST ${PROPOSALS_PATH}`]: () => ({ status: 200, body: { reply: 'ok' } }),
+    });
+    const client = makeClient(fetch as unknown as typeof globalThis.fetch);
+    const seen: (number | undefined)[] = [];
+    const real = client.paymentAgents.createProposals.bind(client.paymentAgents);
+    client.paymentAgents.createProposals = ((id, data, options) => {
+      seen.push(options?.timeout);
+      return real(id, data, options);
+    }) as typeof client.paymentAgents.createProposals;
+
+    const slow = client.newAgentConversation(AGENT_ID, { timeout: 240_000 });
+    await slow.send('pay these nine vendors every friday');
+    await slow.send('and add a tenth');
+    expect(seen).toEqual([240_000, 240_000]);
+
+    // Unset means the endpoint's own long default applies — the conversation
+    // must not pin it to the client's ordinary deadline.
+    const plain = client.newAgentConversation(AGENT_ID);
+    await plain.send('pay alice');
+    expect(seen[2]).toBeUndefined();
+  });
+
   it('rolls back the optimistic user turn on error (retry does not duplicate)', async () => {
     const { fetch } = createRoutedFetch({
       [`POST ${PROPOSALS_PATH}`]: () => ({

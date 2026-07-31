@@ -69,6 +69,7 @@ export class MandatesResource extends BaseResource {
       path: '/mandates',
       body: data,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 
@@ -92,6 +93,7 @@ export class MandatesResource extends BaseResource {
       path: `/mandates/${mandateId}/approve`,
       body: data,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 
@@ -115,6 +117,7 @@ export class MandatesResource extends BaseResource {
       path: `/mandates/${mandateId}/cancel`,
       body: data,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 
@@ -166,6 +169,7 @@ export class MandatesResource extends BaseResource {
       path: `/mandates/${mandateId}/amend`,
       body: data,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 

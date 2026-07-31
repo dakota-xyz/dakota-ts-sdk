@@ -46,6 +46,7 @@ export class SelfServeResource extends BaseResource {
       path: '/self-serve/credits/purchase',
       body: data,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 

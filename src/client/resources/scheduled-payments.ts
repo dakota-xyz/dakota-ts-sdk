@@ -52,6 +52,7 @@ export class ScheduledPaymentsResource extends BaseResource {
       path: '/scheduled-payments',
       body: data,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 
@@ -69,6 +70,7 @@ export class ScheduledPaymentsResource extends BaseResource {
       method: 'POST',
       path: `/scheduled-payments/${scheduledPaymentId}/cancel`,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 }

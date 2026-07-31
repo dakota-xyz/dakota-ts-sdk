@@ -67,6 +67,7 @@ export class FeePayoutDestinationResource extends BaseResource {
       path: '/fee-payout-destination',
       body: data,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 

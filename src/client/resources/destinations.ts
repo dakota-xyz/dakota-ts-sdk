@@ -64,6 +64,7 @@ export class DestinationsResource extends BaseResource {
       path: `/recipients/${recipientId}/destinations`,
       body: data,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 

@@ -35,6 +35,7 @@ export class WebhooksResource extends BaseResource {
       path: '/webhooks/targets',
       body: data,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 
@@ -78,6 +79,7 @@ export class WebhooksResource extends BaseResource {
       path: `/webhooks/targets/${targetId}`,
       body: data,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 
@@ -159,6 +161,7 @@ export class WebhooksResource extends BaseResource {
       method: 'POST',
       path: `/webhooks/events/${eventId}/replay`,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 }

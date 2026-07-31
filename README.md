@@ -376,7 +376,9 @@ const client = new DakotaClient({
   // Auth mode (default: Auto)
   authMode: AuthMode.Auto, // Auto, APIKey, or ApplicationToken
 
-  // Custom timeout (default: 15000ms)
+  // Custom timeout (default: 15000ms).
+  // Setting this applies it to EVERY request, including the model-backed
+  // agentic endpoints that otherwise get 180000ms — see "Timeouts" below.
   timeout: 30000,
 
   // Custom retry policy
@@ -396,6 +398,54 @@ const client = new DakotaClient({
   logger: console, // or custom logger
 });
 ```
+
+## Timeouts
+
+Requests default to **15s**, which suits ordinary reads and writes. The
+agentic endpoints that call a model default to **180s** instead:
+
+| Endpoint | Default |
+|---|---|
+| Everything else | 15s |
+| `paymentAgents.createProposals` / `AgentConversation.send` | 180s |
+| `insights.chat` | 180s |
+
+A drafting turn is a sequence of model calls — read the payees, check
+balances, draft, revise — so "pay these nine vendors every Friday"
+legitimately runs minutes while "what can you do?" returns at once. Under a
+15s deadline the simple turns pass and the complex ones abort client-side,
+which looks like flakiness rather than a deadline.
+
+Override it at whichever level fits, most specific first:
+
+```typescript
+// Per request — one slow call, everything else untouched. Available on
+// every method that takes request options (the mutating ones).
+await client.paymentAgents.createProposals(agentId, { prompt }, { timeout: 240_000 });
+
+// Per conversation — every turn of this chat
+const conv = client.newAgentConversation(agentId, { timeout: 240_000 });
+
+// Client-wide — applies to EVERYTHING, agentic endpoints included
+const client = new DakotaClient({ apiKey, timeout: 30_000 });
+```
+
+Precedence is: per-request `timeout` → explicit client `timeout` → endpoint
+default → 15s. Note the third row: **an explicit client-wide `timeout` wins
+over the long agentic default**, because a deadline you configured is a
+choice the SDK should not overrule. If you set a short global timeout and
+also use agent conversations, raise it per conversation.
+
+Two more things worth knowing:
+
+- The deadline is **per attempt**, not per call. A timing-out request is
+  retried per `retryPolicy`, so budget roughly `timeout × maxAttempts`.
+- A timeout raises `TransportError` naming the elapsed deadline and how to
+  change it. It is a client-side abort, not a server error — the server may
+  well still be completing the work.
+- Per-request `timeout` rides on `RequestOptions`, so it is available on the
+  methods that accept them. Plain `get` / `list` reads do not take options
+  yet; use the client-wide setting for those.
 
 ## Idempotency Keys
 

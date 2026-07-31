@@ -72,6 +72,7 @@ export class CustomersResource extends BaseResource {
       path: '/customers',
       body: data,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 
@@ -194,6 +195,7 @@ export class CustomersResource extends BaseResource {
       method: 'POST',
       path: `/customers/${customerId}/re-engagement`,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 
@@ -235,6 +237,7 @@ export class CustomersResource extends BaseResource {
       path: `/customers/${customerId}/sub-client`,
       body: data,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 
@@ -290,6 +293,7 @@ export class CustomersResource extends BaseResource {
       path: '/customers/bulk-import-sumsub-tokens',
       body: data,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 
@@ -327,6 +331,7 @@ export class CustomersResource extends BaseResource {
       path: '/customers/import-persona-tokens',
       body: data,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 
