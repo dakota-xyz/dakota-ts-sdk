@@ -122,6 +122,7 @@ export class SandboxResource extends BaseResource {
       path: '/sandbox/simulate/inbound',
       body: data,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 
@@ -175,6 +176,7 @@ export class SandboxResource extends BaseResource {
       path: '/sandbox/simulate/onboarding',
       body: data,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 
@@ -229,6 +231,7 @@ export class SandboxResource extends BaseResource {
       path: `/sandbox/simulations/${simulationId}/advance`,
       body: data,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 

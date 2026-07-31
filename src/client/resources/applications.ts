@@ -77,6 +77,7 @@ export class ApplicationsResource extends BaseResource {
       path: `/applications/${applicationId}/submissions`,
       body: data ?? {},
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 
@@ -103,6 +104,7 @@ export class ApplicationsResource extends BaseResource {
       path: `/applications/${applicationId}/business-details`,
       body: data,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 
@@ -130,6 +132,7 @@ export class ApplicationsResource extends BaseResource {
       path: `/applications/${applicationId}/individual-details`,
       body: data,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 
@@ -154,6 +157,7 @@ export class ApplicationsResource extends BaseResource {
       path: `/applications/${applicationId}/associated-individuals`,
       body: data,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 
@@ -178,6 +182,7 @@ export class ApplicationsResource extends BaseResource {
       path: `/applications/${applicationId}/associated-individuals/${individualId}`,
       body: data,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 
@@ -224,6 +229,7 @@ export class ApplicationsResource extends BaseResource {
       path: `/applications/${applicationId}/attestations`,
       body: data,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 
@@ -263,6 +269,7 @@ export class ApplicationsResource extends BaseResource {
       path: `/applications/${applicationId}/edd`,
       body: data,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 
@@ -290,6 +297,7 @@ export class ApplicationsResource extends BaseResource {
       path: `/applications/${applicationId}/documents`,
       body: data,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 
@@ -362,6 +370,7 @@ export class ApplicationsResource extends BaseResource {
       path: `/applications/${applicationId}/documents/${documentId}/verifications`,
       body: _data ?? {},
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 
@@ -385,6 +394,7 @@ export class ApplicationsResource extends BaseResource {
       path: `/applications/${applicationId}/document-uploads`,
       body: data,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 
@@ -415,6 +425,7 @@ export class ApplicationsResource extends BaseResource {
       path: `/applications/${applicationId}/associated-individuals/${individualId}/documents`,
       body: data,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 
@@ -440,6 +451,7 @@ export class ApplicationsResource extends BaseResource {
       path: `/applications/${applicationId}/associated-individuals/${individualId}/document-uploads`,
       body: data,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 }

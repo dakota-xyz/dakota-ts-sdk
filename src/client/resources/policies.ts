@@ -30,6 +30,7 @@ export class PoliciesResource extends BaseResource {
       path: '/policies',
       body: data,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 
@@ -72,6 +73,7 @@ export class PoliciesResource extends BaseResource {
       path: `/policies/${policyId}`,
       body: options?.endorsement,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 
@@ -92,6 +94,7 @@ export class PoliciesResource extends BaseResource {
       path: `/policies/${policyId}/rules`,
       body: options?.endorsement ?? data,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 
@@ -114,6 +117,7 @@ export class PoliciesResource extends BaseResource {
       path: `/policies/${policyId}/rules/${ruleId}`,
       body: options?.endorsement ?? data,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 
@@ -134,6 +138,7 @@ export class PoliciesResource extends BaseResource {
       path: `/policies/${policyId}/rules/${ruleId}`,
       body: options?.endorsement,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 
@@ -173,6 +178,7 @@ export class PoliciesResource extends BaseResource {
       path: `/policies/${policyId}/wallets/${walletId}`,
       body: options?.endorsement,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 
@@ -197,6 +203,7 @@ export class PoliciesResource extends BaseResource {
       path: `/policies/${policyId}/wallets/${walletId}`,
       body: options?.endorsement,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 }

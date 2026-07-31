@@ -89,6 +89,20 @@ export interface AgentConversationOptions {
    * DST transition before a far-future fire date shifts it by the DST delta.
    */
   timezone?: string;
+
+  /**
+   * Deadline (ms) for each turn of this conversation.
+   *
+   * Turns default to {@link AGENTIC_MODEL_TIMEOUT_MS}, which is sized for a
+   * multi-payee drafting turn. Set this when your own turns are longer (a
+   * very large payee list) or shorter (you would rather show the customer a
+   * failure than keep them waiting).
+   *
+   * Required if the client was built with an explicit `timeout`: that
+   * choice wins over the endpoint default, so a client configured with a
+   * short global deadline will cut turns off unless you raise it here.
+   */
+  timeout?: number;
 }
 
 /**
@@ -107,6 +121,7 @@ export class AgentConversation {
   private readonly client: DakotaClient;
   private readonly paymentAgentId: string;
   private readonly timezone?: string;
+  private readonly timeout?: number;
   private history: ChatMessage[] = [];
 
   constructor(
@@ -118,6 +133,7 @@ export class AgentConversation {
     this.client = client;
     this.paymentAgentId = paymentAgentId;
     this.timezone = options?.timezone;
+    this.timeout = options?.timeout;
     if (history && history.length > 0) {
       this.history = history.map(cloneMessage);
     }
@@ -170,12 +186,16 @@ export class AgentConversation {
 
     let result: AgenticProposalsResult;
     try {
-      result = await this.client.paymentAgents.createProposals(this.paymentAgentId, {
-        messages,
-        // Resent on EVERY turn — the endpoint is stateless, so a zone given
-        // once would be forgotten on the next one.
-        ...(this.timezone ? { timezone: this.timezone } : {}),
-      });
+      result = await this.client.paymentAgents.createProposals(
+        this.paymentAgentId,
+        {
+          messages,
+          // Resent on EVERY turn — the endpoint is stateless, so a zone given
+          // once would be forgotten on the next one.
+          ...(this.timezone ? { timezone: this.timezone } : {}),
+        },
+        this.timeout !== undefined ? { timeout: this.timeout } : undefined
+      );
     } catch (err) {
       // Roll back the optimistic user turn so a retry does not duplicate it.
       this.history.pop();

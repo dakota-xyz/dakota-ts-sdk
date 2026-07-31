@@ -500,4 +500,110 @@ describe('Transport', () => {
       expect(result).toEqual({ id: '1' });
     });
   });
+
+  describe('timeout resolution', () => {
+    // A fetch that never settles until aborted — the only honest way to
+    // exercise a deadline.
+    function hangingFetch(): {
+      fetch: ReturnType<typeof vi.fn<[unknown, RequestInit?], Promise<Response>>>;
+      deadlines: number[];
+    } {
+      const deadlines: number[] = [];
+      const fetch = vi.fn((_url: unknown, init?: RequestInit): Promise<Response> => {
+        const started = Date.now();
+        return new Promise<Response>((_resolve, reject) => {
+          init?.signal?.addEventListener('abort', () => {
+            deadlines.push(Date.now() - started);
+            const err = new Error('aborted');
+            err.name = 'AbortError';
+            reject(err);
+          });
+        });
+      });
+      return { fetch, deadlines };
+    }
+
+    function transportWith(configOverrides: Record<string, unknown>, fetchImpl: unknown) {
+      return new Transport(
+        resolveConfig({
+          apiKey: 'test_api_key',
+          retryPolicy: { maxAttempts: 1, initialBackoffMs: 1, maxBackoffMs: 1 },
+          fetch: fetchImpl as typeof fetch,
+          ...configOverrides,
+        })
+      );
+    }
+
+    it('names the elapsed deadline and how to change it, so it is not read as a server error', async () => {
+      const { fetch } = hangingFetch();
+      const t = transportWith({ timeout: 30 }, fetch);
+
+      await expect(t.request({ method: 'GET', path: '/customers' })).rejects.toThrow(
+        /timed out after 30ms/
+      );
+      await expect(t.request({ method: 'GET', path: '/customers' })).rejects.toThrow(
+        /client-side deadline/
+      );
+    });
+
+    it('a per-request timeout beats the client-wide one', async () => {
+      const { fetch, deadlines } = hangingFetch();
+      const t = transportWith({ timeout: 5000 }, fetch);
+
+      await expect(t.request({ method: 'GET', path: '/customers', timeout: 40 })).rejects.toThrow(
+        /timed out after 40ms/
+      );
+      // Actually aborted at ~40ms, not the configured 5s.
+      expect(deadlines[0]).toBeLessThan(1000);
+    });
+
+    it('an endpoint default applies when the caller configured no timeout', async () => {
+      const { fetch } = hangingFetch();
+      const t = transportWith({}, fetch); // no explicit timeout
+
+      await expect(t.request({ method: 'GET', path: '/x', endpointTimeout: 25 })).rejects.toThrow(
+        /timed out after 25ms/
+      );
+    });
+
+    it('an EXPLICIT client timeout beats an endpoint default — the caller chose it', async () => {
+      const { fetch } = hangingFetch();
+      const t = transportWith({ timeout: 20 }, fetch);
+
+      // The endpoint would like 60s; the caller said 20ms and wins.
+      await expect(
+        t.request({ method: 'GET', path: '/x', endpointTimeout: 60_000 })
+      ).rejects.toThrow(/timed out after 20ms/);
+    });
+
+    it('a per-request timeout still beats an explicit client timeout', async () => {
+      const { fetch } = hangingFetch();
+      const t = transportWith({ timeout: 20 }, fetch);
+
+      await expect(
+        t.request({ method: 'GET', path: '/x', timeout: 45, endpointTimeout: 60_000 })
+      ).rejects.toThrow(/timed out after 45ms/);
+    });
+
+    it('reports a caller abort as a cancellation, and does not retry it', async () => {
+      const { fetch } = hangingFetch();
+      const t = new Transport(
+        resolveConfig({
+          apiKey: 'test_api_key',
+          timeout: 60_000, // long, so only the caller's abort can fire
+          retryPolicy: { maxAttempts: 3, initialBackoffMs: 1, maxBackoffMs: 1 },
+          fetch: fetch as unknown as typeof fetch,
+        })
+      );
+
+      const controller = new AbortController();
+      const pending = t.request({ method: 'GET', path: '/customers', signal: controller.signal });
+      controller.abort();
+
+      await expect(pending).rejects.toThrow(TransportError);
+      await expect(pending).rejects.toThrow(/aborted by caller/);
+      // Re-issuing a request the caller explicitly called off would be wrong.
+      expect(fetch).toHaveBeenCalledTimes(1);
+    });
+  });
 });

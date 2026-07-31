@@ -32,6 +32,7 @@ export class SignerGroupsResource extends BaseResource {
       path: '/signer-groups',
       body: data,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 
@@ -93,6 +94,7 @@ export class SignerGroupsResource extends BaseResource {
       path: `/signer-groups/${signerGroupId}/signers`,
       body: data,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 
@@ -114,6 +116,7 @@ export class SignerGroupsResource extends BaseResource {
       method: 'DELETE',
       path: `/signer-groups/${signerGroupId}/signers/${signerId}`,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 
@@ -153,6 +156,7 @@ export class SignerGroupsResource extends BaseResource {
       path: `/wallets/${walletId}/signer-groups/${signerGroupId}`,
       body: options?.endorsement,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 
@@ -177,6 +181,7 @@ export class SignerGroupsResource extends BaseResource {
       path: `/wallets/${walletId}/signer-groups/${signerGroupId}`,
       body: options?.endorsement,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 
@@ -209,6 +214,7 @@ export class SignersResource extends BaseResource {
       path: '/signers',
       body: data,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 

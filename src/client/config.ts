@@ -53,7 +53,20 @@ export interface DakotaClientConfig {
   baseURL?: string;
   /** Authentication mode (default: Auto) */
   authMode?: AuthMode;
-  /** Request timeout in milliseconds (default: 15000) */
+  /**
+   * Request timeout in milliseconds (default: 15000).
+   *
+   * Setting this explicitly applies it to EVERY request, including the
+   * model-backed agentic endpoints that otherwise get a longer default
+   * ({@link AGENTIC_MODEL_TIMEOUT_MS}) — so you keep full control, but a
+   * global value tuned for fast reads will also cap agent turns. To keep
+   * the long agentic default while tightening everything else, leave this
+   * unset and pass `{ timeout }` per request instead.
+   *
+   * Note this is a per-ATTEMPT deadline: with the default retry policy a
+   * timing-out request can be attempted up to `retryPolicy.maxAttempts`
+   * times, so worst-case wall clock is roughly `timeout × maxAttempts`.
+   */
   timeout?: number;
   /** Retry policy configuration */
   retryPolicy?: Partial<RetryPolicy>;
@@ -76,12 +89,46 @@ export interface ResolvedConfig {
   baseURL: string;
   authMode: AuthMode;
   timeout: number;
+  /**
+   * Whether `timeout` came from the caller rather than the default.
+   *
+   * An explicit timeout is a deliberate choice and wins everywhere. An
+   * inherited default does not, so endpoints that know they are slow (the
+   * model-backed agentic ones) can raise it without overriding a value the
+   * caller actually asked for.
+   */
+  timeoutWasExplicit: boolean;
   retryPolicy: RetryPolicy;
   logger: Logger;
   automaticIdempotency: boolean;
   idempotencyKeyGenerator: () => string;
   fetch: typeof fetch;
 }
+
+/**
+ * Default per-request timeout (ms).
+ *
+ * Sized for ordinary CRUD reads and writes, which answer in well under a
+ * second. It is deliberately NOT the deadline for the agentic endpoints
+ * that call a model — see {@link AGENTIC_MODEL_TIMEOUT_MS}.
+ */
+export const DEFAULT_TIMEOUT_MS = 15_000;
+
+/**
+ * Default per-request timeout (ms) for the agentic endpoints whose work is
+ * a sequence of model calls: drafting proposals and insight chat.
+ *
+ * A multi-payee drafting turn ("pay these nine vendors every Friday")
+ * legitimately runs minutes — it reads payees, checks balances, drafts, and
+ * revises, each a separate model round. Under the ordinary 15s deadline
+ * those turns abort client-side while the server is still working, which
+ * reads as flakiness rather than as a deadline: the simple turns finish in
+ * time and the complex ones do not.
+ *
+ * Applies only when the caller did not set `timeout` on the client (an
+ * explicit choice always wins) and can be overridden per request.
+ */
+export const AGENTIC_MODEL_TIMEOUT_MS = 180_000;
 
 /**
  * Default retry policy.
@@ -162,7 +209,8 @@ export function resolveConfig(config: DakotaClientConfig): ResolvedConfig {
   }
 
   // Validate timeout
-  const timeout = config.timeout ?? 15000;
+  const timeoutWasExplicit = config.timeout !== undefined;
+  const timeout = config.timeout ?? DEFAULT_TIMEOUT_MS;
   if (timeout <= 0) {
     throw new ConfigurationError('Timeout must be greater than zero');
   }
@@ -194,6 +242,7 @@ export function resolveConfig(config: DakotaClientConfig): ResolvedConfig {
     baseURL,
     authMode,
     timeout,
+    timeoutWasExplicit,
     retryPolicy,
     logger: config.logger ?? noopLogger,
     automaticIdempotency: config.automaticIdempotency ?? true,

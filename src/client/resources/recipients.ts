@@ -42,6 +42,7 @@ export class RecipientsResource extends BaseResource {
       path: `/customers/${customerId}/recipients`,
       body: data,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 
@@ -105,6 +106,7 @@ export class RecipientsResource extends BaseResource {
       path: `/recipients/${recipientId}`,
       body: data,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 

@@ -6,6 +6,7 @@
  */
 
 import { BaseResource } from './base.js';
+import { AGENTIC_MODEL_TIMEOUT_MS } from '../config.js';
 import type {
   InsightReport,
   InsightChatRequest,
@@ -50,6 +51,10 @@ export class InsightsResource extends BaseResource {
    * never moves money. Rate-limited per customer (hourly burst + daily
    * window) — a 429 means back off and retry later.
    *
+   * Model-backed, so it defaults to {@link AGENTIC_MODEL_TIMEOUT_MS} rather
+   * than the client's ordinary deadline. Pass `{ timeout }` to change it for
+   * one call; an explicit client-wide `timeout` still wins.
+   *
    * @param customerId - Customer ID
    * @param data - The conversation so far (1–40 messages)
    * @returns The assistant's reply (+ how the boundary screen treated the turn)
@@ -64,6 +69,8 @@ export class InsightsResource extends BaseResource {
       path: `/customers/${customerId}/insights/chat`,
       body: data,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
+      endpointTimeout: AGENTIC_MODEL_TIMEOUT_MS,
     });
   }
 }

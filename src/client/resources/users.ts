@@ -28,6 +28,7 @@ export class UsersResource extends BaseResource {
       path: '/users',
       body: data,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 
@@ -53,6 +54,7 @@ export class UsersResource extends BaseResource {
       path: `/users/${userId}`,
       body: data,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 

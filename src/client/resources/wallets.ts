@@ -41,6 +41,7 @@ export class WalletsResource extends BaseResource {
       path: '/wallets',
       body: data,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 
@@ -177,6 +178,7 @@ export class WalletsResource extends BaseResource {
       path: `/wallets/${walletId}/transactions`,
       body: data,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 }

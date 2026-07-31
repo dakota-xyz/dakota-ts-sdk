@@ -1021,6 +1021,19 @@ export interface RequestOptions {
   idempotencyKey?: string;
 
   /**
+   * Deadline for THIS request, in milliseconds.
+   *
+   * Overrides the client-wide `timeout` (and any endpoint default) for this
+   * call only — so one slow operation does not force you to loosen the
+   * deadline on every fast one, or to build a second client that differs by
+   * a single number.
+   *
+   * Per ATTEMPT, not per call: a request that keeps timing out is retried
+   * per `retryPolicy`, so budget roughly `timeout × maxAttempts`.
+   */
+  timeout?: number;
+
+  /**
    * Endorsed-request envelope (`{ signatures, intent }`) for mutating
    * policy, signer-group, and wallet-transaction endpoints. Required by the
    * server on all endorsed routes — passing this is the only way the

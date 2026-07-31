@@ -6,6 +6,7 @@
  */
 
 import { BaseResource } from './base.js';
+import { AGENTIC_MODEL_TIMEOUT_MS } from '../config.js';
 import type {
   PaymentAgent,
   PaymentAgentCreateRequest,
@@ -31,6 +32,7 @@ export class PaymentAgentsResource extends BaseResource {
       path: '/payment-agents',
       body: data,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 
@@ -72,6 +74,7 @@ export class PaymentAgentsResource extends BaseResource {
       method: 'POST',
       path: `/payment-agents/${paymentAgentId}/revoke`,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 
@@ -83,6 +86,12 @@ export class PaymentAgentsResource extends BaseResource {
    * conversation so far in `messages` on each call. Prefer
    * `AgentConversation` for multi-turn chat; use this directly only for
    * one-shot proposals.
+   *
+   * SLOW BY NATURE. A turn is a sequence of model calls — read the payees,
+   * check balances, draft, revise — so a multi-payee request legitimately
+   * runs minutes. It therefore defaults to {@link AGENTIC_MODEL_TIMEOUT_MS}
+   * rather than the client's ordinary deadline. Pass `{ timeout }` to
+   * change it for one call; an explicit client-wide `timeout` still wins.
    *
    * @param paymentAgentId - Payment agent ID
    * @param data - Prompt and/or messages
@@ -98,6 +107,8 @@ export class PaymentAgentsResource extends BaseResource {
       path: `/payment-agents/${paymentAgentId}/proposals`,
       body: data,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
+      endpointTimeout: AGENTIC_MODEL_TIMEOUT_MS,
     });
   }
 

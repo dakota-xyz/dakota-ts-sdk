@@ -58,6 +58,7 @@ export class TransactionsResource extends BaseResource {
       path: '/transactions',
       body: data,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 
@@ -131,6 +132,7 @@ export class TransactionsResource extends BaseResource {
       method: 'POST',
       path: `/transactions/${transactionId}/cancellations`,
       idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 }
