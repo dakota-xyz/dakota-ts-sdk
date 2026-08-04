@@ -123,6 +123,68 @@ describe('AgentConversation.send', () => {
     expect(seen[2]).toBeUndefined();
   });
 
+  it('surfaces blockers ALONGSIDE proposals — they are not alternatives', async () => {
+    const { fetch } = createRoutedFetch({
+      [`POST ${PROPOSALS_PATH}`]: () => ({
+        status: 200,
+        body: {
+          reply: 'I can add Priya, but your limit will not reach her.',
+          proposals: [{ summary: 'Create payee Priya', actions: [] }],
+          blockers: [
+            {
+              code: 'mandate_does_not_cover_payee',
+              mandate_id: 'mandate_1',
+              payee_name: 'Priya',
+              detail: 'the limit does not target this payee',
+            },
+          ],
+        },
+      }),
+    });
+    const client = makeClient(fetch as unknown as typeof globalThis.fetch);
+
+    const turn = await client.newAgentConversation(AGENT_ID).send('pay priya 10 usdc');
+
+    // The whole point: a blocked turn can still carry work to accept first.
+    expect(turn.hasProposals).toBe(true);
+    expect(turn.proposals).toHaveLength(1);
+    expect(turn.hasBlockers).toBe(true);
+    expect(turn.blockers[0]?.code).toBe('mandate_does_not_cover_payee');
+    expect(turn.blockers[0]?.payee_name).toBe('Priya');
+  });
+
+  it('reports no blockers as an empty array, not undefined', async () => {
+    const { fetch } = createRoutedFetch({
+      [`POST ${PROPOSALS_PATH}`]: () => ({ status: 200, body: { reply: 'ok' } }),
+    });
+    const client = makeClient(fetch as unknown as typeof globalThis.fetch);
+
+    const turn = await client.newAgentConversation(AGENT_ID).send('hi');
+
+    expect(turn.blockers).toEqual([]);
+    expect(turn.hasBlockers).toBe(false);
+  });
+
+  it('resends the client_policy override on EVERY turn, and omits it when unset', async () => {
+    const { fetch, requests } = createRoutedFetch({
+      [`POST ${PROPOSALS_PATH}`]: () => ({ status: 200, body: { reply: 'ok' } }),
+    });
+    const client = makeClient(fetch as unknown as typeof globalThis.fetch);
+    const policy = { payee_model: 'flat' as const, labels: { payee: 'recipient' } };
+
+    const scoped = client.newAgentConversation(AGENT_ID, { clientPolicy: policy });
+    await scoped.send('pay alice');
+    await scoped.send('and bob');
+    expect(policyOf(requests[0])).toEqual(policy);
+    expect(policyOf(requests[1])).toEqual(policy);
+
+    // Unset must fall through to the client's registration — sending an
+    // empty object would instead read as an override meaning "defaults".
+    const plain = client.newAgentConversation(AGENT_ID);
+    await plain.send('pay alice');
+    expect(policyOf(requests[2])).toBeUndefined();
+  });
+
   it('rolls back the optimistic user turn on error (retry does not duplicate)', async () => {
     const { fetch } = createRoutedFetch({
       [`POST ${PROPOSALS_PATH}`]: () => ({
@@ -168,6 +230,11 @@ describe('AgentConversation.send', () => {
     expect(secondBody).not.toContain(wantBase64);
   });
 });
+
+function policyOf(req: RecordedRequest | undefined): unknown {
+  if (!req || !req.body || typeof req.body !== 'object') return undefined;
+  return (req.body as { client_policy?: unknown }).client_policy;
+}
 
 function timezoneOf(req: RecordedRequest | undefined): string | undefined {
   if (!req || !req.body || typeof req.body !== 'object') return undefined;

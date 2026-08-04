@@ -492,6 +492,141 @@ paths:
                 title: Not Found
                 status: 404
                 detail: agentic payments are not enabled
+  /clients/{client_id}/agentic-policy:
+    x-alpha: true
+    parameters:
+      - name: client_id
+        in: path
+        required: true
+        schema:
+          $ref: '#/components/schemas/KSUID'
+    put:
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      tags:
+        - Agentic Payments
+      summary: Register the client's agentic policy (ALPHA)
+      description: |
+        > **Alpha** — early access.
+
+        Registers (or fully replaces) this client's `client_policy`, so the client declares its vocabulary ONCE instead of resending it in every `POST /payment-agents/{payment_agent_id}/proposals` body. Sending it per request still works and still wins, as a development override — but forgetting to send it fails SILENTLY: the agent simply narrates in platform's nouns again ("destination", "mandate") and nothing errors. A registration removes that failure mode.
+
+        The body is the SAME `client_policy` object the proposals request takes, so an existing integration registers by moving the object it already sends. It goes through the SAME validation: an unknown key, an unknown value, or a label for a concept the server does not implement is a 400 HERE, at registration — not a surprise on a customer's first conversation.
+
+        FULL REPLACE, not a merge: the registration IS the client's declared vocabulary, so an omitted field means the client no longer wants it. An empty body (`{}`) therefore clears the registration back to platform defaults.
+
+        A client may register its OWN policy; writing another client's is a 403.
+      operationId: updateClientAgenticPolicy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgenticClientPolicy'
+            example:
+              payee_model: flat
+              mandate_strategy: external_only
+              payout_route: bank_only
+              labels:
+                limit: spending limit
+                limit_unit: USD
+                payee: recipient
+      responses:
+        '200':
+          description: The registered policy, normalized as it will be applied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisteredAgenticClientPolicy'
+              example:
+                policy:
+                  payee_model: flat
+                  mandate_strategy: external_only
+                  payout_route: bank_only
+                  labels:
+                    limit: spending limit
+                    limit_unit: USD
+                    payee: recipient
+                created_at: 1761600000
+                updated_at: 1761686400
+        '400':
+          description: |
+            The policy is not one this server can enforce — an unknown key, an unsupported value, or a label for an unimplemented concept.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+    get:
+      tags:
+        - Agentic Payments
+      summary: Get the client's registered agentic policy (ALPHA)
+      description: |
+        > **Alpha** — early access.
+
+        Returns the `client_policy` registered for this client — the vocabulary and payout constraints every drafting turn uses when the proposals request body does not carry its own.
+
+        A client may read its OWN policy; reading another client's is a 403. No registration is a 404 — which is not an error condition but the default: with no registration and no body policy the agent drafts on platform defaults, exactly as it did before registration existed.
+      operationId: getClientAgenticPolicy
+      responses:
+        '200':
+          description: The client's registered agentic policy, normalized.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisteredAgenticClientPolicy'
+              example:
+                policy:
+                  payee_model: flat
+                  mandate_strategy: external_only
+                  payout_route: bank_only
+                  labels:
+                    limit: spending limit
+                    limit_unit: USD
+                    payee: recipient
+                created_at: 1761600000
+                updated_at: 1761686400
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: This client has no registered policy.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /payment-agents/{payment_agent_id}:
     x-alpha: true
     get:
@@ -1615,6 +1750,14 @@ components:
         reply:
           type: string
           description: The agent's conversational reply — a clarifying question or confirmation. Present without proposals when the agent needs more from the user; may accompany proposals as a short note.
+        blockers:
+          type: array
+          description: |
+            ALPHA — machine-actionable reasons the agent could not complete the request, for the CLIENT APPLICATION rather than the customer. `reply` explains it in prose, which software cannot branch on: "extend the limit to cover Priya", "I need her bank details" and "that rail is not supported" all arrive as some text. A blocker names the reason as a stable code so the client can act on it — opening its own limit editor with the payee filled in, say — and only then decide what the customer sees.
+            MAY ACCOMPANY PROPOSALS, and routinely does. The common case is a payee who does not exist yet: the turn proposes creating them AND reports that the limit will not reach them, because the client has to do both, in that order — accept the proposal so the payee has an id, then amend the limit to include it. Treat proposals and blockers as independent, never as alternatives.
+            Absent when nothing blocked the turn. ALWAYS switch on `code` and ignore codes you do not know, as new ones are added over time. Every blocker returned has been re-checked against the server's own data, so a code never reflects only the model's opinion.
+          items:
+            $ref: '#/components/schemas/AgenticBlocker'
         conversation_status:
           type: string
           enum:
@@ -1698,12 +1841,16 @@ components:
         - payment_agent_id
         - proposals
       properties:
+        client_policy:
+          $ref: '#/components/schemas/AgenticClientPolicy'
         payment_agent_id:
           type: string
         proposals:
           type: array
           items:
             $ref: '#/components/schemas/AgenticProposal'
+        developer_fee:
+          $ref: '#/components/schemas/DeveloperFee'
     CreateMandateAction:
       type: object
       required:
@@ -1763,6 +1910,8 @@ components:
           description: |
             The customer's IANA timezone (e.g. "America/Los_Angeles"). When present, the agent resolves every relative date ("tomorrow", "Friday") and clock time ("10 am") in THIS timezone; a date without a time is drafted for the first working hours of the local day (10:00) and the draft summary states the resolved local time; a time without a date means its next local occurrence. Absent or unrecognized ⇒ times resolve as UTC and the agent says so when a specific clock time matters. Send it on EVERY turn — the server is stateless. Note: the zone's UTC offset is captured at drafting time, so a DST transition before a far-future fire date shifts the fire time by the DST delta.
           example: America/Los_Angeles
+        client_policy:
+          $ref: '#/components/schemas/AgenticClientPolicy'
     CreateScheduledPaymentsAction:
       type: object
       required:
@@ -1778,6 +1927,10 @@ components:
           type: string
         asset:
           type: string
+        network_id:
+          type: string
+          description: 'The chain THIS payment settles on. The network belongs to the payment, not to the payee: an address belongs to a whole family, so which chain a given payment uses is chosen when the payment is made. Optional — the destination''s own network is used when omitted. When the destination pins a DIFFERENT one in the same family, this payment''s network wins (the pin records what an earlier payment did, not a restriction on the address). Across chain FAMILIES the address does not carry at all, and that is refused.'
+          example: base-sepolia
         dates:
           type: array
           maxItems: 366
@@ -1824,6 +1977,10 @@ components:
         output_asset:
           type: string
           description: The asset the recipient receives (a currency such as USD for a bank offramp).
+        output_network_id:
+          type: string
+          description: 'The chain the PAYEE is paid on — the payout leg, and a different chain from `source_network_id` (the deposit the funding wallet pays). Crypto payouts only; a bank offramp has no chain. Optional: the destination''s own network is used when omitted. When set it decides, because the network belongs to the payment and not to the payee — an address receives on every chain in its family, so a destination''s saved network records what a previous payment did rather than restricting this one. Across chain FAMILIES the address does not carry at all, and that is refused.'
+          example: base-sepolia
         rail:
           type: string
           description: Outbound rail — REQUIRED for a bank offramp (e.g. ach, fedwire, swift); omit for a crypto swap.

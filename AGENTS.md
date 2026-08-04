@@ -645,6 +645,27 @@ const poll = setInterval(async () => {
 const turn = await conv
   .send('Pay Alice 100 USDC on base-mainnet every month')
   .finally(() => clearInterval(poll));
+
+// BLOCKERS are for your APPLICATION; `reply` is for the customer. They
+// ACCOMPANY proposals rather than replacing them — the common case is a
+// payee who does not exist yet, where the turn proposes creating them AND
+// reports that the limit will not reach them. You have to do both, in that
+// order: accept the proposal so the payee gets an id, then amend the limit.
+for (const b of turn.blockers) {
+  switch (b.code) {
+    case 'mandate_does_not_cover_payee':
+      // Actionable: amend the limit to ADD b.payee_name as a target. That
+      // changes nothing else, so it can never raise the limit.
+      openLimitEditor(b.mandate_id, b.payee_name);
+      break;
+    case 'no_mandate':
+      // Nothing to amend — the customer must establish a limit first.
+      openLimitCreation();
+      break;
+    default:
+      break; // Ignore codes you don't know; new ones are added over time.
+  }
+}
 if (turn.hasProposals) {
   // Accept proposals -> persisted instructions (+ drafted mandates to sign).
   const result = await client.instructions.create({
@@ -707,6 +728,31 @@ await client.mandates.amend(mandateId, {
 for (const v of await client.mandates.listVersions(mandateId)) {
   console.log(v.version, v.approved_by_signer_id, v.rule?.max_amount_in_window);
 }
+
+// Register the vocabulary the agent speaks for YOUR product — once, not per
+// request. Without it the agent narrates in platform nouns ("destination",
+// "mandate"). Passing `clientPolicy` per conversation also works but is a
+// development override: forget it and it fails SILENTLY.
+await client.agenticPolicy.set(clientId, {
+  payee_model: 'flat', // one entry per payout method, not one payee with N methods
+  payout_assets: ['USDC', 'USDT'], // what a PAYEE may receive — state it when
+  // your funding asset is never a payout
+  labels: { limit: 'spending limit', payee: 'recipient', limit_unit: 'USD' },
+  payout_route: 'conversion_account_only', // every payment funds a conversion account
+  mandate_strategy: 'external_only', // limits live in YOUR editor; the agent never drafts one
+});
+// Full replace, not a merge — `{}` clears the registration. Validation is
+// strict, so an unknown key or an unimplemented label concept is a 400 HERE
+// rather than a surprise on a customer's first conversation.
+
+// Declare your developer fee PER PAYOUT TYPE when accepting proposals. The
+// two rates are independent — omit one and that payout type carries no fee,
+// and the agent is told nothing about a fee it could mention.
+await client.instructions.create({
+  payment_agent_id: agent.id!,
+  proposals: turn.proposals,
+  developer_fee: { swap_bps: 50, offramp_bps: 25 },
+});
 
 // Read-only account insights + advisory chat.
 const report = await client.insights.get(customerId);

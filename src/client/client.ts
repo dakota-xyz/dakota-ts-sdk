@@ -29,6 +29,7 @@ import {
   MandatesResource,
   ScheduledPaymentsResource,
   InsightsResource,
+  AgenticPolicyResource,
 } from './resources/index.js';
 import {
   AgentConversation,
@@ -119,6 +120,8 @@ export class DakotaClient {
   readonly scheduledPayments: ScheduledPaymentsResource;
   /** Insights API (ALPHA) - read-only advisory reporting over agentic activity */
   readonly insights: InsightsResource;
+  /** Agentic Policy API (ALPHA) - register the vocabulary the agent speaks for your product */
+  readonly agenticPolicy: AgenticPolicyResource;
 
   /**
    * Create a new Dakota client.
@@ -181,6 +184,7 @@ export class DakotaClient {
     this.mandates = new MandatesResource(this.transport);
     this.scheduledPayments = new ScheduledPaymentsResource(this.transport);
     this.insights = new InsightsResource(this.transport);
+    this.agenticPolicy = new AgenticPolicyResource(this.transport);
   }
 
   // ==========================================================================

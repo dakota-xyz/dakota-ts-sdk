@@ -65,6 +65,14 @@ export class AccountsResource extends BaseResource {
    * });
    * // Returns: { bank_account: { bank_name, aba_routing_number, account_number } } - customer sends USD here
    * ```
+   *
+   * @remarks
+   * `max_transactions` caps how many transactions the account may ever
+   * create — `1` makes it a one-off. Know what reaching the cap does before
+   * you set one: further deposits are **refused, not returned**. The funds
+   * still arrive and are then held pending manual intervention, with nothing
+   * converted, nothing forwarded, and no transaction on the account for
+   * them. Stop sending to the deposit details once the cap is reached.
    */
   async create(data: AccountCreateRequest, options?: RequestOptions): Promise<Account> {
     return this.transport.request<Account>({

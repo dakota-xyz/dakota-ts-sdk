@@ -239,6 +239,13 @@ describe('DakotaClient', () => {
       expect(typeof client.scheduledPayments.cancel).toBe('function');
     });
 
+    it('exposes agenticPolicy resource (ALPHA)', () => {
+      const client = new DakotaClient({ apiKey: 'test_key' });
+      expect(client.agenticPolicy).toBeDefined();
+      expect(typeof client.agenticPolicy.get).toBe('function');
+      expect(typeof client.agenticPolicy.set).toBe('function');
+    });
+
     it('exposes agentic conversation + wallet helpers (ALPHA)', () => {
       const client = new DakotaClient({ apiKey: 'test_key' });
       expect(typeof client.newAgentConversation).toBe('function');
