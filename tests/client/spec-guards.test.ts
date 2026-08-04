@@ -34,7 +34,10 @@ describe('openapi spec guards', () => {
    * `agenticPolicy` call 404'd. Until upstream regenerates, the SDK carries
    * the corrected path by hand, and this guard keeps it corrected.
    */
-  for (const spec of ['openapi.yaml', 'openapi.merged.yaml']) {
+  // Only the CHECKED-IN specs. `openapi.merged.yaml` is a gitignored build
+  // artifact that does not exist on a fresh clone, and it is wholly derived
+  // from these two — guarding both covers it.
+  for (const spec of ['openapi.yaml', 'openapi.agentic.yaml']) {
     it(`${spec} has /agentic-policy and NOT the client-scoped shape`, () => {
       const { paths } = loadSpec(spec);
 
