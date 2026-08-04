@@ -1196,7 +1196,7 @@ export type AgenticBlockerCode = NonNullable<AgenticBlocker['code']>;
  *
  * Reshapes what the drafting model sees and constrains what it may propose,
  * so the agent narrates in your nouns instead of the platform's. Register it
- * ONCE via `client.agenticPolicy.set(clientId, policy)`; sending it per
+ * ONCE via `client.agenticPolicy.set(policy)`; sending it per
  * request is a development override that wins for that turn only.
  *
  * STRICT — an unknown key, an unknown value, or a label for a concept the

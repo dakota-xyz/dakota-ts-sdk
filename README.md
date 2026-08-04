@@ -764,11 +764,11 @@ once and every drafting turn narrates in your nouns instead of the platform's.
 
 | Method | Description |
 |--------|-------------|
-| `agenticPolicy.get(clientId)` | Read your registered policy (404 = none, which is the default) |
-| `agenticPolicy.set(clientId, policy)` | Register or fully replace it (`{}` clears it) |
+| `agenticPolicy.get()` | Read your registered policy (404 = none, which is the default) |
+| `agenticPolicy.set(policy)` | Register or fully replace it (`{}` clears it) |
 
 ```typescript
-await client.agenticPolicy.set(clientId, {
+await client.agenticPolicy.set({
   payee_model: 'flat',
   payout_assets: ['USDC', 'USDT'],
   labels: { limit: 'spending limit', payee: 'recipient', limit_unit: 'USD' },

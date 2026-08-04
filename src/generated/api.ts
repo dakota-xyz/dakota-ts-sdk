@@ -1958,44 +1958,6 @@ export type paths = {
         readonly patch?: never;
         readonly trace?: never;
     };
-    readonly "/clients/{client_id}/agentic-policy": {
-        readonly parameters: {
-            readonly query?: never;
-            readonly header?: never;
-            readonly path: {
-                readonly client_id: components["schemas"]["KSUID"];
-            };
-            readonly cookie?: never;
-        };
-        /**
-         * Get the client's registered agentic policy (ALPHA)
-         * @description > **Alpha** — early access.
-         *
-         *     Returns the `client_policy` registered for this client — the vocabulary and payout constraints every drafting turn uses when the proposals request body does not carry its own.
-         *
-         *     A client may read its OWN policy; reading another client's is a 403. No registration is a 404 — which is not an error condition but the default: with no registration and no body policy the agent drafts on platform defaults, exactly as it did before registration existed.
-         */
-        readonly get: operations["getClientAgenticPolicy"];
-        /**
-         * Register the client's agentic policy (ALPHA)
-         * @description > **Alpha** — early access.
-         *
-         *     Registers (or fully replaces) this client's `client_policy`, so the client declares its vocabulary ONCE instead of resending it in every `POST /payment-agents/{payment_agent_id}/proposals` body. Sending it per request still works and still wins, as a development override — but forgetting to send it fails SILENTLY: the agent simply narrates in platform's nouns again ("destination", "mandate") and nothing errors. A registration removes that failure mode.
-         *
-         *     The body is the SAME `client_policy` object the proposals request takes, so an existing integration registers by moving the object it already sends. It goes through the SAME validation: an unknown key, an unknown value, or a label for a concept the server does not implement is a 400 HERE, at registration — not a surprise on a customer's first conversation.
-         *
-         *     FULL REPLACE, not a merge: the registration IS the client's declared vocabulary, so an omitted field means the client no longer wants it. An empty body (`{}`) therefore clears the registration back to platform defaults.
-         *
-         *     A client may register its OWN policy; writing another client's is a 403.
-         */
-        readonly put: operations["updateClientAgenticPolicy"];
-        readonly post?: never;
-        readonly delete?: never;
-        readonly options?: never;
-        readonly head?: never;
-        readonly patch?: never;
-        readonly trace?: never;
-    };
     readonly "/payment-agents/{payment_agent_id}": {
         readonly parameters: {
             readonly query?: never;
@@ -2442,6 +2404,38 @@ export type paths = {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/agentic-policy": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Get the client's registered agentic policy (ALPHA)
+         * @description Returns the `client_policy` registered for the CALLING client — the vocabulary and payout constraints every drafting turn and every accept uses. Scoped to the caller by construction: the client is resolved from the API key, so there is no id to pass and no other client's policy to address.
+         *
+         *     No registration is a 404 — which is not an error condition but the default: with no registration and no body policy the agent drafts on platform defaults, exactly as it did before registration existed.
+         */
+        readonly get: operations["getClientAgenticPolicy"];
+        /**
+         * Register the client's agentic policy (ALPHA)
+         * @description Registers (or fully replaces) this client's `client_policy` — the ONLY way to set one. A client declares its vocabulary once, and every drafting turn and every accept then resolve it from here.
+         *
+         *     Registration is deliberately the only path. The policy was once also accepted in the `POST /payment-agents/{payment_agent_id}/proposals` and `POST /instructions` bodies, and that made a two-call conversation able to disagree with itself: a proposal drafted under one policy and accepted without it is judged by different rules, so a legal draft was refused at the customer's approval click. A policy is a property of the CLIENT, not of a request, and it now lives in exactly one place.
+         *
+         *     A full replace, not a merge: send the whole policy every time. Changing one takes effect on the next turn — there is no cache — so this is also how you TEST a policy. Register, run a conversation, register something else. Validation happens HERE: an unknown key, an unknown value, or a label for a concept the server does not implement is a 400 at registration, not a surprise on a customer's first conversation.
+         *
+         *     FULL REPLACE, not a merge: the registration IS the client's declared vocabulary, so an omitted field means the client no longer wants it. An empty body (`{}`) therefore clears the registration back to platform defaults.
+         */
+        readonly put: operations["updateClientAgenticPolicy"];
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
 };
 export type webhooks = Record<string, never>;
 export type components = {
@@ -2803,9 +2797,9 @@ export type components = {
         /**
          * @description ALPHA — how THIS client's product speaks, and what the agent may propose for it. It reshapes what the drafting model SEES (tool results, tool descriptions, prompt sections) and constrains what it may PROPOSE, so the agent narrates in the client's own nouns instead of platform ones.
          *
-         *     SCOPE: this is a per-CLIENT policy — it belongs to the `client_id` behind the API key, never to a key (api keys are N:1 to clients, so a per-key policy would fragment for a client running one service key per deployment). REGISTER IT ONCE at `PUT /clients/{client_id}/agentic-policy`.
+         *     SCOPE: this is a per-CLIENT policy — it belongs to the `client_id` behind the API key, never to a key (api keys are N:1 to clients, so a per-key policy would fragment for a client running one service key per deployment). REGISTER IT at `PUT /agentic-policy`, which resolves the client from the API key: there is no id to pass and no other client's policy to address.
          *
-         *     DELIVERY: sent in a `POST .../proposals` body this object is a DEVELOPMENT OVERRIDE — it wins for that one turn and the server logs that it did. Prefer the registration: forgetting to send the body copy fails SILENTLY, and the agent simply starts narrating in platform's nouns again with no error anywhere. Resolution per request is: a non-empty body policy, else this client's registration, else nothing at all.
+         *     DELIVERY: registration only. A request body never carries this object — a conversation is two calls (draft, then accept) judged independently, and a per-request policy let them disagree, so a draft that was legal under one could be refused at the customer's approval click.
          *
          *     STRICT: an unknown key, an unknown value, or a label for a concept the server does not implement is a 400 — "accepted" always means "enforced". Absent (or every field empty) ⇒ platform defaults, byte-for-byte the behaviour of a request that never mentioned it.
          */
@@ -23960,173 +23954,6 @@ export interface operations {
             };
         };
     };
-    readonly getClientAgenticPolicy: {
-        readonly parameters: {
-            readonly query?: never;
-            readonly header?: never;
-            readonly path: {
-                readonly client_id: components["schemas"]["KSUID"];
-            };
-            readonly cookie?: never;
-        };
-        readonly requestBody?: never;
-        readonly responses: {
-            /** @description The client's registered agentic policy, normalized. */
-            readonly 200: {
-                headers: {
-                    readonly [name: string]: unknown;
-                };
-                content: {
-                    /**
-                     * @example {
-                     *       "policy": {
-                     *         "payee_model": "flat",
-                     *         "mandate_strategy": "external_only",
-                     *         "payout_route": "bank_only",
-                     *         "labels": {
-                     *           "limit": "spending limit",
-                     *           "limit_unit": "USD",
-                     *           "payee": "recipient"
-                     *         }
-                     *       },
-                     *       "created_at": 1761600000,
-                     *       "updated_at": 1761686400
-                     *     }
-                     */
-                    readonly "application/json": components["schemas"]["RegisteredAgenticClientPolicy"];
-                };
-            };
-            /** @description Bad Request */
-            readonly 400: {
-                headers: {
-                    readonly [name: string]: unknown;
-                };
-                content: {
-                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Unauthorized */
-            readonly 401: {
-                headers: {
-                    readonly [name: string]: unknown;
-                };
-                content: {
-                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Forbidden */
-            readonly 403: {
-                headers: {
-                    readonly [name: string]: unknown;
-                };
-                content: {
-                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description This client has no registered policy. */
-            readonly 404: {
-                headers: {
-                    readonly [name: string]: unknown;
-                };
-                content: {
-                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    readonly updateClientAgenticPolicy: {
-        readonly parameters: {
-            readonly query?: never;
-            readonly header: {
-                /** @description Unique key to ensure request idempotency. If the same key is used within a certain time window, the original response will be returned instead of executing the request again. */
-                readonly "x-idempotency-key": components["parameters"]["IdempotencyKeyHeader"];
-            };
-            readonly path: {
-                readonly client_id: components["schemas"]["KSUID"];
-            };
-            readonly cookie?: never;
-        };
-        readonly requestBody: {
-            readonly content: {
-                /**
-                 * @example {
-                 *       "payee_model": "flat",
-                 *       "mandate_strategy": "external_only",
-                 *       "payout_route": "bank_only",
-                 *       "labels": {
-                 *         "limit": "spending limit",
-                 *         "limit_unit": "USD",
-                 *         "payee": "recipient"
-                 *       }
-                 *     }
-                 */
-                readonly "application/json": components["schemas"]["AgenticClientPolicy"];
-            };
-        };
-        readonly responses: {
-            /** @description The registered policy, normalized as it will be applied. */
-            readonly 200: {
-                headers: {
-                    readonly [name: string]: unknown;
-                };
-                content: {
-                    /**
-                     * @example {
-                     *       "policy": {
-                     *         "payee_model": "flat",
-                     *         "mandate_strategy": "external_only",
-                     *         "payout_route": "bank_only",
-                     *         "labels": {
-                     *           "limit": "spending limit",
-                     *           "limit_unit": "USD",
-                     *           "payee": "recipient"
-                     *         }
-                     *       },
-                     *       "created_at": 1761600000,
-                     *       "updated_at": 1761686400
-                     *     }
-                     */
-                    readonly "application/json": components["schemas"]["RegisteredAgenticClientPolicy"];
-                };
-            };
-            /** @description The policy is not one this server can enforce — an unknown key, an unsupported value, or a label for an unimplemented concept. */
-            readonly 400: {
-                headers: {
-                    readonly [name: string]: unknown;
-                };
-                content: {
-                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Unauthorized */
-            readonly 401: {
-                headers: {
-                    readonly [name: string]: unknown;
-                };
-                content: {
-                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Forbidden */
-            readonly 403: {
-                headers: {
-                    readonly [name: string]: unknown;
-                };
-                content: {
-                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Not Found */
-            readonly 404: {
-                headers: {
-                    readonly [name: string]: unknown;
-                };
-                content: {
-                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
     readonly getPaymentAgent: {
         readonly parameters: {
             readonly query?: never;
@@ -25890,6 +25717,151 @@ export interface operations {
                      *       "detail": "agentic payments are not enabled"
                      *     }
                      */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    readonly getClientAgenticPolicy: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The client's registered agentic policy, normalized. */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "policy": {
+                     *         "payee_model": "flat",
+                     *         "mandate_strategy": "external_only",
+                     *         "payout_route": "bank_only",
+                     *         "labels": {
+                     *           "limit": "spending limit",
+                     *           "limit_unit": "USD",
+                     *           "payee": "recipient"
+                     *         }
+                     *       },
+                     *       "created_at": 1761600000,
+                     *       "updated_at": 1761686400
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["RegisteredAgenticClientPolicy"];
+                };
+            };
+            /** @description Bad Request */
+            readonly 400: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            readonly 401: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description This client has no registered policy. */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    readonly updateClientAgenticPolicy: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header: {
+                /** @description Unique key to ensure request idempotency. If the same key is used within a certain time window, the original response will be returned instead of executing the request again. */
+                readonly "x-idempotency-key": components["parameters"]["IdempotencyKeyHeader"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                /**
+                 * @example {
+                 *       "payee_model": "flat",
+                 *       "mandate_strategy": "external_only",
+                 *       "payout_route": "bank_only",
+                 *       "labels": {
+                 *         "limit": "spending limit",
+                 *         "limit_unit": "USD",
+                 *         "payee": "recipient"
+                 *       }
+                 *     }
+                 */
+                readonly "application/json": components["schemas"]["AgenticClientPolicy"];
+            };
+        };
+        readonly responses: {
+            /** @description The registered policy, normalized as it will be applied. */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "policy": {
+                     *         "payee_model": "flat",
+                     *         "mandate_strategy": "external_only",
+                     *         "payout_route": "bank_only",
+                     *         "labels": {
+                     *           "limit": "spending limit",
+                     *           "limit_unit": "USD",
+                     *           "payee": "recipient"
+                     *         }
+                     *       },
+                     *       "created_at": 1761600000,
+                     *       "updated_at": 1761686400
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["RegisteredAgenticClientPolicy"];
+                };
+            };
+            /** @description The policy is not one this server can enforce — an unknown key, an unsupported value, or a label for an unimplemented concept. */
+            readonly 400: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            readonly 401: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
                     readonly "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };

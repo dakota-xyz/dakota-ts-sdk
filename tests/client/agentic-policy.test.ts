@@ -12,8 +12,7 @@ import { DakotaClient } from '../../src/client/client.js';
 import { APIError } from '../../src/client/errors.js';
 import { createRoutedFetch } from '../agentic/helpers.js';
 
-const CLIENT_ID = 'clt_1';
-const PATH = `/clients/${CLIENT_ID}/agentic-policy`;
+const PATH = '/agentic-policy';
 
 function makeClient(fetchImpl: unknown) {
   return new DakotaClient({
@@ -32,6 +31,22 @@ const POLICY = {
 };
 
 describe('agenticPolicy', () => {
+  it('addresses /agentic-policy — the client comes from the API key, never a path id', async () => {
+    const { fetch, requests } = createRoutedFetch({
+      [`GET ${PATH}`]: () => ({ status: 200, body: { policy: {} } }),
+      [`PUT ${PATH}`]: () => ({ status: 200, body: { policy: {} } }),
+    });
+    const client = makeClient(fetch);
+
+    await client.agenticPolicy.get();
+    await client.agenticPolicy.set({});
+
+    // The platform router registers exactly this. A client-scoped path 404s,
+    // which is what shipped in 2.2.0.
+    expect(requests.map((r) => r.path)).toEqual(['/agentic-policy', '/agentic-policy']);
+    expect(requests.every((r) => !r.path.includes('/clients/'))).toBe(true);
+  });
+
   it('registers a policy and returns the NORMALIZED stored form', async () => {
     const { fetch, requests } = createRoutedFetch({
       [`PUT ${PATH}`]: (req) => ({
@@ -43,7 +58,7 @@ describe('agenticPolicy', () => {
     });
     const client = makeClient(fetch);
 
-    const registered = await client.agenticPolicy.set(CLIENT_ID, POLICY);
+    const registered = await client.agenticPolicy.set(POLICY);
 
     expect(requests[0]?.method).toBe('PUT');
     expect(requests[0]?.body).toEqual(POLICY);
@@ -56,7 +71,7 @@ describe('agenticPolicy', () => {
       [`PUT ${PATH}`]: () => ({ status: 200, body: { policy: {} } }),
     });
 
-    await makeClient(fetch).agenticPolicy.set(CLIENT_ID, POLICY, {
+    await makeClient(fetch).agenticPolicy.set(POLICY, {
       idempotencyKey: '11111111-1111-4111-8111-111111111111',
     });
 
@@ -68,7 +83,7 @@ describe('agenticPolicy', () => {
       [`PUT ${PATH}`]: () => ({ status: 200, body: { policy: {} } }),
     });
 
-    const registered = await makeClient(fetch).agenticPolicy.set(CLIENT_ID, {});
+    const registered = await makeClient(fetch).agenticPolicy.set({});
 
     // An omitted field means "no longer wanted", so `{}` must reach the wire
     // as `{}` rather than being dropped or merged into anything.
@@ -84,7 +99,7 @@ describe('agenticPolicy', () => {
       }),
     });
 
-    const got = await makeClient(fetch).agenticPolicy.get(CLIENT_ID);
+    const got = await makeClient(fetch).agenticPolicy.get();
 
     expect(got.policy.labels?.payee).toBe('recipient');
   });
@@ -101,7 +116,7 @@ describe('agenticPolicy', () => {
     // status, so it must arrive as a typed APIError rather than a throw
     // that looks like a transport failure.
     const err = await makeClient(fetch)
-      .agenticPolicy.get(CLIENT_ID)
+      .agenticPolicy.get()
       .catch((e: unknown) => e);
 
     expect(err).toBeInstanceOf(APIError);
@@ -117,7 +132,7 @@ describe('agenticPolicy', () => {
     });
 
     const err = await makeClient(fetch)
-      .agenticPolicy.set(CLIENT_ID, { labels: { payee: 'x' } })
+      .agenticPolicy.set({ labels: { payee: 'x' } })
       .catch((e: unknown) => e);
 
     expect(err).toBeInstanceOf(APIError);
