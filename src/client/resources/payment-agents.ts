@@ -93,6 +93,15 @@ export class PaymentAgentsResource extends BaseResource {
    * rather than the client's ordinary deadline. Pass `{ timeout }` to
    * change it for one call; an explicit client-wide `timeout` still wins.
    *
+   * The result may carry `blockers` ALONGSIDE proposals — they are not
+   * alternatives. Branch on `blocker.code`, not on `reply`, and ignore codes
+   * you do not recognize.
+   *
+   * `data.client_policy` is a DEVELOPMENT override of the vocabulary the
+   * agent drafts under; prefer registering it once with
+   * `client.agenticPolicy.set()`, since forgetting to send it here fails
+   * silently.
+   *
    * @param paymentAgentId - Payment agent ID
    * @param data - Prompt and/or messages
    * @returns Proposals (at high confidence) and/or a conversational reply

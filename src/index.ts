@@ -81,6 +81,7 @@ export {
   MandatesResource,
   ScheduledPaymentsResource,
   InsightsResource,
+  AgenticPolicyResource,
   type AccountListParams,
 } from './client/resources/index.js';
 

@@ -9,7 +9,12 @@
  */
 
 import type { DakotaClient } from '../client/client.js';
-import type { AgenticProposal, AgenticProposalsResult } from '../client/types.js';
+import type {
+  AgenticBlocker,
+  AgenticClientPolicy,
+  AgenticProposal,
+  AgenticProposalsResult,
+} from '../client/types.js';
 
 /**
  * MIME types the platform accepts for a document attachment.
@@ -65,6 +70,26 @@ export interface ConversationTurn {
   /** Whether the agent drafted proposals this turn. */
   hasProposals: boolean;
   /**
+   * Machine-actionable reasons the turn could not complete — for YOUR
+   * application, not the customer. `reply` says the same thing in prose,
+   * which software cannot branch on: "extend the limit to cover Priya",
+   * "I need her bank details" and "that rail is not supported" all arrive
+   * as some text.
+   *
+   * These ACCOMPANY proposals rather than replacing them, and routinely do.
+   * The common case is a payee who does not exist yet: the turn proposes
+   * creating them AND reports that the limit will not reach them, because
+   * you have to do both, in that order — accept the proposal so the payee
+   * has an id, then amend the limit to include it. Never treat proposals
+   * and blockers as alternatives.
+   *
+   * Empty when nothing blocked the turn. Always switch on `code` and ignore
+   * codes you do not know; new ones are added over time.
+   */
+  blockers: AgenticBlocker[];
+  /** Whether the turn reported any blocker. */
+  hasBlockers: boolean;
+  /**
    * The boundary screen's verdict for this turn: `"ok"` (normal), `"warned"`
    * (off-topic — the customer was warned), or `"blocked"` (the chat is
    * terminated; stop serving and offer a fresh conversation). Empty when
@@ -103,6 +128,21 @@ export interface AgentConversationOptions {
    * short global deadline will cut turns off unless you raise it here.
    */
   timeout?: number;
+
+  /**
+   * Per-turn `client_policy` override — the vocabulary and payout
+   * constraints the agent drafts under.
+   *
+   * This is a DEVELOPMENT override. It wins for the turns of this
+   * conversation and the server logs that it did. For production, register
+   * the policy once with `client.agenticPolicy.set(clientId, policy)`
+   * instead: forgetting to pass it here fails SILENTLY — the agent simply
+   * narrates in the platform's nouns again, with no error anywhere.
+   *
+   * Resolution per request is: a non-empty policy here, else the client's
+   * registration, else platform defaults.
+   */
+  clientPolicy?: AgenticClientPolicy;
 }
 
 /**
@@ -122,6 +162,7 @@ export class AgentConversation {
   private readonly paymentAgentId: string;
   private readonly timezone?: string;
   private readonly timeout?: number;
+  private readonly clientPolicy?: AgenticClientPolicy;
   private history: ChatMessage[] = [];
 
   constructor(
@@ -134,6 +175,7 @@ export class AgentConversation {
     this.paymentAgentId = paymentAgentId;
     this.timezone = options?.timezone;
     this.timeout = options?.timeout;
+    this.clientPolicy = options?.clientPolicy;
     if (history && history.length > 0) {
       this.history = history.map(cloneMessage);
     }
@@ -191,8 +233,11 @@ export class AgentConversation {
         {
           messages,
           // Resent on EVERY turn — the endpoint is stateless, so a zone given
-          // once would be forgotten on the next one.
+          // once would be forgotten on the next one. Same for the policy
+          // override: an omitted one silently falls back to the client's
+          // registration (or platform defaults).
           ...(this.timezone ? { timezone: this.timezone } : {}),
+          ...(this.clientPolicy ? { client_policy: this.clientPolicy } : {}),
         },
         this.timeout !== undefined ? { timeout: this.timeout } : undefined
       );
@@ -206,6 +251,8 @@ export class AgentConversation {
       reply: result.reply ?? '',
       proposals: result.proposals ? [...result.proposals] : [],
       hasProposals: !!result.proposals && result.proposals.length > 0,
+      blockers: result.blockers ? [...result.blockers] : [],
+      hasBlockers: !!result.blockers && result.blockers.length > 0,
       conversationStatus: result.conversation_status ?? '',
     };
 

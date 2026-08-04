@@ -757,6 +757,30 @@ Hosted signing agents that draft payments (`x-alpha`, flag-gated).
 | `paymentAgents.createProposals(id, data)` | One-shot proposals turn (see `newAgentConversation`) |
 | `paymentAgents.getProposalsProgress(id)` | Live progress of an in-flight drafting turn (advisory) |
 
+### Agentic Policy (Alpha)
+
+How your product speaks, and what the agent may propose for it. Register it
+once and every drafting turn narrates in your nouns instead of the platform's.
+
+| Method | Description |
+|--------|-------------|
+| `agenticPolicy.get(clientId)` | Read your registered policy (404 = none, which is the default) |
+| `agenticPolicy.set(clientId, policy)` | Register or fully replace it (`{}` clears it) |
+
+```typescript
+await client.agenticPolicy.set(clientId, {
+  payee_model: 'flat',
+  payout_assets: ['USDC', 'USDT'],
+  labels: { limit: 'spending limit', payee: 'recipient', limit_unit: 'USD' },
+  payout_route: 'conversion_account_only',
+});
+```
+
+It is a **full replace, not a merge** — an omitted field means you no longer
+want it. You can also pass `clientPolicy` per conversation, but that is a
+development override: forgetting it fails *silently*, and the agent quietly
+goes back to saying "destination" and "mandate".
+
 ### Mandates (Alpha)
 
 The §8 authorizations that arm scheduled payments.

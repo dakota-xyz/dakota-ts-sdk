@@ -1178,6 +1178,51 @@ export type MandateBudgetLine = components['schemas']['MandateBudgetLine'];
 /** Live snapshot of an in-flight proposal-drafting turn (advisory display only). */
 export type AgenticProposalsProgress = components['schemas']['AgenticProposalsProgress'];
 
+/**
+ * One machine-actionable reason a drafting turn could not complete — for the
+ * CLIENT APPLICATION, not the customer.
+ *
+ * `reply` explains the same thing in prose, which software cannot branch on.
+ * Always switch on `code` and IGNORE codes you do not recognize: new ones are
+ * added over time.
+ */
+export type AgenticBlocker = components['schemas']['AgenticBlocker'];
+
+/** The stable `code` of an {@link AgenticBlocker}. Treat as an OPEN set. */
+export type AgenticBlockerCode = NonNullable<AgenticBlocker['code']>;
+
+/**
+ * How THIS client's product speaks, and what the agent may propose for it.
+ *
+ * Reshapes what the drafting model sees and constrains what it may propose,
+ * so the agent narrates in your nouns instead of the platform's. Register it
+ * ONCE via `client.agenticPolicy.set(clientId, policy)`; sending it per
+ * request is a development override that wins for that turn only.
+ *
+ * STRICT — an unknown key, an unknown value, or a label for a concept the
+ * server does not implement is a 400, so "accepted" always means "enforced".
+ */
+export type AgenticClientPolicy = components['schemas']['AgenticClientPolicy'];
+
+/**
+ * A client's registered policy plus its registration timestamps.
+ *
+ * `policy` is the NORMALIZED form — what the server will actually apply, not
+ * an echo of what was sent (values meaning "the default" are normalized away).
+ */
+export type RegisteredAgenticClientPolicy = components['schemas']['RegisteredAgenticClientPolicy'];
+
+/**
+ * Your developer fee, declared per payout type: `swap_bps` for a crypto
+ * payout, `offramp_bps` for a bank payout.
+ *
+ * The two are independent — omit one (or send zero) and that payout type
+ * carries no fee at all, and the agent is told nothing about a fee it could
+ * mention. Both are DEFAULTS for the auto-accounts a request creates; an
+ * action-level `fee_bps` still wins outright.
+ */
+export type DeveloperFee = components['schemas']['DeveloperFee'];
+
 /** A scheduled payment — bookkeeping row created by accepting an instruction. */
 export type ScheduledPayment = components['schemas']['ScheduledPaymentResponse'];
 

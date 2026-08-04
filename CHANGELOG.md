@@ -2,6 +2,73 @@
 
 All notable changes to the Dakota TypeScript SDK are documented in this file.
 
+## [2.2.0] - 2026-08-04
+
+Spec sync with platform `main`. No breaking changes.
+
+### Added — agentic client policy (ALPHA)
+
+`client.agenticPolicy` (`get` / `set`) registers how YOUR product speaks
+and what the agent may propose for it — payee shape, allowed payout
+assets, the nouns your customers use (`limit`, `payee`, `limit_unit`),
+whether limits live in your own editor, and how money may leave. It
+reshapes what the drafting model sees, so the agent narrates in your
+nouns instead of the platform's.
+
+The policy is per CLIENT, not per API key (keys are N:1 to clients, so a
+per-key policy would fragment across deployments). Registration is a
+FULL REPLACE — an omitted field means you no longer want it, and `{}`
+clears it back to platform defaults. Validation is strict: an unknown
+key, an unknown value, or a label for an unimplemented concept is a 400
+at registration rather than a surprise mid-conversation.
+
+`AgentConversationOptions.clientPolicy` and
+`CreateProposalsRequest.client_policy` still work and still win, but they
+are DEVELOPMENT overrides — forgetting to send one fails silently, with
+the agent simply going back to platform nouns and nothing erroring.
+Prefer the registration.
+
+### Added — blockers on a drafting turn (ALPHA)
+
+`ConversationTurn.blockers` / `hasBlockers` (and
+`AgenticProposalsResult.blockers`) give machine-actionable reasons a turn
+could not complete, for your APPLICATION rather than the customer.
+`reply` says the same thing in prose, which software cannot branch on.
+
+They **accompany proposals rather than replacing them**, and routinely
+do: the common case is a payee who does not exist yet, where the turn
+proposes creating them *and* reports that the limit will not reach them —
+you need both, in that order. Codes today are
+`mandate_does_not_cover_payee` (actionable: amend the limit to add the
+payee as a target) and `no_mandate` (nothing to amend). Switch on `code`
+and ignore ones you do not recognize.
+
+### Added — developer fee per payout type (ALPHA)
+
+`CreateInstructionsRequest.developer_fee` declares `swap_bps` for a
+crypto payout and `offramp_bps` for a bank payout. The two are
+independent, so one conversation can charge a swap and stay silent about
+a bank payout in the same turn. Both are defaults for the auto-accounts
+the request creates; an action-level `fee_bps` still wins.
+
+### Added — per-payment network selection (ALPHA)
+
+`CreateScheduledPaymentsAction.network_id` and
+`CreateAutoAccountAction.output_network_id` pick the chain for THIS
+payment. The network belongs to the payment, not the payee: an address
+receives on every chain in its family, so a destination's saved network
+records what a previous payment did rather than restricting this one.
+Crossing chain FAMILIES is still refused.
+
+### Changed — `max_transactions` on an account
+
+Reaching the cap **refuses further deposits; it does not turn the deposit
+details off**, and refused funds are *not* returned — they arrive and are
+then held pending manual intervention, with nothing converted, nothing
+forwarded, and no transaction recorded. Stop sending to the deposit
+details once the cap is reached. Documented on `accounts.create`; the
+platform behaviour changed, not the SDK.
+
 ## [2.1.1] - 2026-08-01
 
 ### Fixed — the default timeout aborted agent conversations

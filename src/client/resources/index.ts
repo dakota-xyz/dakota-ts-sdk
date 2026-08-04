@@ -25,3 +25,4 @@ export { InstructionsResource } from './instructions.js';
 export { MandatesResource } from './mandates.js';
 export { ScheduledPaymentsResource } from './scheduled-payments.js';
 export { InsightsResource } from './insights.js';
+export { AgenticPolicyResource } from './agentic-policy.js';

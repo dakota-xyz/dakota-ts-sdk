@@ -1958,6 +1958,44 @@ export type paths = {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/clients/{client_id}/agentic-policy": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                readonly client_id: components["schemas"]["KSUID"];
+            };
+            readonly cookie?: never;
+        };
+        /**
+         * Get the client's registered agentic policy (ALPHA)
+         * @description > **Alpha** — early access.
+         *
+         *     Returns the `client_policy` registered for this client — the vocabulary and payout constraints every drafting turn uses when the proposals request body does not carry its own.
+         *
+         *     A client may read its OWN policy; reading another client's is a 403. No registration is a 404 — which is not an error condition but the default: with no registration and no body policy the agent drafts on platform defaults, exactly as it did before registration existed.
+         */
+        readonly get: operations["getClientAgenticPolicy"];
+        /**
+         * Register the client's agentic policy (ALPHA)
+         * @description > **Alpha** — early access.
+         *
+         *     Registers (or fully replaces) this client's `client_policy`, so the client declares its vocabulary ONCE instead of resending it in every `POST /payment-agents/{payment_agent_id}/proposals` body. Sending it per request still works and still wins, as a development override — but forgetting to send it fails SILENTLY: the agent simply narrates in platform's nouns again ("destination", "mandate") and nothing errors. A registration removes that failure mode.
+         *
+         *     The body is the SAME `client_policy` object the proposals request takes, so an existing integration registers by moving the object it already sends. It goes through the SAME validation: an unknown key, an unknown value, or a label for a concept the server does not implement is a 400 HERE, at registration — not a surprise on a customer's first conversation.
+         *
+         *     FULL REPLACE, not a merge: the registration IS the client's declared vocabulary, so an omitted field means the client no longer wants it. An empty body (`{}`) therefore clears the registration back to platform defaults.
+         *
+         *     A client may register its OWN policy; writing another client's is a 403.
+         */
+        readonly put: operations["updateClientAgenticPolicy"];
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/payment-agents/{payment_agent_id}": {
         readonly parameters: {
             readonly query?: never;
@@ -2645,6 +2683,11 @@ export type components = {
             readonly wallet_id?: string;
             readonly amount: string;
             readonly asset: string;
+            /**
+             * @description The chain THIS payment settles on. The network belongs to the payment, not to the payee: an address belongs to a whole family, so which chain a given payment uses is chosen when the payment is made. Optional — the destination's own network is used when omitted. When the destination pins a DIFFERENT one in the same family, this payment's network wins (the pin records what an earlier payment did, not a restriction on the address). Across chain FAMILIES the address does not carry at all, and that is refused.
+             * @example base-sepolia
+             */
+            readonly network_id?: string;
             readonly dates?: readonly number[];
             readonly count?: number;
             /** Format: int64 */
@@ -2701,6 +2744,11 @@ export type components = {
             readonly source_network_id: components["schemas"]["NetworkId"];
             /** @description The asset the recipient receives (a currency such as USD for a bank offramp). */
             readonly output_asset: string;
+            /**
+             * @description The chain the PAYEE is paid on — the payout leg, and a different chain from `source_network_id` (the deposit the funding wallet pays). Crypto payouts only; a bank offramp has no chain. Optional: the destination's own network is used when omitted. When set it decides, because the network belongs to the payment and not to the payee — an address receives on every chain in its family, so a destination's saved network records what a previous payment did rather than restricting this one. Across chain FAMILIES the address does not carry at all, and that is refused.
+             * @example base-sepolia
+             */
+            readonly output_network_id?: string;
             /** @description Outbound rail — REQUIRED for a bank offramp (e.g. ach, fedwire, swift); omit for a crypto swap. */
             readonly rail?: string;
             /** @enum {string} */
@@ -2711,9 +2759,28 @@ export type components = {
              */
             readonly fee_bps?: number;
         };
+        /**
+         * @description Your developer fee, declared per payout type. A conversion is charged the rate for the kind of payout it funds: `swap_bps` for a crypto payout, `offramp_bps` for a bank payout. Omit a rate, or send zero, and that payout type carries no fee at all — nothing is charged, nothing is added to the amount, and the agent is told nothing about a fee it could mention. The two are independent, so one conversation can charge a swap and stay silent about a bank payout in the same turn.
+         *
+         *     Both rates are DEFAULTS for the auto-accounts a request creates. An action-level `fee_bps` is an explicit override and still wins outright, for either type.
+         */
+        readonly DeveloperFee: {
+            /**
+             * Format: int32
+             * @description Rate for a crypto payout — a `create_auto_account` naming no `rail`.
+             */
+            readonly swap_bps?: number;
+            /**
+             * Format: int32
+             * @description Rate for a bank payout — a `create_auto_account` naming a `rail`. An offramp converts too (it just settles on a rail instead of a chain), so charging it is a pricing decision that belongs to you. Zero or omitted means the payout is free of a conversion fee.
+             */
+            readonly offramp_bps?: number;
+        };
         readonly CreateInstructionsRequest: {
+            readonly client_policy?: components["schemas"]["AgenticClientPolicy"];
             readonly payment_agent_id: string;
             readonly proposals: readonly components["schemas"]["AgenticProposal"][];
+            readonly developer_fee?: components["schemas"]["DeveloperFee"];
         };
         readonly AgenticInstructionsResult: {
             /** @description Every mandate this batch DRAFTED, in full wire shape (identical to GET /mandates/{mandate_id}) — sign the §8 approval immediately, no follow-up fetch or polling. Pending until a signer other than the bound one approves. */
@@ -2731,6 +2798,87 @@ export type components = {
              * @example America/Los_Angeles
              */
             readonly timezone?: string;
+            readonly client_policy?: components["schemas"]["AgenticClientPolicy"];
+        };
+        /**
+         * @description ALPHA — how THIS client's product speaks, and what the agent may propose for it. It reshapes what the drafting model SEES (tool results, tool descriptions, prompt sections) and constrains what it may PROPOSE, so the agent narrates in the client's own nouns instead of platform ones.
+         *
+         *     SCOPE: this is a per-CLIENT policy — it belongs to the `client_id` behind the API key, never to a key (api keys are N:1 to clients, so a per-key policy would fragment for a client running one service key per deployment). REGISTER IT ONCE at `PUT /clients/{client_id}/agentic-policy`.
+         *
+         *     DELIVERY: sent in a `POST .../proposals` body this object is a DEVELOPMENT OVERRIDE — it wins for that one turn and the server logs that it did. Prefer the registration: forgetting to send the body copy fails SILENTLY, and the agent simply starts narrating in platform's nouns again with no error anywhere. Resolution per request is: a non-empty body policy, else this client's registration, else nothing at all.
+         *
+         *     STRICT: an unknown key, an unknown value, or a label for a concept the server does not implement is a 400 — "accepted" always means "enforced". Absent (or every field empty) ⇒ platform defaults, byte-for-byte the behaviour of a request that never mentioned it.
+         */
+        readonly AgenticClientPolicy: {
+            /**
+             * @description How payees are shaped in tool results. `nested` (the default, and what an absent policy means) returns ONE payee carrying N payout methods. `flat` returns one entry PER payout method — a payee is a name plus one way of being paid — each with `payee_ref` (the id to pass straight through wherever a payout method is referenced), `entity_ref` (the person behind the entry; several entries can share one, and it is what binds a new payout method to an existing person instead of duplicating them), `name`, and `paid_by` (a rendered human phrase such as `bank account at Chase ****4321` or `base-sepolia 0x1234…cdef`). A payout method never pins an asset, so `paid_by` never names one.
+             * @example flat
+             * @enum {string}
+             */
+            readonly payee_model?: "" | "nested" | "flat";
+            /**
+             * @description The assets a PAYEE may receive — what a conversion may output, and what a direct payment may send. Absent or empty means unrestricted, which is the platform default.
+             *
+             *     State it when your product's FUNDING asset is not something a payee is ever paid in. Platform's asset registry only knows which assets settle on which chain, so it cannot tell that your funding stablecoin is a category error as a payout — it will happily draft one if a customer names it, and because that route needs no conversion account it also creates a duplicate payee for someone already saved. Declaring the allowlist turns both into a refusal the model sees before the customer does.
+             *
+             *     Case-insensitive and de-duplicated; the order you send is the order quoted back to the customer.
+             * @example [
+             *       "USDC",
+             *       "USDT"
+             *     ]
+             */
+            readonly payout_assets?: readonly string[];
+            /**
+             * @description Platform concept → the noun THIS client's customers use for it. The noun replaces the platform word in the tool results the agent reads AND in what it writes to the customer. Implemented concepts: `limit` (the spending limit; platform calls it a mandate), `payee` (the person being paid), and `limit_unit` (the UNIT the limit's amounts are quoted in, e.g. `USD`). Any other key is a 400 — a label for a concept the server does not implement would be accepted and then ignored.
+             *
+             *     `limit` and `payee` are nouns and must match `^[a-z][a-z0-9 _-]{0,30}$`. `limit_unit` is a unit code and must match `^[A-Za-z][A-Za-z0-9]{0,9}$`, so it may be uppercase. Never a phrase, never a sentence.
+             *
+             *     `limit_unit` matters most under a `payout_route` that forces a conversion account: the limit governs the DEPOSIT leg, so its own asset is the funding asset the customer has never heard of. With the unit set the agent quotes the caps and remaining budget in it ("your spending limit is 10 USD per month, 0.98 left") instead of reaching for the funding asset.
+             *
+             *     Labelling `payee` also renames the flat view's keys: the container becomes the label plus `s` and each entry's ref becomes the label plus `_ref` — so `{"payee": "recipient"}` yields `recipients[]` with `recipient_ref`. `entity_ref` is NOT renamed; it is an opaque handle to the person behind the entry, not the labelled concept. The plural is a literal `+s` (the charset restricts labels to simple lowercase nouns), so an irregular noun gets an odd but harmless plural.
+             * @example {
+             *       "limit": "spending limit",
+             *       "limit_unit": "USD",
+             *       "payee": "recipient"
+             *     }
+             */
+            readonly labels?: {
+                readonly [key: string]: string;
+            };
+            /**
+             * @description `external_only`: spending limits live entirely OUTSIDE this conversation — the client creates and amends them in its own limit editor through the customer-signed amend API. The agent never drafts one; a drafted payment must fit an existing active limit's remaining budget, and when nothing covers it the agent says so and points the customer at the app instead of proposing a limit. Absent ⇒ the agent drafts limits as usual.
+             * @example external_only
+             * @enum {string}
+             */
+            readonly mandate_strategy?: "" | "external_only";
+            /**
+             * @description Restricts how the money may leave. `conversion_account_only`: every scheduled payment must fund a conversion account — no direct wallet-to-address send. `bank_only`: on top of that the payout must land in a bank account — an outbound bank rail is required and no crypto payout method may be created. Absent ⇒ any supported route.
+             *
+             *     Either value also makes the FUNDING leg system-chosen, which changes two things. The payment has two legs and the customer only names one: what they ask for is what ARRIVES (the conversion's output), while what LEAVES the wallet is the conversion deposit. The spending limit governs the DEPOSIT leg, so (a) the asset or chain the customer names can never put a payment outside the limit — coverage is judged on the per-payment cap and the remaining budget alone — and (b) the deposit's asset and network move out of the limit's `rule` into a `funding_leg_internal` block in the `active_mandates` result, which the agent copies into the conversion account and never says out loud. Pair this with `labels.limit_unit` so the agent has a unit to quote the limit in.
+             * @example conversion_account_only
+             * @enum {string}
+             */
+            readonly payout_route?: "" | "conversion_account_only" | "bank_only";
+        } & {
+            readonly [key: string]: unknown;
+        };
+        /**
+         * @description A client's registered `client_policy` (ALPHA) with its registration timestamps.
+         *
+         *     `policy` is the NORMALIZED form — what the server will actually apply, not an echo of what was sent. Values that mean "the default" are normalized away (`payee_model: nested` becomes absent, because an explicit nested and an absent policy have to be the same value rather than two values that merely behave alike today).
+         */
+        readonly RegisteredAgenticClientPolicy: {
+            readonly policy: components["schemas"]["AgenticClientPolicy"];
+            /**
+             * Format: int64
+             * @description Unix time this client first registered a policy.
+             */
+            readonly created_at?: number;
+            /**
+             * Format: int64
+             * @description Unix time the registration was last replaced.
+             */
+            readonly updated_at?: number;
         };
         readonly AgenticChatMessage: {
             /** @enum {string} */
@@ -2784,12 +2932,31 @@ export type components = {
              */
             readonly updated_at?: number;
         };
+        /** @description One machine-actionable reason a drafting turn produced no proposals. Verified server-side before it is returned. */
+        readonly AgenticBlocker: {
+            /**
+             * @description `mandate_does_not_cover_payee` — a spending limit is in force but its rule does not reach the named payee. This is the ACTIONABLE one: the limit can be amended to ADD the payee as a target, which changes nothing else and so can never raise the limit; collect the customer's signature for that amendment and run the turn again. `no_mandate` — no active limit exists at all, so there is nothing to amend and the customer must establish one first. The two are kept distinct so a client never opens an amend flow against a limit that does not exist.
+             * @enum {string}
+             */
+            readonly code: "mandate_does_not_cover_payee" | "no_mandate";
+            readonly mandate_id?: components["schemas"]["KSUID"];
+            /** @description The payee the customer named, verbatim. A NAME and not an id, because in the case this exists for the payee does not exist yet — which is why nothing covers them. */
+            readonly payee_name?: string;
+            /** @description Short human-readable note. Advisory only — branch on `code`. */
+            readonly detail?: string;
+        };
         /** @description The agent's next step. At least one of `proposals` or `reply` is always present in a successful response — `proposals` at high confidence (optionally with a short `reply` note), or `reply` alone when the agent needs more from the user. */
         readonly AgenticProposalsResult: {
             /** @description Validated action-series proposals, ready to accept via POST /instructions. Present only at high confidence. */
             readonly proposals?: readonly components["schemas"]["AgenticProposal"][];
             /** @description The agent's conversational reply — a clarifying question or confirmation. Present without proposals when the agent needs more from the user; may accompany proposals as a short note. */
             readonly reply?: string;
+            /**
+             * @description ALPHA — machine-actionable reasons the agent could not complete the request, for the CLIENT APPLICATION rather than the customer. `reply` explains it in prose, which software cannot branch on: "extend the limit to cover Priya", "I need her bank details" and "that rail is not supported" all arrive as some text. A blocker names the reason as a stable code so the client can act on it — opening its own limit editor with the payee filled in, say — and only then decide what the customer sees.
+             *     MAY ACCOMPANY PROPOSALS, and routinely does. The common case is a payee who does not exist yet: the turn proposes creating them AND reports that the limit will not reach them, because the client has to do both, in that order — accept the proposal so the payee has an id, then amend the limit to include it. Treat proposals and blockers as independent, never as alternatives.
+             *     Absent when nothing blocked the turn. ALWAYS switch on `code` and ignore codes you do not know, as new ones are added over time. Every blocker returned has been re-checked against the server's own data, so a code never reflects only the model's opinion.
+             */
+            readonly blockers?: readonly components["schemas"]["AgenticBlocker"][];
             /**
              * @description How the boundary screen treated this turn. `ok` is a normal payments turn; `warned` means the request was off-topic and the customer was warned but may continue; `blocked` means the conversation has been terminated (repeated off-topic turns or a manipulation attempt) — the client should stop serving it and offer a fresh chat. `rejected_input` means this message was refused wholesale (e.g. more payees than one conversation supports) and should NOT be added to the conversation history — the reply explains what to resend; the conversation itself continues unaffected.
              * @enum {string}
@@ -4081,15 +4248,41 @@ export type components = {
             readonly developer_fee_bps?: number;
             /**
              * Format: int32
-             * @description Caps how many sweeps this account performs before it stops
-             *     converting. A sweep is one convert-and-forward of funds received at
-             *     the account through to its destination, so `1` makes the account a
-             *     one-off — the deposit details self-disable after a single sweep —
-             *     and `N` lets one account serve exactly N sweeps.
+             * @description Hard cap on how many transactions this account may ever create. A
+             *     transaction is one convert-and-forward of funds received at the
+             *     account through to its destination, so `1` makes the account a
+             *     one-off and `N` lets one account serve N payments.
              *
              *     Omit for the default, which is unchanged: the account is uncapped
              *     and keeps sweeping every deposit indefinitely (a durable, standing
              *     account).
+             *
+             *     **Reaching the cap refuses further deposits; it does not turn the
+             *     deposit details off.** Once the cap is used up:
+             *
+             *     - Deposits sent to the account are **refused**. They are *not*
+             *       returned to the sender — the funds still arrive and are then held
+             *       pending manual intervention. Nothing is converted, nothing is
+             *       forwarded, and no transaction appears on the account for them. Stop
+             *       sending to the deposit details once the cap is reached.
+             *     - The account is closed and stops serving new payments.
+             *     - This is **not recoverable through this API**. `max_transactions` is
+             *       immutable — it cannot be raised, and a closed account cannot be
+             *       reopened — so a capped-out account is finished. Create a new
+             *       account (with new deposit details) to keep receiving.
+             *
+             *     **A slot is consumed by any transaction in flight or delivered, not
+             *     only a successful one.** A slot is released only when a transaction
+             *     ends with the value *not* staying with the recipient: canceled,
+             *     rejected, reversed, or refunded. A failed or returned transaction
+             *     keeps its slot, because its funds are still held and it can still be
+             *     retried, until it is refunded. Size the cap against the number of
+             *     deposits you expect, not the number of successes you need. Releasing
+             *     a slot does not reopen a closed account.
+             *
+             *     The cap is checked as each deposit arrives, so deposits that race
+             *     each other can briefly overshoot `N`; the account closes on the next
+             *     one.
              * @example 1
              */
             readonly max_transactions?: number;
@@ -23762,6 +23955,173 @@ export interface operations {
                      *       "detail": "agent not found"
                      *     }
                      */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    readonly getClientAgenticPolicy: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                readonly client_id: components["schemas"]["KSUID"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The client's registered agentic policy, normalized. */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "policy": {
+                     *         "payee_model": "flat",
+                     *         "mandate_strategy": "external_only",
+                     *         "payout_route": "bank_only",
+                     *         "labels": {
+                     *           "limit": "spending limit",
+                     *           "limit_unit": "USD",
+                     *           "payee": "recipient"
+                     *         }
+                     *       },
+                     *       "created_at": 1761600000,
+                     *       "updated_at": 1761686400
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["RegisteredAgenticClientPolicy"];
+                };
+            };
+            /** @description Bad Request */
+            readonly 400: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            readonly 401: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            readonly 403: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description This client has no registered policy. */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    readonly updateClientAgenticPolicy: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header: {
+                /** @description Unique key to ensure request idempotency. If the same key is used within a certain time window, the original response will be returned instead of executing the request again. */
+                readonly "x-idempotency-key": components["parameters"]["IdempotencyKeyHeader"];
+            };
+            readonly path: {
+                readonly client_id: components["schemas"]["KSUID"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                /**
+                 * @example {
+                 *       "payee_model": "flat",
+                 *       "mandate_strategy": "external_only",
+                 *       "payout_route": "bank_only",
+                 *       "labels": {
+                 *         "limit": "spending limit",
+                 *         "limit_unit": "USD",
+                 *         "payee": "recipient"
+                 *       }
+                 *     }
+                 */
+                readonly "application/json": components["schemas"]["AgenticClientPolicy"];
+            };
+        };
+        readonly responses: {
+            /** @description The registered policy, normalized as it will be applied. */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "policy": {
+                     *         "payee_model": "flat",
+                     *         "mandate_strategy": "external_only",
+                     *         "payout_route": "bank_only",
+                     *         "labels": {
+                     *           "limit": "spending limit",
+                     *           "limit_unit": "USD",
+                     *           "payee": "recipient"
+                     *         }
+                     *       },
+                     *       "created_at": 1761600000,
+                     *       "updated_at": 1761686400
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["RegisteredAgenticClientPolicy"];
+                };
+            };
+            /** @description The policy is not one this server can enforce — an unknown key, an unsupported value, or a label for an unimplemented concept. */
+            readonly 400: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            readonly 401: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            readonly 403: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
                     readonly "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
