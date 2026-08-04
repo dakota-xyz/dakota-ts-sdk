@@ -135,7 +135,7 @@ export interface AgentConversationOptions {
    *
    * This is a DEVELOPMENT override. It wins for the turns of this
    * conversation and the server logs that it did. For production, register
-   * the policy once with `client.agenticPolicy.set(clientId, policy)`
+   * the policy once with `client.agenticPolicy.set(policy)`
    * instead: forgetting to pass it here fails SILENTLY — the agent simply
    * narrates in the platform's nouns again, with no error anywhere.
    *

@@ -733,7 +733,7 @@ for (const v of await client.mandates.listVersions(mandateId)) {
 // request. Without it the agent narrates in platform nouns ("destination",
 // "mandate"). Passing `clientPolicy` per conversation also works but is a
 // development override: forget it and it fails SILENTLY.
-await client.agenticPolicy.set(clientId, {
+await client.agenticPolicy.set({
   payee_model: 'flat', // one entry per payout method, not one payee with N methods
   payout_assets: ['USDC', 'USDT'], // what a PAYEE may receive — state it when
   // your funding asset is never a payout

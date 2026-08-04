@@ -2,6 +2,35 @@
 
 All notable changes to the Dakota TypeScript SDK are documented in this file.
 
+## [2.2.1] - 2026-08-04
+
+### Fixed — `agenticPolicy` called a route that does not exist
+
+Every `client.agenticPolicy` call in 2.2.0 404'd. The SDK addressed
+`/clients/{client_id}/agentic-policy`, but the platform serves
+`/agentic-policy` and resolves the client from the API key — there is no
+id to pass, and no other client's policy to address even to be refused.
+
+The stale path came from the platform's published `openapi.public.yaml`,
+which still describes the older client-scoped shape: it was not
+regenerated when the route was simplified, so it disagrees with the
+`openapi.yaml` the router is generated from. The SDK now carries the
+corrected path by hand, with a guard test (`tests/client/spec-guards`)
+so a future spec sync cannot quietly reintroduce it.
+
+**The method signatures lost their `clientId` argument:**
+
+```typescript
+// before (always 404'd)          // after
+agenticPolicy.get(clientId)       agenticPolicy.get()
+agenticPolicy.set(clientId, pol)  agenticPolicy.set(pol)
+```
+
+This is a compile-time break, deliberately: it only affects code that
+was already failing at runtime, and a TypeScript error is a better way
+to learn that than a 404. Nothing else in 2.2.0 is affected — blockers,
+`developer_fee`, and per-payment network selection all work.
+
 ## [2.2.0] - 2026-08-04
 
 Spec sync with platform `main`. No breaking changes.

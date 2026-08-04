@@ -15,27 +15,27 @@ import type {
 /**
  * Agentic Client Policy API resource (ALPHA).
  *
- * The policy is per CLIENT — it belongs to the `client_id` behind your API
- * key, never to a key, since API keys are N:1 to clients and a per-key policy
+ * The policy is per CLIENT — it belongs to the client behind your API key,
+ * never to a key, since API keys are N:1 to clients and a per-key policy
  * would fragment for anyone running one service key per deployment.
  *
- * You may read and write your OWN policy; another client's is a 403.
+ * There is no client id to pass. The route resolves the client from the API
+ * key, so you cannot address another client's policy even to be refused.
  */
 export class AgenticPolicyResource extends BaseResource {
   /**
-   * Get the policy registered for this client.
+   * Get the policy registered for the client behind your API key.
    *
    * A 404 here is the DEFAULT, not an error condition: with no registration
    * and no per-request policy the agent drafts on platform defaults, exactly
    * as it did before registration existed.
    *
-   * @param clientId - Your client ID
    * @returns The normalized registered policy + its timestamps
    *
    * @example
    * ```typescript
    * try {
-   *   const { policy } = await client.agenticPolicy.get(clientId);
+   *   const { policy } = await client.agenticPolicy.get();
    *   console.log(policy.labels);
    * } catch (e) {
    *   if (e instanceof APIError && e.statusCode === 404) {
@@ -44,10 +44,10 @@ export class AgenticPolicyResource extends BaseResource {
    * }
    * ```
    */
-  async get(clientId: string): Promise<RegisteredAgenticClientPolicy> {
+  async get(): Promise<RegisteredAgenticClientPolicy> {
     return this.transport.request<RegisteredAgenticClientPolicy>({
       method: 'GET',
-      path: `/clients/${clientId}/agentic-policy`,
+      path: '/agentic-policy',
     });
   }
 
@@ -68,14 +68,15 @@ export class AgenticPolicyResource extends BaseResource {
    * unsupported value, or a label for an unimplemented concept is a 400 HERE,
    * at registration — not a surprise on a customer's first conversation.
    *
-   * @param clientId - Your client ID
+   * The client comes from your API key; there is no id to pass.
+   *
    * @param policy - The complete policy (`{}` clears it)
    * @param options - Request options (e.g., custom idempotency key)
    * @returns The normalized stored policy + its timestamps
    *
    * @example
    * ```typescript
-   * await client.agenticPolicy.set(clientId, {
+   * await client.agenticPolicy.set({
    *   payee_model: 'flat',
    *   payout_assets: ['USDC', 'USDT'],
    *   labels: { limit: 'spending limit', payee: 'recipient', limit_unit: 'USD' },
@@ -85,13 +86,12 @@ export class AgenticPolicyResource extends BaseResource {
    * ```
    */
   async set(
-    clientId: string,
     policy: AgenticClientPolicy,
     options?: RequestOptions
   ): Promise<RegisteredAgenticClientPolicy> {
     return this.transport.request<RegisteredAgenticClientPolicy>({
       method: 'PUT',
-      path: `/clients/${clientId}/agentic-policy`,
+      path: '/agentic-policy',
       body: policy,
       idempotencyKey: options?.idempotencyKey,
       timeout: options?.timeout,

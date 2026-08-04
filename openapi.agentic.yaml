@@ -492,141 +492,6 @@ paths:
                 title: Not Found
                 status: 404
                 detail: agentic payments are not enabled
-  /clients/{client_id}/agentic-policy:
-    x-alpha: true
-    parameters:
-      - name: client_id
-        in: path
-        required: true
-        schema:
-          $ref: '#/components/schemas/KSUID'
-    put:
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKeyHeader'
-      tags:
-        - Agentic Payments
-      summary: Register the client's agentic policy (ALPHA)
-      description: |
-        > **Alpha** — early access.
-
-        Registers (or fully replaces) this client's `client_policy`, so the client declares its vocabulary ONCE instead of resending it in every `POST /payment-agents/{payment_agent_id}/proposals` body. Sending it per request still works and still wins, as a development override — but forgetting to send it fails SILENTLY: the agent simply narrates in platform's nouns again ("destination", "mandate") and nothing errors. A registration removes that failure mode.
-
-        The body is the SAME `client_policy` object the proposals request takes, so an existing integration registers by moving the object it already sends. It goes through the SAME validation: an unknown key, an unknown value, or a label for a concept the server does not implement is a 400 HERE, at registration — not a surprise on a customer's first conversation.
-
-        FULL REPLACE, not a merge: the registration IS the client's declared vocabulary, so an omitted field means the client no longer wants it. An empty body (`{}`) therefore clears the registration back to platform defaults.
-
-        A client may register its OWN policy; writing another client's is a 403.
-      operationId: updateClientAgenticPolicy
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AgenticClientPolicy'
-            example:
-              payee_model: flat
-              mandate_strategy: external_only
-              payout_route: bank_only
-              labels:
-                limit: spending limit
-                limit_unit: USD
-                payee: recipient
-      responses:
-        '200':
-          description: The registered policy, normalized as it will be applied.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RegisteredAgenticClientPolicy'
-              example:
-                policy:
-                  payee_model: flat
-                  mandate_strategy: external_only
-                  payout_route: bank_only
-                  labels:
-                    limit: spending limit
-                    limit_unit: USD
-                    payee: recipient
-                created_at: 1761600000
-                updated_at: 1761686400
-        '400':
-          description: |
-            The policy is not one this server can enforce — an unknown key, an unsupported value, or a label for an unimplemented concept.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
-          description: Unauthorized
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '404':
-          description: Not Found
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-    get:
-      tags:
-        - Agentic Payments
-      summary: Get the client's registered agentic policy (ALPHA)
-      description: |
-        > **Alpha** — early access.
-
-        Returns the `client_policy` registered for this client — the vocabulary and payout constraints every drafting turn uses when the proposals request body does not carry its own.
-
-        A client may read its OWN policy; reading another client's is a 403. No registration is a 404 — which is not an error condition but the default: with no registration and no body policy the agent drafts on platform defaults, exactly as it did before registration existed.
-      operationId: getClientAgenticPolicy
-      responses:
-        '200':
-          description: The client's registered agentic policy, normalized.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RegisteredAgenticClientPolicy'
-              example:
-                policy:
-                  payee_model: flat
-                  mandate_strategy: external_only
-                  payout_route: bank_only
-                  labels:
-                    limit: spending limit
-                    limit_unit: USD
-                    payee: recipient
-                created_at: 1761600000
-                updated_at: 1761686400
-        '400':
-          description: Bad Request
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
-          description: Unauthorized
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '403':
-          description: Forbidden
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '404':
-          description: This client has no registered policy.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
   /payment-agents/{payment_agent_id}:
     x-alpha: true
     get:
@@ -1546,6 +1411,119 @@ paths:
                 title: Not Found
                 status: 404
                 detail: agentic payments are not enabled
+  /agentic-policy:
+    x-alpha: true
+    get:
+      tags:
+        - Agentic Payments
+      summary: Get the client's registered agentic policy (ALPHA)
+      description: |
+        Returns the `client_policy` registered for the CALLING client — the vocabulary and payout constraints every drafting turn and every accept uses. Scoped to the caller by construction: the client is resolved from the API key, so there is no id to pass and no other client's policy to address.
+
+        No registration is a 404 — which is not an error condition but the default: with no registration and no body policy the agent drafts on platform defaults, exactly as it did before registration existed.
+      operationId: getClientAgenticPolicy
+      responses:
+        '200':
+          description: The client's registered agentic policy, normalized.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisteredAgenticClientPolicy'
+              example:
+                policy:
+                  payee_model: flat
+                  mandate_strategy: external_only
+                  payout_route: bank_only
+                  labels:
+                    limit: spending limit
+                    limit_unit: USD
+                    payee: recipient
+                created_at: 1761600000
+                updated_at: 1761686400
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: This client has no registered policy.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+    put:
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      tags:
+        - Agentic Payments
+      summary: Register the client's agentic policy (ALPHA)
+      description: |
+        Registers (or fully replaces) this client's `client_policy` — the ONLY way to set one. A client declares its vocabulary once, and every drafting turn and every accept then resolve it from here.
+
+        Registration is deliberately the only path. The policy was once also accepted in the `POST /payment-agents/{payment_agent_id}/proposals` and `POST /instructions` bodies, and that made a two-call conversation able to disagree with itself: a proposal drafted under one policy and accepted without it is judged by different rules, so a legal draft was refused at the customer's approval click. A policy is a property of the CLIENT, not of a request, and it now lives in exactly one place.
+
+        A full replace, not a merge: send the whole policy every time. Changing one takes effect on the next turn — there is no cache — so this is also how you TEST a policy. Register, run a conversation, register something else. Validation happens HERE: an unknown key, an unknown value, or a label for a concept the server does not implement is a 400 at registration, not a surprise on a customer's first conversation.
+
+        FULL REPLACE, not a merge: the registration IS the client's declared vocabulary, so an omitted field means the client no longer wants it. An empty body (`{}`) therefore clears the registration back to platform defaults.
+      operationId: updateClientAgenticPolicy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgenticClientPolicy'
+            example:
+              payee_model: flat
+              mandate_strategy: external_only
+              payout_route: bank_only
+              labels:
+                limit: spending limit
+                limit_unit: USD
+                payee: recipient
+      responses:
+        '200':
+          description: The registered policy, normalized as it will be applied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisteredAgenticClientPolicy'
+              example:
+                policy:
+                  payee_model: flat
+                  mandate_strategy: external_only
+                  payout_route: bank_only
+                  labels:
+                    limit: spending limit
+                    limit_unit: USD
+                    payee: recipient
+                created_at: 1761600000
+                updated_at: 1761686400
+        '400':
+          description: |
+            The policy is not one this server can enforce — an unknown key, an unsupported value, or a label for an unimplemented concept.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
 components:
   schemas:
     PaymentAgentResponse:

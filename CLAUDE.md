@@ -130,6 +130,26 @@ npm run generate
 overlays (`openapi.agentic.yaml`) into a gitignored `openapi.merged.yaml`,
 then runs `openapi-typescript` against the merged output.
 
+### Syncing from the platform — the public spec can be stale
+
+`openapi.yaml` is synced from the platform's `openapi.public.yaml`, which
+the platform GENERATES from its internal `openapi.yaml`
+(`make openapi-public`). That generation is a manual step, so the public
+file can lag the routes the server actually serves — the internal
+`openapi.yaml` is what `internal/api/oapi/routes.go` is generated from,
+and therefore what is authoritative.
+
+This has bitten once: SDK 2.2.0 shipped
+`/clients/{client_id}/agentic-policy` from a stale public spec while the
+server served `/agentic-policy`, so every `agenticPolicy` call 404'd.
+
+**After any sync, if a path looks wrong, check the platform's internal
+`openapi.yaml` (and `routes.go`) before trusting the public file.**
+Deliberate deviations from upstream are pinned by
+`tests/client/spec-guards.test.ts`, which fails if a sync reintroduces a
+shape we already corrected. Add a guard there whenever you hand-correct
+the spec.
+
 ### Why the overlay exists
 
 The overlay pins the alpha surface the SDK opts into (`x-alpha: true` —
