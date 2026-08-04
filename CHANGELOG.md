@@ -2,6 +2,34 @@
 
 All notable changes to the Dakota TypeScript SDK are documented in this file.
 
+## [2.2.2] - 2026-08-04
+
+### Fixed — `rejected_input` poisoned the conversation transcript
+
+`conversation_status: 'rejected_input'` means the message was refused
+WHOLESALE and, per the spec, "should NOT be added to the conversation
+history". 2.2.0 shipped that status in the types and the changelog but
+never implemented the behaviour.
+
+`AgentConversation` rolls the optimistic user turn back only on a
+transport error. A `rejected_input` arrives as an HTTP **200** with a
+populated body, so the rollback never fired: the refused message stayed
+in the transcript *and* a synthetic assistant turn was appended on top.
+Every later `send()` then re-transmitted the exact message the server
+asked the client to drop, corrupting the conversation from that point
+on — and since `messages()` returns a copy, callers could not repair it.
+
+The refused turn is now rolled back with no assistant turn recorded, so
+the transcript is identical to before the call. The caller still gets the
+turn, whose `reply` explains what to resend, and the conversation
+continues unaffected.
+
+`warned` and `blocked` are untouched — those turns happened, and dropping
+them would break the alternating transcript the platform requires.
+
+Found by automated review on the Go SDK port of the same code; the Go SDK
+carried the identical defect and is fixed in the same change.
+
 ## [2.2.1] - 2026-08-04
 
 ### Fixed — `agenticPolicy` called a route that does not exist

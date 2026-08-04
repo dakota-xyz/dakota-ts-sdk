@@ -185,6 +185,71 @@ describe('AgentConversation.send', () => {
     expect(policyOf(requests[2])).toBeUndefined();
   });
 
+  it('a rejected_input turn leaves the transcript untouched and is never re-sent', async () => {
+    let turn = 0;
+    const { fetch, requests } = createRoutedFetch({
+      [`POST ${PROPOSALS_PATH}`]: () => {
+        const t = turn++;
+        // NOTE: 200 with a populated body — that is what makes this a trap.
+        if (t === 0) return { status: 200, body: { reply: 'Got it.', conversation_status: 'ok' } };
+        if (t === 1)
+          return {
+            status: 200,
+            body: {
+              reply: 'Too many payees — resend with one.',
+              conversation_status: 'rejected_input',
+            },
+          };
+        return { status: 200, body: { reply: 'Sure.', conversation_status: 'ok' } };
+      },
+    });
+    const client = makeClient(fetch as unknown as typeof globalThis.fetch);
+    const conv = client.newAgentConversation(AGENT_ID);
+
+    await conv.send('pay alice');
+    const before = conv.messages();
+    expect(before).toHaveLength(2);
+
+    // The caller still gets the reply and the status...
+    const rejected = await conv.send('pay these 400 payees');
+    expect(rejected.conversationStatus).toBe('rejected_input');
+    expect(rejected.reply).toBe('Too many payees — resend with one.');
+
+    // ...but the transcript is identical to before it: neither the refused
+    // user turn nor a synthetic assistant turn survives.
+    expect(conv.messages()).toEqual(before);
+
+    // And the next turn must not re-transmit the refused message.
+    await conv.send('pay bob');
+    expect(messagesOf(requests[2])).toEqual([
+      { role: 'user', content: 'pay alice' },
+      { role: 'assistant', content: 'Got it.' },
+      { role: 'user', content: 'pay bob' },
+    ]);
+  });
+
+  it('keeps warned and blocked turns — only rejected_input is dropped', async () => {
+    for (const status of ['ok', 'warned', 'blocked']) {
+      const { fetch } = createRoutedFetch({
+        [`POST ${PROPOSALS_PATH}`]: () => ({
+          status: 200,
+          body: { reply: 'noted', conversation_status: status },
+        }),
+      });
+      const client = makeClient(fetch as unknown as typeof globalThis.fetch);
+      const conv = client.newAgentConversation(AGENT_ID);
+
+      await conv.send('hello');
+
+      // These turns happened; dropping them would break the alternating
+      // transcript the platform requires.
+      expect(conv.messages()).toEqual([
+        { role: 'user', content: 'hello' },
+        { role: 'assistant', content: 'noted' },
+      ]);
+    }
+  });
+
   it('rolls back the optimistic user turn on error (retry does not duplicate)', async () => {
     const { fetch } = createRoutedFetch({
       [`POST ${PROPOSALS_PATH}`]: () => ({
