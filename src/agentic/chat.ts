@@ -90,13 +90,29 @@ export interface ConversationTurn {
   /** Whether the turn reported any blocker. */
   hasBlockers: boolean;
   /**
-   * The boundary screen's verdict for this turn: `"ok"` (normal), `"warned"`
-   * (off-topic — the customer was warned), or `"blocked"` (the chat is
-   * terminated; stop serving and offer a fresh conversation). Empty when
-   * the platform sent none.
+   * The boundary screen's verdict for this turn:
+   *
+   * - `"ok"` — normal payments turn.
+   * - `"warned"` — off-topic; the customer was warned but may continue.
+   * - `"blocked"` — the chat is terminated; stop serving it and offer a fresh
+   *   conversation.
+   * - `"rejected_input"` — this message was refused WHOLESALE (e.g. more
+   *   payees than one conversation supports). `reply` explains what to
+   *   resend; the conversation continues unaffected, and the SDK has already
+   *   dropped the refused message from the transcript for you.
+   *
+   * Empty when the platform sent none. Treat it as an OPEN set — new values
+   * may be added.
    */
   conversationStatus: string;
 }
+
+/**
+ * The boundary screen's verdict for a message refused wholesale. Its contract
+ * is that the message must NOT be added to the conversation history — see
+ * {@link ConversationTurn.conversationStatus}.
+ */
+const REJECTED_INPUT = 'rejected_input';
 
 /** Options for an {@link AgentConversation}. */
 export interface AgentConversationOptions {
@@ -255,6 +271,21 @@ export class AgentConversation {
       hasBlockers: !!result.blockers && result.blockers.length > 0,
       conversationStatus: result.conversation_status ?? '',
     };
+
+    // `rejected_input`: the server refused this message WHOLESALE and told us
+    // not to keep it. Roll the optimistic user turn back and record no
+    // assistant turn, so the transcript is identical to before this send. The
+    // conversation itself continues unaffected — the caller still gets the
+    // turn, whose `reply` explains what to resend.
+    //
+    // Without this the refused message stays in the transcript and is
+    // re-transmitted on every later turn — the exact message the server asked
+    // the client to drop — corrupting the conversation from here on. And
+    // `messages()` returns a copy, so a caller could not repair it either.
+    if (turn.conversationStatus === REJECTED_INPUT) {
+      this.history.pop();
+      return turn;
+    }
 
     // Record an assistant turn so the transcript keeps alternating — the
     // platform (and the underlying model) reject two consecutive user
