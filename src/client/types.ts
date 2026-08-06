@@ -1241,15 +1241,6 @@ export type InsightEvidence = components['schemas']['InsightEvidence'];
 /** The typed-facts snapshot inside an InsightReport. */
 export type InsightSnapshot = components['schemas']['InsightSnapshot'];
 
-/** One conversation turn for the insight chat. */
-export type InsightChatMessage = components['schemas']['InsightChatMessage'];
-
-/** Request body for POST /customers/{id}/insights/chat (stateless; send the whole conversation). */
-export type InsightChatRequest = components['schemas']['InsightChatRequest'];
-
-/** The insight-chat assistant's reply. */
-export type InsightChatResponse = components['schemas']['InsightChatResponse'];
-
 /** Parameters for listing mandates. */
 export interface MandateListParams extends ListParams {
   customer_id?: string;

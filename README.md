@@ -229,12 +229,6 @@ await client.mandates.approve(mandate.id!, {
 ```typescript
 // Deterministic report: balances, upcoming payments, mandate headroom, risks.
 const report = await client.insights.get(customerId);
-
-// Advisory chat over the same report — stateless; never moves money.
-const answer = await client.insights.chat(customerId, {
-  messages: [{ role: 'user', content: 'Anything I should know about my account this week?' }],
-});
-console.log(answer.reply);
 ```
 
 The full agentic surface is reachable via `client.paymentAgents`, `client.mandates`, `client.instructions`, `client.scheduledPayments`, and `client.insights`.
@@ -408,7 +402,6 @@ agentic endpoints that call a model default to **180s** instead:
 |---|---|
 | Everything else | 15s |
 | `paymentAgents.createProposals` / `AgentConversation.send` | 180s |
-| `insights.chat` | 180s |
 
 A drafting turn is a sequence of model calls — read the payees, check
 balances, draft, revise — so "pay these nine vendors every Friday"
@@ -823,7 +816,6 @@ Read-only advisory reporting over a customer's agentic activity.
 | Method | Description |
 |--------|-------------|
 | `insights.get(customerId)` | Deterministic account insight report |
-| `insights.chat(customerId, data)` | Stateless advisory chat over the report |
 
 ---
 

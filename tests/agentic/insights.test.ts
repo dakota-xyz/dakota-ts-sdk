@@ -45,7 +45,6 @@ describe('InsightsResource', () => {
     const client = makeClient(fetch as unknown as typeof globalThis.fetch);
     expect(client.insights).toBeDefined();
     expect(typeof client.insights.get).toBe('function');
-    expect(typeof client.insights.chat).toBe('function');
   });
 
   it('gets the insight report', async () => {
@@ -61,45 +60,5 @@ describe('InsightsResource', () => {
     expect(report.insights[0]?.kind).toBe('upcoming_payments');
     expect(report.insights[0]?.evidence[0]?.type).toBe('scheduled_payment');
     expect(requests[0]?.method).toBe('GET');
-  });
-
-  it('chats about the account (stateless, idempotency key on POST)', async () => {
-    const { fetch, requests } = createRoutedFetch({
-      [`POST /customers/${CUSTOMER_ID}/insights/chat`]: () => ({
-        status: 200,
-        body: { reply: 'You have 3 payments due soon.', conversation_status: 'ok' },
-      }),
-    });
-    const client = makeClient(fetch as unknown as typeof globalThis.fetch);
-
-    const res = await client.insights.chat(CUSTOMER_ID, {
-      messages: [{ role: 'user', content: 'Anything I should know this week?' }],
-    });
-
-    expect(res.reply).toContain('3 payments');
-    expect(res.conversation_status).toBe('ok');
-    const post = requests.find((r) => r.method === 'POST');
-    expect(post).toBeDefined();
-    expect(post!.headers['x-idempotency-key']).toBeTruthy();
-    expect((post!.body as { messages: unknown[] }).messages).toHaveLength(1);
-  });
-
-  it('passes a caller-supplied idempotency key verbatim', async () => {
-    const { fetch, requests } = createRoutedFetch({
-      [`POST /customers/${CUSTOMER_ID}/insights/chat`]: () => ({
-        status: 200,
-        body: { reply: 'ok' },
-      }),
-    });
-    const client = makeClient(fetch as unknown as typeof globalThis.fetch);
-
-    await client.insights.chat(
-      CUSTOMER_ID,
-      { messages: [{ role: 'user', content: 'hi' }] },
-      { idempotencyKey: 'caller-key-chat' }
-    );
-
-    const post = requests.find((r) => r.method === 'POST');
-    expect(post!.headers['x-idempotency-key']).toBe('caller-key-chat');
   });
 });

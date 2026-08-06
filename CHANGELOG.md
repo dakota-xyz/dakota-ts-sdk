@@ -2,6 +2,28 @@
 
 All notable changes to the Dakota TypeScript SDK are documented in this file.
 
+## [Unreleased]
+
+### Removed — `insights.chat` (ALPHA)
+
+`client.insights.chat(customerId, …)` is gone, along with the
+`InsightChat{Message,Request,Response}` types and the chat path/schemas in
+`openapi.agentic.yaml`. Platform removed
+`POST /customers/{customer_id}/insights/chat` for the agentic BETA (ENG-3153),
+so the method had no server to reach — it would 404 for every caller.
+
+`client.insights.get(customerId)`, the deterministic account report, is
+**unaffected**, and so is every other agentic resource.
+
+This is the alpha caveat doing its job: the hosted agentic surface is
+`x-alpha`, flag-gated, and documented as liable to change **or be removed**
+without a major-version bump. Platform kept the conversational core deliberately
+and expects to bring it back in a reshaped form after the beta; when it does, it
+will arrive as a new addition here rather than as a restoration of this method.
+
+The 180s `AGENTIC_MODEL_TIMEOUT_MS` default now applies to proposal drafting
+alone.
+
 ## [2.2.2] - 2026-08-04
 
 ### Fixed — `rejected_input` poisoned the conversation transcript

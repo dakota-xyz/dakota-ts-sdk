@@ -2316,28 +2316,6 @@ export type paths = {
         readonly patch?: never;
         readonly trace?: never;
     };
-    readonly "/customers/{customer_id}/insights/chat": {
-        readonly parameters: {
-            readonly query?: never;
-            readonly header?: never;
-            readonly path?: never;
-            readonly cookie?: never;
-        };
-        readonly get?: never;
-        readonly put?: never;
-        /**
-         * Ask about the customer's account (ALPHA)
-         * @description > **Alpha** — early access.
-         *
-         *     A read-only, advisory conversation over the customer's account. Stateless: send the conversation so far in `messages` on each call; the response is the assistant's next plain-text `reply`. The assistant narrates the same deterministic report `GET /customers/{customer_id}/insights` returns (plus the customer's payments and mandates) — it never originates a number, never proposes, and never moves money. Requires the LLM layer to be configured server-side.
-         */
-        readonly post: operations["chatCustomerInsights"];
-        readonly delete?: never;
-        readonly options?: never;
-        readonly head?: never;
-        readonly patch?: never;
-        readonly trace?: never;
-    };
     readonly "/payment-agents/{payment_agent_id}/revoke": {
         readonly parameters: {
             readonly query?: never;
@@ -2652,24 +2630,6 @@ export type components = {
             readonly insights: readonly components["schemas"]["InsightItem"][];
             /** @description Advisory recommendations (always present, possibly empty). Non-binding — acting on one is a separate, human-gated step. */
             readonly suggestions: readonly components["schemas"]["InsightItem"][];
-        };
-        readonly InsightChatMessage: {
-            /** @enum {string} */
-            readonly role: "user" | "assistant";
-            readonly content: string;
-        };
-        readonly InsightChatRequest: {
-            /** @description The conversation so far, oldest first. */
-            readonly messages: readonly components["schemas"]["InsightChatMessage"][];
-        };
-        readonly InsightChatResponse: {
-            /** @description The assistant's plain-text answer. Advisory only — the assistant cannot execute anything. */
-            readonly reply: string;
-            /**
-             * @description How the boundary screen treated this turn. `ok` is a normal turn; `warned` means the request was off-topic and the customer was warned but may continue; `blocked` means the conversation has been terminated (repeated off-topic turns or a manipulation attempt) — the client should stop serving it and offer a fresh chat.
-             * @enum {string}
-             */
-            readonly conversation_status?: "ok" | "warned" | "blocked";
         };
         readonly CreateScheduledPaymentsAction: {
             readonly destination_id?: string;
@@ -25348,101 +25308,6 @@ export interface operations {
                      *       "title": "Not Found",
                      *       "status": 404,
                      *       "detail": "agentic payments are not enabled"
-                     *     }
-                     */
-                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    readonly chatCustomerInsights: {
-        readonly parameters: {
-            readonly query?: never;
-            readonly header: {
-                /** @description Unique key to ensure request idempotency. If the same key is used within a certain time window, the original response will be returned instead of executing the request again. */
-                readonly "x-idempotency-key": components["parameters"]["IdempotencyKeyHeader"];
-            };
-            readonly path: {
-                readonly customer_id: string;
-            };
-            readonly cookie?: never;
-        };
-        readonly requestBody: {
-            readonly content: {
-                /**
-                 * @example {
-                 *       "messages": [
-                 *         {
-                 *           "role": "user",
-                 *           "content": "Anything I should know about my account this week?"
-                 *         }
-                 *       ]
-                 *     }
-                 */
-                readonly "application/json": components["schemas"]["InsightChatRequest"];
-            };
-        };
-        readonly responses: {
-            /** @description The assistant's reply */
-            readonly 200: {
-                headers: {
-                    readonly [name: string]: unknown;
-                };
-                content: {
-                    /**
-                     * @example {
-                     *       "reply": "You have 3 payments (5200 USDC) due in the next two weeks, and your Operating wallet shows $3100.25 — about 2100 USDC short. Consider topping it up before July 14."
-                     *     }
-                     */
-                    readonly "application/json": components["schemas"]["InsightChatResponse"];
-                };
-            };
-            /** @description Invalid request, or the insight chat layer is not configured */
-            readonly 400: {
-                headers: {
-                    readonly [name: string]: unknown;
-                };
-                content: {
-                    /**
-                     * @example {
-                     *       "type": "https://docs.dakota.xyz/api-reference/errors#invalid-request",
-                     *       "title": "Invalid Request",
-                     *       "status": 400,
-                     *       "detail": "insight chat is not enabled (no LLM configured)"
-                     *     }
-                     */
-                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Agentic payments not enabled, or the customer was not found */
-            readonly 404: {
-                headers: {
-                    readonly [name: string]: unknown;
-                };
-                content: {
-                    /**
-                     * @example {
-                     *       "type": "https://docs.dakota.xyz/api-reference/errors#not-found",
-                     *       "title": "Not Found",
-                     *       "status": 404,
-                     *       "detail": "customer not found"
-                     *     }
-                     */
-                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description The per-customer insight-chat rate limit was exceeded (an hourly burst window and a daily window). Back off and retry later. */
-            readonly 429: {
-                headers: {
-                    readonly [name: string]: unknown;
-                };
-                content: {
-                    /**
-                     * @example {
-                     *       "type": "https://docs.dakota.xyz/api-reference/errors#rate-limited",
-                     *       "title": "Rate Limited",
-                     *       "status": 429,
-                     *       "detail": "insight chat rate limit reached for this customer (hour window) — retry later"
                      *     }
                      */
                     readonly "application/problem+json": components["schemas"]["ProblemDetails"];
