@@ -116,7 +116,7 @@ export const DEFAULT_TIMEOUT_MS = 15_000;
 
 /**
  * Default per-request timeout (ms) for the agentic endpoints whose work is
- * a sequence of model calls: drafting proposals and insight chat.
+ * a sequence of model calls: drafting proposals.
  *
  * A multi-payee drafting turn ("pay these nine vendors every Friday")
  * legitimately runs minutes — it reads payees, checks balances, drafts, and

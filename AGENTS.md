@@ -754,11 +754,8 @@ await client.instructions.create({
   developer_fee: { swap_bps: 50, offramp_bps: 25 },
 });
 
-// Read-only account insights + advisory chat.
+// Read-only account insights.
 const report = await client.insights.get(customerId);
-const answer = await client.insights.chat(customerId, {
-  messages: [{ role: 'user', content: 'Anything I should know this week?' }],
-});
 ```
 
 Failures of scheduled payments surface as the `scheduled_payment.failed` webhook (`ScheduledPaymentFailedData`); successful fires emit the standard `wallet.transaction.created`.
