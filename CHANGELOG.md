@@ -2,7 +2,15 @@
 
 All notable changes to the Dakota TypeScript SDK are documented in this file.
 
-## [Unreleased]
+## [3.0.0] - 2026-08-26
+
+Major because this breaks the STABLE surface, not only the alpha one: the
+transactions list changes both its types and what it sends on the wire. See
+**Breaking** below for the two things to check in your own code.
+
+**2.2.2 never reached npm.** Its version bump landed but was never tagged or
+released, so npm went straight from 2.2.1 to this release. The
+`rejected_input` fix recorded under [2.2.2] ships here for the first time.
 
 ### Changed — spec sync with platform main
 
@@ -200,6 +208,9 @@ The 180s `AGENTIC_MODEL_TIMEOUT_MS` default now applies to proposal drafting
 alone.
 
 ## [2.2.2] - 2026-08-04
+
+> Bumped but never published — no tag, no release, and npm never served it.
+> Everything below first shipped in [3.0.0].
 
 ### Fixed — `rejected_input` poisoned the conversation transcript
 
