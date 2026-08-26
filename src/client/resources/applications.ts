@@ -7,6 +7,7 @@ import { PaginatedIterator } from '../pagination.js';
 import type {
   Application,
   ApplicationDocumentUploadRequest,
+  ApplicationGetParams,
   ApplicationDocumentUploadUrlRequest,
   ApplicationSubmissionRequest,
   AssociatedIndividual,
@@ -51,13 +52,32 @@ export class ApplicationsResource extends BaseResource {
   /**
    * Get an application by ID.
    *
+   * `include` inlines extra sections — a comma-separated list of `entities`,
+   * `validation`, `edd`, `attestations`, or `all`. Each adds weight, and
+   * `'all'` carries the full KYB record including every associated
+   * individual's date of birth, nationality and email, so ask for what the
+   * page renders.
+   *
+   * To render an accept-agreements page, use {@link getLegalAcceptance}
+   * instead: it returns exactly that page's inputs and none of the personal
+   * data.
+   *
    * @param applicationId - Application ID
+   * @param params - Optional `{ include }`
    * @returns Application record
+   *
+   * @example
+   * ```typescript
+   * const app = await client.applications.get(applicationId, {
+   *   include: 'entities,validation',
+   * });
+   * ```
    */
-  async get(applicationId: string): Promise<Application> {
+  async get(applicationId: string, params?: ApplicationGetParams): Promise<Application> {
     return this.transport.request<Application>({
       method: 'GET',
       path: `/applications/${applicationId}`,
+      query: { ...params },
     });
   }
 

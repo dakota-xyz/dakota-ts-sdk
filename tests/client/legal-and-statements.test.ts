@@ -278,3 +278,95 @@ describe('problem details extensions', () => {
     expect(err.resolutionUrl).toBeNull();
   });
 });
+
+/**
+ * Filters the spec has carried for a while that the typed surface never
+ * named. `ListParams` has an index signature, so these always reached the
+ * wire if you knew to pass them — they were just undiscoverable and untyped.
+ */
+describe('previously untyped list filters', () => {
+  const EMPTY = () => ({ status: 200, body: { data: [], meta: { has_more_after: false } } });
+
+  it('auto-transactions takes its filters, with epoch-second dates', async () => {
+    const { fetch, requests } = createRoutedFetch({ 'GET /auto-transactions': EMPTY });
+    const client = makeClient(fetch);
+
+    await client.autoTransactions
+      .list({
+        auto_account_id: 'acct_1',
+        statuses: 'pending,processing',
+        types: 'onramp,offramp',
+        start_date: 1_760_000_000,
+        outgoing_amount_min: '100.00',
+        sort_dir: 'desc',
+      })
+      .toArray();
+
+    const q = requests[0]?.query;
+    expect(q?.auto_account_id).toBe('acct_1');
+    expect(q?.statuses).toBe('pending,processing');
+    expect(q?.types).toBe('onramp,offramp');
+    // Epoch SECONDS here, unlike the ISO strings every other list takes.
+    expect(q?.start_date).toBe('1760000000');
+    expect(q?.outgoing_amount_min).toBe('100.00');
+    expect(q?.sort_dir).toBe('desc');
+  });
+
+  it('users takes search, roles, and sorting', async () => {
+    const { fetch, requests } = createRoutedFetch({ 'GET /users': EMPTY });
+    const client = makeClient(fetch);
+
+    await client.users.list({ search: 'ada', roles: 'admin,member', sort_by: 'email' }).toArray();
+
+    expect(requests[0]?.query.search).toBe('ada');
+    expect(requests[0]?.query.roles).toBe('admin,member');
+    expect(requests[0]?.query.sort_by).toBe('email');
+  });
+
+  it('destinations takes destination_type', async () => {
+    const { fetch, requests } = createRoutedFetch({
+      'GET /recipients/rcp_1/destinations': EMPTY,
+    });
+    const client = makeClient(fetch);
+
+    await client.destinations.list('rcp_1', { destination_type: 'crypto' }).toArray();
+
+    expect(requests[0]?.query.destination_type).toBe('crypto');
+  });
+
+  it('scheduled payments take mandate_version and page', async () => {
+    const { fetch, requests } = createRoutedFetch({
+      'GET /scheduled-payments': () => ({ status: 200, body: [] }),
+    });
+    const client = makeClient(fetch);
+
+    await client.scheduledPayments
+      .list({ mandate_id: 'mnd_1', mandate_version: 2, limit: 50, page: 2 })
+      .toArray();
+
+    expect(requests[0]?.query.mandate_version).toBe('2');
+    expect(requests[0]?.query.page).toBe('2');
+  });
+
+  it('applications.get inlines only the sections asked for', async () => {
+    const { fetch, requests } = createRoutedFetch({
+      'GET /applications/app_1': () => ({ status: 200, body: { id: 'app_1' } }),
+    });
+    const client = makeClient(fetch);
+
+    await client.applications.get('app_1', { include: 'entities,validation' });
+
+    expect(requests[0]?.query.include).toBe('entities,validation');
+  });
+
+  it('applications.get sends no include when none is asked for', async () => {
+    const { fetch, requests } = createRoutedFetch({
+      'GET /applications/app_1': () => ({ status: 200, body: { id: 'app_1' } }),
+    });
+    const client = makeClient(fetch);
+
+    await client.applications.get('app_1');
+
+    expect(requests[0]?.query.include).toBeUndefined();
+  });
+});

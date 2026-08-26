@@ -1332,6 +1332,81 @@ export type TransactionListParams =
   | WalletTransactionListParams
   | AutoAccountTransactionListParams;
 
+/**
+ * Auto-transaction list parameters.
+ *
+ * `statuses` and `types` take a COMMA-SEPARATED string, not an array. Dates
+ * are Unix epoch SECONDS, not ISO strings — unlike every other list endpoint
+ * here.
+ */
+export interface AutoTransactionListParams extends ListParams {
+  auto_account_id?: string;
+  destination_id?: string;
+  status?: TransactionStatus;
+  /** Several statuses at once, comma-separated (e.g. `'pending,processing'`). */
+  statuses?: string;
+  type?: string;
+  /** Several types at once, comma-separated (e.g. `'onramp,offramp'`). */
+  types?: string;
+  provider_id?: string;
+  source_crypto_address?: string;
+  destination_crypto_address?: string;
+  source_network_id?: string;
+  destination_network_id?: string;
+  transaction_hash?: string;
+  /** Created on or after this instant. Epoch SECONDS. */
+  start_date?: number;
+  /** Created on or before this instant. Epoch SECONDS. */
+  end_date?: number;
+  input_asset?: string;
+  destination_asset?: string;
+  /** Decimal string, e.g. `'100.00'`. */
+  outgoing_amount_min?: string;
+  /** Decimal string, e.g. `'5000.00'`. */
+  outgoing_amount_max?: string;
+  /** Only `created_at` is supported today, which is also the default. */
+  sort_by?: 'created_at';
+  /** Defaults to `desc`. */
+  sort_dir?: 'asc' | 'desc';
+}
+
+/** Destination list parameters. */
+export interface DestinationListParams extends ListParams {
+  destination_type?: 'crypto' | 'fiat_us' | 'fiat_iban';
+}
+
+/** User list parameters. */
+export interface UserListParams extends ListParams {
+  /** Fuzzy match across first/last name, email, and user id. */
+  search?: string;
+  /** ISO 8601, e.g. `'2026-01-01T00:00:00Z'`. */
+  created_at_from?: string;
+  /** ISO 8601, e.g. `'2026-12-31T23:59:59Z'`. */
+  created_at_to?: string;
+  /** One or more roles, comma-separated (e.g. `'admin,member'`). */
+  roles?: string;
+  /** Defaults to `created_at`. */
+  sort_by?: 'created_at' | 'email' | 'name' | 'role';
+  /** Defaults to `desc`. */
+  sort_dir?: 'asc' | 'desc';
+}
+
+/**
+ * Which extra sections to inline on an application read.
+ *
+ * Comma-separated, e.g. `'entities,validation'`, or `'all'`. Each section adds
+ * weight to the response — `'all'` carries the full KYB record, including every
+ * associated individual's date of birth, nationality and email — so ask for
+ * what the page renders rather than defaulting to `'all'`.
+ *
+ * To render an accept-agreements page, use
+ * {@link ApplicationsResource.getLegalAcceptance} instead: it returns exactly
+ * that page's inputs and none of the personal data.
+ */
+export interface ApplicationGetParams {
+  include?: string;
+}
+
 /** Event list parameters */
 export interface EventListParams extends ListParams {
   event_type?: string;
@@ -1500,4 +1575,23 @@ export interface ScheduledPaymentListParams extends ListParams {
    * combination, e.g. 'scheduled,executed'. Omit for all.
    */
   status?: NonNullable<ScheduledPayment['status']> | (string & NonNullable<unknown>);
+  /**
+   * Only payments that executed under this VERSION of the mandate — "which
+   * payments were judged against v2's caps".
+   *
+   * Use together with `mandate_id`, and like it this matches EXECUTED rows
+   * only: the version is stamped at fire time, so a scheduled-but-unfired row
+   * carries none.
+   */
+  mandate_version?: number;
+  /**
+   * 1-based page number, used only alongside `limit`.
+   *
+   * On its own it has nothing to page through and is ignored. A page past the
+   * end is an empty list, not an error.
+   *
+   * Note this endpoint returns EVERY matching payment when `limit` is omitted
+   * — the iterator's usual cursor paging does not apply here.
+   */
+  page?: number;
 }

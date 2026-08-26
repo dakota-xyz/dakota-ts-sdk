@@ -9,10 +9,10 @@ import type {
   OneOffTransaction,
   OneOffTransactionRequest,
   AutoTransaction,
+  AutoTransactionListParams,
   TransactionListParams,
   TransactionResourceType,
   WalletTransaction,
-  ListParams,
   RequestOptions,
 } from '../types.js';
 
@@ -230,10 +230,24 @@ export class AutoTransactionsResource extends BaseResource {
   /**
    * List auto transactions.
    *
-   * @param params - Pagination parameters
+   * `statuses` and `types` take a comma-separated string, not an array, and
+   * `start_date` / `end_date` are Unix epoch SECONDS rather than the ISO
+   * strings the other list endpoints take.
+   *
+   * @param params - Filter and pagination parameters
    * @returns Async iterator of auto transactions
+   *
+   * @example
+   * ```typescript
+   * const recent = client.autoTransactions.list({
+   *   auto_account_id: accountId,
+   *   statuses: 'pending,processing',
+   *   start_date: Math.floor(Date.now() / 1000) - 86_400,
+   *   sort_dir: 'desc',
+   * });
+   * ```
    */
-  list(params?: ListParams): PaginatedIterator<AutoTransaction> {
+  list(params?: AutoTransactionListParams): PaginatedIterator<AutoTransaction> {
     return this.paginate<AutoTransaction>('/auto-transactions', params);
   }
 

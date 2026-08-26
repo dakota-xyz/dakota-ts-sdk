@@ -136,6 +136,19 @@ rather than trusting the list.
   outstanding agreement can be signed. Both are `null` when the problem carries
   neither.
 
+- **Typed list filters that the spec already accepted.** These are not new
+  upstream — the SDK's params types simply never named them, and since
+  `ListParams` carries an index signature they always reached the wire if you
+  knew they existed. Now they are discoverable:
+
+  | Where | Gained |
+  |-------|--------|
+  | `autoTransactions.list()` | `AutoTransactionListParams` — 20 filters incl. `statuses`, `types`, `start_date`/`end_date` (epoch **seconds**), `outgoing_amount_min`/`max`, `sort_by`/`sort_dir` |
+  | `users.list()` | `UserListParams` — `search`, `roles`, `created_at_from`/`to`, `sort_by`/`sort_dir` |
+  | `destinations.list()` | `DestinationListParams` — `destination_type` |
+  | `scheduledPayments.list()` | `mandate_version`, `page` |
+  | `applications.get()` | `{ include }` — `entities`, `validation`, `edd`, `attestations`, `all` |
+
 - Type aliases for the rest of the new surface: `CustomerStatus`,
   `CustomerStatusCounts`, `LegalDocument`, `OutstandingLegalDocument`,
   `AcceptedAgreement`, `LegalAcceptanceAttestor`, `LegalAcceptanceContext`,
