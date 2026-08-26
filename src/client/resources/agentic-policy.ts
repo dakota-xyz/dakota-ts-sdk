@@ -54,11 +54,13 @@ export class AgenticPolicyResource extends BaseResource {
   /**
    * Register — or fully replace — this client's agentic policy.
    *
-   * Declaring the vocabulary once removes a silent failure mode. Sending
-   * `client_policy` in each proposals request still works and still wins, but
-   * FORGETTING to send it fails silently: the agent just narrates in the
-   * platform's nouns again ("destination", "mandate") and nothing errors
-   * anywhere. A registration makes that impossible.
+   * Registration is the ONLY way to set a policy. A policy is a property of
+   * the CLIENT, not of a request: carried per request, a drafting turn and
+   * the accept that followed it could be judged by different rules. The
+   * platform accordingly stopped reading `client_policy` from request bodies,
+   * and one sent there is now ignored — silently, since the agent simply
+   * narrates in the platform's nouns again ("destination", "mandate") with no
+   * error anywhere. Registering once removes that failure mode.
    *
    * FULL REPLACE, not a merge — the registration IS your declared vocabulary,
    * so an omitted field means you no longer want it, and an empty body (`{}`)

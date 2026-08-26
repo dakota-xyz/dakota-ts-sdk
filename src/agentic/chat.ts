@@ -9,12 +9,7 @@
  */
 
 import type { DakotaClient } from '../client/client.js';
-import type {
-  AgenticBlocker,
-  AgenticClientPolicy,
-  AgenticProposal,
-  AgenticProposalsResult,
-} from '../client/types.js';
+import type { AgenticBlocker, AgenticProposal, AgenticProposalsResult } from '../client/types.js';
 
 /**
  * MIME types the platform accepts for a document attachment.
@@ -144,21 +139,6 @@ export interface AgentConversationOptions {
    * short global deadline will cut turns off unless you raise it here.
    */
   timeout?: number;
-
-  /**
-   * Per-turn `client_policy` override — the vocabulary and payout
-   * constraints the agent drafts under.
-   *
-   * This is a DEVELOPMENT override. It wins for the turns of this
-   * conversation and the server logs that it did. For production, register
-   * the policy once with `client.agenticPolicy.set(policy)`
-   * instead: forgetting to pass it here fails SILENTLY — the agent simply
-   * narrates in the platform's nouns again, with no error anywhere.
-   *
-   * Resolution per request is: a non-empty policy here, else the client's
-   * registration, else platform defaults.
-   */
-  clientPolicy?: AgenticClientPolicy;
 }
 
 /**
@@ -178,7 +158,6 @@ export class AgentConversation {
   private readonly paymentAgentId: string;
   private readonly timezone?: string;
   private readonly timeout?: number;
-  private readonly clientPolicy?: AgenticClientPolicy;
   private history: ChatMessage[] = [];
 
   constructor(
@@ -191,7 +170,6 @@ export class AgentConversation {
     this.paymentAgentId = paymentAgentId;
     this.timezone = options?.timezone;
     this.timeout = options?.timeout;
-    this.clientPolicy = options?.clientPolicy;
     if (history && history.length > 0) {
       this.history = history.map(cloneMessage);
     }
@@ -249,11 +227,8 @@ export class AgentConversation {
         {
           messages,
           // Resent on EVERY turn — the endpoint is stateless, so a zone given
-          // once would be forgotten on the next one. Same for the policy
-          // override: an omitted one silently falls back to the client's
-          // registration (or platform defaults).
+          // once would be forgotten on the next one.
           ...(this.timezone ? { timezone: this.timezone } : {}),
-          ...(this.clientPolicy ? { client_policy: this.clientPolicy } : {}),
         },
         this.timeout !== undefined ? { timeout: this.timeout } : undefined
       );

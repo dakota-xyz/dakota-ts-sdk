@@ -770,9 +770,14 @@ await client.agenticPolicy.set({
 ```
 
 It is a **full replace, not a merge** — an omitted field means you no longer
-want it. You can also pass `clientPolicy` per conversation, but that is a
-development override: forgetting it fails *silently*, and the agent quietly
-goes back to saying "destination" and "mandate".
+want it.
+
+Registering is the **only** way to set a policy. It belongs to the client, not
+to a request, so a drafting turn and the accept that follows it cannot be
+judged by different rules. The per-conversation `clientPolicy` option is gone
+(2.3.0): the platform stopped reading `client_policy` from request bodies, and
+one sent there is ignored — the agent quietly goes back to saying "destination"
+and "mandate" with nothing reporting the fallback.
 
 ### Mandates (Alpha)
 

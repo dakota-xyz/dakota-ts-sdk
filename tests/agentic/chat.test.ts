@@ -165,24 +165,21 @@ describe('AgentConversation.send', () => {
     expect(turn.hasBlockers).toBe(false);
   });
 
-  it('resends the client_policy override on EVERY turn, and omits it when unset', async () => {
+  it('never sends client_policy — the platform resolves it from the registration', async () => {
     const { fetch, requests } = createRoutedFetch({
       [`POST ${PROPOSALS_PATH}`]: () => ({ status: 200, body: { reply: 'ok' } }),
     });
     const client = makeClient(fetch as unknown as typeof globalThis.fetch);
-    const policy = { payee_model: 'flat' as const, labels: { payee: 'recipient' } };
 
-    const scoped = client.newAgentConversation(AGENT_ID, { clientPolicy: policy });
-    await scoped.send('pay alice');
-    await scoped.send('and bob');
-    expect(policyOf(requests[0])).toEqual(policy);
-    expect(policyOf(requests[1])).toEqual(policy);
+    const conv = client.newAgentConversation(AGENT_ID);
+    await conv.send('pay alice');
+    await conv.send('and bob');
 
-    // Unset must fall through to the client's registration — sending an
-    // empty object would instead read as an override meaning "defaults".
-    const plain = client.newAgentConversation(AGENT_ID);
-    await plain.send('pay alice');
-    expect(policyOf(requests[2])).toBeUndefined();
+    // The field is gone from the request body upstream. Sending it anyway
+    // would be ignored, so a caller who believed it worked would get the
+    // platform's default vocabulary with nothing reporting the fallback.
+    expect(policyOf(requests[0])).toBeUndefined();
+    expect(policyOf(requests[1])).toBeUndefined();
   });
 
   it('a rejected_input turn leaves the transcript untouched and is never re-sent', async () => {

@@ -729,10 +729,10 @@ for (const v of await client.mandates.listVersions(mandateId)) {
   console.log(v.version, v.approved_by_signer_id, v.rule?.max_amount_in_window);
 }
 
-// Register the vocabulary the agent speaks for YOUR product — once, not per
-// request. Without it the agent narrates in platform nouns ("destination",
-// "mandate"). Passing `clientPolicy` per conversation also works but is a
-// development override: forget it and it fails SILENTLY.
+// Register the vocabulary the agent speaks for YOUR product — once, and ONLY
+// this way. Without it the agent narrates in platform nouns ("destination",
+// "mandate"). A policy sent in a request body is ignored by the platform, so
+// there is no per-conversation option to reach for.
 await client.agenticPolicy.set({
   payee_model: 'flat', // one entry per payout method, not one payee with N methods
   payout_assets: ['USDC', 'USDT'], // what a PAYEE may receive — state it when
