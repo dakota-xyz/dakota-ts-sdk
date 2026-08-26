@@ -1070,30 +1070,92 @@ export interface CustomerListParams extends ListParams {
   is_sub_client?: boolean;
 }
 
-/** Transaction list parameters */
-export interface TransactionListParams extends ListParams {
-  /** Filter by resource family: one_off, wallet, auto_account */
-  transaction_type?: 'one_off' | 'wallet' | 'auto_account';
+/** The transaction resource family a `GET /transactions` page belongs to. */
+export type TransactionResourceType = components['schemas']['TransactionResourceType'];
+
+/**
+ * Meta on a transaction list page.
+ *
+ * The shared pagination meta plus `transaction_type`, which names the family
+ * the server actually listed — so an empty page still says what it searched,
+ * and `total_count` is read as a count of that family alone.
+ */
+export type TransactionListMeta = components['schemas']['TransactionListMeta'];
+
+/** Filters every transaction family accepts. */
+export interface TransactionListParamsBase extends ListParams {
   customer_id?: string;
+  /** Free-text search across the family's rows. */
+  search?: string;
+  sort_by?: 'amount' | 'created_at' | 'customer_name' | 'status';
+  sort_dir?: 'asc' | 'desc';
+  /** RFC 3339 lower bound on `created_at`, inclusive. */
+  created_at_from?: string;
+  /** RFC 3339 upper bound on `created_at`, inclusive. */
+  created_at_to?: string;
+  /** Decimal string, e.g. `'100.00'`. */
+  amount_min?: string;
+  /** Decimal string, e.g. `'5000.00'`. */
+  amount_max?: string;
+}
+
+/**
+ * Filters for the `one_off` family — the default family of
+ * {@link TransactionsResource.list}.
+ */
+export interface OneOffTransactionListParams extends TransactionListParamsBase {
+  transaction_type?: 'one_off';
   destination_id?: string;
   status?: TransactionStatus;
+  /** Several statuses at once, comma-separated (e.g. `'pending,completed'`). */
+  statuses?: string;
   source_network_id?: string;
   source_asset?: string;
   destination_asset?: string;
-  /**
-   * Filter wallet transactions by wallet ID.
-   * Only valid with `transaction_type: 'wallet'`.
-   */
+}
+
+/**
+ * Filters for the `wallet` family.
+ *
+ * `transaction_type: 'wallet'` is REQUIRED — it is the only way to reach this
+ * family, and the server rejects `wallet_id` or `direction` without it with a
+ * 400 rather than inferring it.
+ */
+export interface WalletTransactionListParams extends TransactionListParamsBase {
+  transaction_type: 'wallet';
+  /** Filter to one wallet. */
   wallet_id?: string;
   /**
-   * Filter wallet transactions by direction relative to the wallet:
-   * - `'out'` — transactions sent FROM the wallet
-   * - `'in'` — transactions recorded with the wallet as the recipient
-   *
-   * Only valid with `transaction_type: 'wallet'`.
+   * Direction relative to the wallet:
+   * - `'out'` — sent FROM the wallet
+   * - `'in'` — recorded with the wallet as the recipient
    */
   direction?: 'in' | 'out';
 }
+
+/**
+ * Filters for the `auto_account` family.
+ *
+ * `customer_id` is required: the server rejects
+ * `transaction_type=auto_account` without one with a 400.
+ */
+export interface AutoAccountTransactionListParams extends TransactionListParamsBase {
+  transaction_type: 'auto_account';
+  customer_id: string;
+}
+
+/**
+ * Transaction list parameters, discriminated by family.
+ *
+ * `GET /transactions` serves three families from one path and infers the
+ * family from the filters when `transaction_type` is absent — so the type is
+ * a union rather than one bag of optional fields, and a wallet-only filter
+ * cannot be written without naming the wallet family.
+ */
+export type TransactionListParams =
+  | OneOffTransactionListParams
+  | WalletTransactionListParams
+  | AutoAccountTransactionListParams;
 
 /** Event list parameters */
 export interface EventListParams extends ListParams {

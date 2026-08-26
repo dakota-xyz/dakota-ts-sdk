@@ -242,15 +242,28 @@ const tx = await client.transactions.create({
 console.log(tx.crypto_address); // Send USDC here
 console.log(tx.status);
 
-// List transactions
+// List transactions. GET /transactions serves THREE resource families from
+// one path, and the family decides the row shape:
+//   omitted / 'one_off'  -> OneOffTransaction   (the default)
+//   'wallet'             -> WalletTransaction
+//   'auto_account'       -> AutoTransaction     (requires customer_id)
+// The SDK always names the family on the wire, so the iterator's element type
+// is the family you asked for. Left to the server it is INFERRED from the
+// other filters, and customer_id alone infers auto_account.
 for await (const tx of client.transactions.list()) {
   console.log(tx.id, tx.status, tx.amount);
 }
 
-// List with filters
+// This customer's ONE-OFF transactions
 const completed = client.transactions.list({
   customer_id: customerId,
   status: 'completed',
+});
+
+// This customer's AUTO-ACCOUNT transactions — different family, different shape
+const autoRows = client.transactions.list({
+  transaction_type: 'auto_account',
+  customer_id: customerId,
 });
 
 // Wallet-scoped filters (ENG-2368). Require transaction_type: 'wallet'.

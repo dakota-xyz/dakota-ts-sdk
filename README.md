@@ -295,7 +295,10 @@ const firstCustomer = await client.customers.list().first();
 // With filters
 const activeCustomers = client.customers.list({ kyb_status: 'active' });
 
-// Iterate transactions with filters
+// Iterate transactions with filters. The SDK always names the transaction
+// family on the wire, so this is that customer's ONE-OFF transactions — a
+// raw GET /transactions?customer_id=... would infer the auto_account family
+// and return those instead.
 const completedTxs = client.transactions.list({
   customer_id: customerId,
   status: 'completed',
@@ -571,9 +574,24 @@ Create and manage one-off transactions.
 | Method | Description |
 |--------|-------------|
 | `transactions.create(data)` | Create one-off transaction |
-| `transactions.list(params?)` | List transactions |
+| `transactions.list(params?)` | List transactions (see the family table below) |
 | `transactions.get(id)` | Get transaction by ID |
 | `transactions.cancel(id)` | Cancel pending transaction |
+
+`GET /transactions` serves three resource families from one path, and the
+family decides the row shape. `list()` names the family on the wire and types
+its rows to match:
+
+| `transaction_type` | Yields | Notes |
+|--------------------|--------|-------|
+| omitted or `'one_off'` | `OneOffTransaction` | The default |
+| `'wallet'` | `WalletTransaction` | Required for the `wallet_id` / `direction` filters |
+| `'auto_account'` | `AutoTransaction` | Requires `customer_id` |
+
+Left to the server the family is **inferred** from the other filters, and
+`customer_id` on its own infers `auto_account` — so name it, or let the SDK
+name `one_off` for you. If a response reports a family other than the one
+requested, the iterator throws rather than yielding rows of the wrong shape.
 
 ### Auto Transactions
 

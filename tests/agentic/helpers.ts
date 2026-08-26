@@ -9,6 +9,8 @@ import { vi } from 'vitest';
 export interface RecordedRequest {
   method: string;
   path: string;
+  /** Query string, flattened. Repeated keys keep the LAST value. */
+  query: Record<string, string>;
   body?: unknown;
   headers: Record<string, string>;
 }
@@ -41,6 +43,7 @@ export function createRoutedFetch(
     const record: RecordedRequest = {
       method,
       path: url.pathname,
+      query: Object.fromEntries(url.searchParams),
       body: bodyStr ? safeJson(bodyStr) : undefined,
       headers: normalizeHeaders(init?.headers),
     };
