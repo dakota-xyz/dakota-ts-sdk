@@ -16,10 +16,63 @@ import * as yaml from 'js-yaml';
 
 const ROOT = resolve(__dirname, '../..');
 
-function loadSpec(file: string): { paths: Record<string, unknown> } {
-  return yaml.load(readFileSync(resolve(ROOT, file), 'utf8')) as {
-    paths: Record<string, unknown>;
-  };
+interface Spec {
+  paths: Record<string, unknown>;
+  components?: { schemas?: Record<string, unknown> };
+}
+
+function loadSpec(file: string): Spec {
+  return yaml.load(readFileSync(resolve(ROOT, file), 'utf8')) as Spec;
+}
+
+/** Every `#/components/schemas/X` name reachable from `node`, one hop. */
+function directRefs(node: unknown, acc: Set<string>): void {
+  if (Array.isArray(node)) {
+    for (const v of node) directRefs(v, acc);
+    return;
+  }
+  if (node === null || typeof node !== 'object') return;
+  for (const [k, v] of Object.entries(node as Record<string, unknown>)) {
+    if (k === '$ref' && typeof v === 'string' && v.startsWith('#/components/schemas/')) {
+      acc.add(v.slice('#/components/schemas/'.length));
+    } else {
+      directRefs(v, acc);
+    }
+  }
+}
+
+/** Transitive closure of schema names reachable from `roots`. */
+function refClosure(roots: unknown, schemas: Record<string, unknown>): Set<string> {
+  const seen = new Set<string>();
+  const queue: string[] = [];
+  const seed = new Set<string>();
+  directRefs(roots, seed);
+  queue.push(...seed);
+  while (queue.length > 0) {
+    const name = queue.pop() as string;
+    if (seen.has(name)) continue;
+    seen.add(name);
+    const next = new Set<string>();
+    directRefs(schemas[name], next);
+    for (const n of next) if (!seen.has(n)) queue.push(n);
+  }
+  return seen;
+}
+
+function partitionPaths(spec: Spec): {
+  alpha: Record<string, unknown>;
+  rest: Record<string, unknown>;
+} {
+  const alpha: Record<string, unknown> = {};
+  const rest: Record<string, unknown> = {};
+  for (const [route, def] of Object.entries(spec.paths)) {
+    const isAlpha =
+      def !== null &&
+      typeof def === 'object' &&
+      (def as Record<string, unknown>)['x-alpha'] === true;
+    (isAlpha ? alpha : rest)[route] = def;
+  }
+  return { alpha, rest };
 }
 
 describe('openapi spec guards', () => {
@@ -55,5 +108,68 @@ describe('openapi spec guards', () => {
     const clientScoped = Object.keys(paths).filter((p) => p.includes('{client_id}'));
 
     expect(clientScoped).toEqual([]);
+  });
+
+  /**
+   * The insight CHAT operation is removed on purpose (ENG-3153): the agentic
+   * beta dropped the conversational surface, and `client.insights.chat()` was
+   * deleted with it. The deterministic report `GET /customers/{id}/insights`
+   * stays.
+   *
+   * The platform's `openapi.public.yaml` still describes the chat operation, so
+   * a wholesale re-sync reintroduces it and `npm run generate` would hand the
+   * SDK back a type for a method that no longer exists. This guard catches
+   * that, and stays useful until the published spec drops the operation too.
+   */
+  for (const spec of ['openapi.yaml', 'openapi.agentic.yaml']) {
+    it(`${spec} does not carry the removed insight chat surface`, () => {
+      const { paths, components } = loadSpec(spec);
+
+      expect(paths['/customers/{customer_id}/insights/chat']).toBeUndefined();
+      for (const schema of ['InsightChatMessage', 'InsightChatRequest', 'InsightChatResponse']) {
+        expect(components?.schemas?.[schema]).toBeUndefined();
+      }
+    });
+  }
+
+  /**
+   * The overlay only earns its keep if it is COMPLETE: it exists so the alpha
+   * surface survives a sync that strips alpha paths from the base, and an
+   * overlay missing one schema those paths reference would generate dangling
+   * `$ref`s on exactly the sync it is meant to survive.
+   *
+   * The allowlist in `scripts/extract-agentic.mjs` is maintained by hand, and
+   * it had already drifted ten schemas behind the alpha paths (AgenticBlocker,
+   * MandateVersion, DeveloperFee, …) before this guard existed.
+   *
+   * Only schemas the alpha paths OWN are required. Ones also reachable from a
+   * non-alpha path (Address, ProblemDetails, Meta, …) stay in the base on any
+   * sync, so duplicating them into the overlay would only add a second copy to
+   * keep in step.
+   */
+  it('the agentic overlay carries every schema its alpha paths own', () => {
+    const base = loadSpec('openapi.yaml');
+    const overlay = loadSpec('openapi.agentic.yaml');
+    const schemas = base.components?.schemas ?? {};
+    const { alpha, rest } = partitionPaths(base);
+
+    const sharedWithStable = refClosure(rest, schemas);
+    const alphaOnly = [...refClosure(alpha, schemas)].filter((name) => !sharedWithStable.has(name));
+    const carried = new Set(Object.keys(overlay.components?.schemas ?? {}));
+    const missing = alphaOnly.filter((name) => !carried.has(name)).sort();
+
+    expect(missing).toEqual([]);
+  });
+
+  it('the agentic overlay carries every x-alpha path', () => {
+    const base = loadSpec('openapi.yaml');
+    const overlay = loadSpec('openapi.agentic.yaml');
+    const { alpha } = partitionPaths(base);
+
+    const missing = Object.keys(alpha)
+      .filter((route) => overlay.paths[route] === undefined)
+      .sort();
+
+    expect(missing).toEqual([]);
   });
 });

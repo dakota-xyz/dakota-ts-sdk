@@ -48,6 +48,17 @@ for await (const customer of client.customers.list()) {
 // List with filters
 const active = client.customers.list({ kyb_status: 'active' });
 
+// `status` is the SINGLE client-facing status — one value collapsing the
+// frozen state, the application decision, and the application lifecycle.
+// The *_statuses filters take a COMMA-SEPARATED STRING, not an array.
+const needsAttention = client.customers.list({ status: 'info_requested,frozen' });
+
+// list() iterates rows and drops the envelope, so the per-status counts a
+// dashboard header renders come from listPage(). They ignore the `status`
+// selection, so every chip keeps its count while one is the active filter.
+const page = await client.customers.listPage({ limit: 25, sort_by: 'created_at' });
+console.log(page.status_counts?.info_requested ?? 0);
+
 // List sub-clients only
 const subClients = client.customers.list({ is_sub_client: true });
 
@@ -242,15 +253,28 @@ const tx = await client.transactions.create({
 console.log(tx.crypto_address); // Send USDC here
 console.log(tx.status);
 
-// List transactions
+// List transactions. GET /transactions serves THREE resource families from
+// one path, and the family decides the row shape:
+//   omitted / 'one_off'  -> OneOffTransaction   (the default)
+//   'wallet'             -> WalletTransaction
+//   'auto_account'       -> AutoTransaction     (requires customer_id)
+// The SDK always names the family on the wire, so the iterator's element type
+// is the family you asked for. Left to the server it is INFERRED from the
+// other filters, and customer_id alone infers auto_account.
 for await (const tx of client.transactions.list()) {
   console.log(tx.id, tx.status, tx.amount);
 }
 
-// List with filters
+// This customer's ONE-OFF transactions
 const completed = client.transactions.list({
   customer_id: customerId,
   status: 'completed',
+});
+
+// This customer's AUTO-ACCOUNT transactions — different family, different shape
+const autoRows = client.transactions.list({
+  transaction_type: 'auto_account',
+  customer_id: customerId,
 });
 
 // Wallet-scoped filters (ENG-2368). Require transaction_type: 'wallet'.
@@ -578,6 +602,59 @@ for (const network of networks) {
 }
 ```
 
+### Legal Documents
+
+```typescript
+// UNAUTHENTICATED — callable before a customer relationship exists.
+// An index without the text; fetch the one you will display.
+for (const doc of await client.legal.list()) {
+  console.log(doc.key, doc.version, doc.title);
+}
+
+const tos = await client.legal.get('dakota_tos');
+render(tos.content);
+
+// A revision is IMMUTABLE, so cache (key, version) forever. legal.list() is
+// not cacheable — it names whichever revision is in force NOW.
+const older = await client.legal.get('dakota_tos', '2026-07-23');
+
+// Record what the customer actually saw, not whichever revision was current
+// when the request landed.
+await client.applications.submitAttestation(applicationId, {
+  attestation_type: 'terms_of_service',
+  legal_document_version: tos.version,
+  applicant_id: attestorId,
+});
+
+// The accept-agreements page context: what is still owed and who may accept
+// it. Deliberately NOT the application — applications.get() would return the
+// whole KYB record, and the link reaching this endpoint is emailed, so its
+// token is scoped to this call and the attestation submission.
+const ctx = await client.applications.getLegalAcceptance(applicationId);
+// A business may have several control persons; an individual application has
+// exactly one permissible attestor, so there is nobody to pick.
+const attestor = ctx.application_type === 'individual' ? ctx.attestors[0] : pick(ctx.attestors);
+```
+
+### RD Marketing Fee
+
+```typescript
+// The client comes from the session — no id to pass. A client with no
+// contract gets a 404; an EMPTY list means the contract starts later.
+const months = await client.rdMarketingFee.listMonths(); // newest first
+const statement = await client.rdMarketingFee.getStatement(months[0]);
+
+for (const day of statement.daily) {
+  // ABSENT is not zero: absent means the day is not derived yet, '0' means
+  // the client genuinely held no RD. Do not render them alike.
+  console.log(day.date, day.balance_minor ?? 'not yet derived');
+}
+
+// The running month is included, with its fee figures absent rather than
+// zero — the bank's interest posts the month after it is earned.
+console.log(statement.owed_minor ?? 'not priced yet');
+```
+
 ### Sandbox (Testing)
 
 ```typescript
@@ -729,10 +806,10 @@ for (const v of await client.mandates.listVersions(mandateId)) {
   console.log(v.version, v.approved_by_signer_id, v.rule?.max_amount_in_window);
 }
 
-// Register the vocabulary the agent speaks for YOUR product — once, not per
-// request. Without it the agent narrates in platform nouns ("destination",
-// "mandate"). Passing `clientPolicy` per conversation also works but is a
-// development override: forget it and it fails SILENTLY.
+// Register the vocabulary the agent speaks for YOUR product — once, and ONLY
+// this way. Without it the agent narrates in platform nouns ("destination",
+// "mandate"). A policy sent in a request body is ignored by the platform, so
+// there is no per-conversation option to reach for.
 await client.agenticPolicy.set({
   payee_model: 'flat', // one entry per payout method, not one payee with N methods
   payout_assets: ['USDC', 'USDT'], // what a PAYEE may receive — state it when
@@ -745,9 +822,17 @@ await client.agenticPolicy.set({
 // strict, so an unknown key or an unimplemented label concept is a 400 HERE
 // rather than a surprise on a customer's first conversation.
 
-// Declare your developer fee PER PAYOUT TYPE when accepting proposals. The
-// two rates are independent — omit one and that payout type carries no fee,
-// and the agent is told nothing about a fee it could mention.
+// Declare your developer fee PER PAYOUT TYPE. The two rates are independent —
+// omit one and that payout type carries no fee.
+//
+// Declare it in BOTH places, not one or the other. The drafting turn is what
+// lets the agent MENTION the fee; the accept is what CHARGES it. Set it only
+// on the accept and the customer approves a summary that never disclosed a
+// fee and is then charged it.
+const priced = client.newAgentConversation(agent.id!, {
+  developerFee: { swap_bps: 50, offramp_bps: 25 },
+});
+
 await client.instructions.create({
   payment_agent_id: agent.id!,
   proposals: turn.proposals,
@@ -819,6 +904,12 @@ try {
     console.log('Request ID:', error.requestId);
     console.log('Retryable:', error.retryable);
     console.log('Details:', error.details);
+    // For a HUMAN surface: `message` names request fields so a machine caller
+    // can self-correct; `userMessage` says it without API vocabulary.
+    console.log('Show a person:', error.userMessage ?? error.message);
+    // A link that CLEARS the problem, when one exists (today:
+    // terms-not-accepted). Token-gated and usable as-is.
+    console.log('Resolution:', error.resolutionUrl);
   }
   if (error instanceof TransportError) {
     console.log('Transport error:', error.message);

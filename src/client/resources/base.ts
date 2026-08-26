@@ -17,11 +17,16 @@ export abstract class BaseResource {
 
   /**
    * Create a paginated iterator for a list endpoint.
+   *
+   * `inspectMeta` is called with each page's raw `meta` before the page is
+   * yielded, for endpoints whose meta says something the caller must act on.
+   * Throw from it to fail the page.
    */
   protected paginate<T>(
     path: string,
     params?: Record<string, unknown>,
-    cursorExtractor?: CursorExtractor<T>
+    cursorExtractor?: CursorExtractor<T>,
+    inspectMeta?: (meta: Record<string, unknown> | undefined) => void
   ): PaginatedIterator<T> {
     const fetcher: PageFetcher<T> = async (cursor?: string) => {
       const query: Record<string, string | number | boolean | undefined> = {};
@@ -60,8 +65,11 @@ export abstract class BaseResource {
       // array as one complete page: there is no cursor to follow, so
       // `meta` is absent and `has_more_after` correctly reads false.
       if (Array.isArray(response)) {
+        inspectMeta?.(undefined);
         return { data: response, meta: undefined };
       }
+
+      inspectMeta?.(response.meta as Record<string, unknown> | undefined);
 
       return {
         data: response.data ?? [],

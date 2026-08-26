@@ -63,6 +63,30 @@ export type CustomerCreateResponse = components['schemas']['CustomerCreateRespon
 /** KYB status */
 export type KybStatus = Customer['kyb_status'];
 
+/**
+ * The single client-facing customer status.
+ *
+ * One value collapsing the frozen state, the application decision, and the
+ * application lifecycle — what the dashboard shows, filters, and counts by.
+ * See `Customer.status` for the derivation precedence.
+ *
+ * Distinct from {@link KybStatus}, which reports only the KYB leg.
+ */
+export type CustomerStatus = components['schemas']['CustomerStatus'];
+
+/**
+ * How many customers hold each unified status.
+ *
+ * Returned alongside a customer page as `status_counts`, computed under the
+ * same filters (search, date, sub-client) but IGNORING the `status` selection
+ * itself — so a status chip keeps its count while that status is the active
+ * filter. A status absent from the object has a count of zero.
+ *
+ * `customers.list()` iterates rows, so reach this with
+ * {@link CustomersResource.listPage}.
+ */
+export type CustomerStatusCounts = components['schemas']['CustomerStatusCounts'];
+
 /** Request to update the sub-client association for a customer */
 export type UpdateCustomerSubClientRequest =
   components['schemas']['UpdateCustomerSubClientRequest'];
@@ -322,6 +346,17 @@ export type Application = components['schemas']['Application'];
 export type ApplicationStatus = components['schemas']['ApplicationStatus'];
 
 /**
+ * The reviewer-selected resubmission scope for an RFI (request for
+ * information).
+ *
+ * Present on `Application.rfi_requested_items` while an RFI is open: which
+ * documents to replace, whether the business description is editable, and any
+ * free-text compliance questions to answer. Render the resubmit page from
+ * this rather than reopening the whole application form.
+ */
+export type RFIRequestedItems = components['schemas']['RFIRequestedItems'];
+
+/**
  * Business application creation request.
  *
  * Used when submitting a business application for KYB verification.
@@ -566,6 +601,72 @@ export interface WebhookHistoryResponse {
   has_more: boolean;
   cursor?: string | null;
 }
+
+// ============================================================================
+// Legal Document Types
+// ============================================================================
+
+/**
+ * One published revision of a legal document.
+ *
+ * A revision is IMMUTABLE: `version` identifies an exact text that never
+ * changes once published, and a correction produces a new revision rather than
+ * editing this one. So an acceptance recorded against a version always refers
+ * to the same words, and a fetched `(key, version)` can be cached forever.
+ *
+ * `content` is present only on {@link LegalResource.get} — the list is an
+ * index without the text.
+ */
+export type LegalDocument = components['schemas']['LegalDocument'];
+
+/**
+ * A legal document the customer has never accepted, at the revision now in
+ * force. Identity only — fetch the text with {@link LegalResource.get}.
+ */
+export type OutstandingLegalDocument = components['schemas']['OutstandingLegalDocument'];
+
+/** An agreement this application has already accepted, and at which revision. */
+export type AcceptedAgreement = components['schemas']['AcceptedAgreement'];
+
+/**
+ * Someone permitted to accept this application's agreements.
+ *
+ * An id and a display name, and NOTHING else about the person: the credential
+ * that reaches this endpoint travels in an emailed URL, and date of birth,
+ * nationality and email are exactly what that scoping exists to keep out.
+ */
+export type LegalAcceptanceAttestor = components['schemas']['LegalAcceptanceAttestor'];
+
+/**
+ * What an accept-agreements page renders: the agreements still owed, and the
+ * people permitted to accept them.
+ *
+ * Deliberately NOT the application — see
+ * {@link ApplicationsResource.getLegalAcceptance}.
+ */
+export type LegalAcceptanceContext = components['schemas']['LegalAcceptanceContext'];
+
+// ============================================================================
+// RD Marketing Fee Types
+// ============================================================================
+
+/**
+ * One month of a client's reserve-management marketing-fee statement.
+ *
+ * Absent is not zero: `owed_minor` and `avg_daily_balance_minor` are absent
+ * until the month is priced, and a zero there would instead assert that
+ * nothing is owed.
+ */
+export type RDMarketingFeeStatement = components['schemas']['RDMarketingFeeStatement'];
+
+/**
+ * One calendar day of a marketing-fee statement.
+ *
+ * Every day of the month gets a row. An ABSENT `balance_minor` means the day
+ * is not stamped yet; a present `'0'` means the client genuinely held no RD
+ * that day. The two are different facts and must not render alike.
+ */
+export type RDMarketingFeeDailyRow = components['schemas']['RDMarketingFeeDailyRow'];
 
 // ============================================================================
 // Info Types
@@ -961,8 +1062,20 @@ export type SelfServeCreditsLedgerEntryType = SelfServeCreditsLedgerEntry['entry
 
 /** Parameters for listing self-serve credits ledger entries */
 export interface SelfServeCreditsLedgerParams {
-  /** Cursor for pagination (ISO 8601 datetime) */
+  /** Cursor for pagination (ISO 8601 datetime). Returns entries created BEFORE it. */
   cursor?: string;
+  /**
+   * Tiebreaker for `cursor` — pass the `id` of the last entry on the previous
+   * page, alongside its `created_at` as `cursor`.
+   *
+   * Entries written in one transaction share an identical `created_at`, so
+   * ordering by timestamp alone is not total and a page boundary landing
+   * inside such a group SILENTLY DROPS rows. With both, entries come back
+   * strictly before `(cursor, cursor_id)` in `(created_at, id)` order.
+   *
+   * Ignored unless `cursor` is also present.
+   */
+  cursor_id?: string;
   /** Number of entries to return (1-100, default 20) */
   limit?: number;
   /** Filter by entry type */
@@ -1061,38 +1174,237 @@ export interface ListParams {
   [key: string]: unknown;
 }
 
-/** Customer list parameters */
+/**
+ * Customer list parameters.
+ *
+ * The `*_statuses` filters take a COMMA-SEPARATED list in one string, not an
+ * array — `'active,frozen'`, not `['active', 'frozen']`.
+ */
 export interface CustomerListParams extends ListParams {
   external_id?: string;
+  /** Name, email, or customer id. Case-insensitive. */
   search?: string;
+  /** A single KYB status. Use `kyb_statuses` for several. */
   kyb_status?: KybStatus;
+  /** Several KYB statuses, comma-separated (e.g. `'active,frozen'`). */
+  kyb_statuses?: string;
+  /**
+   * Several effective KYC/B link statuses, comma-separated. Values mirror
+   * `KybLinkStatus`: `not_started`, `pending`, `in_review`, `approved`,
+   * `expired`, `rejected`.
+   */
+  kyc_statuses?: string;
+  /**
+   * Several onboarding application statuses, comma-separated. Values mirror
+   * {@link ApplicationStatus}. Customers with NO application are excluded
+   * when this filter is set.
+   */
+  application_statuses?: string;
+  /**
+   * Several unified customer statuses, comma-separated (e.g.
+   * `'frozen,info_requested'`). Values mirror {@link CustomerStatus}.
+   *
+   * This is the one client-facing status the dashboard shows, filters, and
+   * counts by — it collapses the frozen state, the application decision, and
+   * the application lifecycle into a single value.
+   */
+  status?: string;
   sub_client_id?: string;
+  /** True returns ONLY sub-clients. False or omitted returns everything. */
   is_sub_client?: boolean;
+  /** Defaults to `name`. */
+  sort_by?:
+    | 'application_status'
+    | 'created_at'
+    | 'customer_type'
+    | 'id'
+    | 'kyb_status'
+    | 'kyc_status'
+    | 'name'
+    | 'status';
+  /** Defaults to `asc`. */
+  sort_dir?: 'asc' | 'desc';
+  /** RFC 3339 lower bound on `created_at`. */
+  created_at_from?: string;
+  /** RFC 3339 upper bound on `created_at`. */
+  created_at_to?: string;
 }
 
-/** Transaction list parameters */
-export interface TransactionListParams extends ListParams {
-  /** Filter by resource family: one_off, wallet, auto_account */
-  transaction_type?: 'one_off' | 'wallet' | 'auto_account';
+/**
+ * One page of customers, plus the per-status counts the dashboard header
+ * renders. Returned by {@link CustomersResource.listPage}.
+ */
+export interface CustomerPage {
+  data: Customer[];
+  meta?: Meta;
+  /**
+   * Counts under the same filters but ignoring the `status` selection, so a
+   * status chip keeps its count while it is the active filter. Absent when
+   * the server did not compute them.
+   */
+  status_counts?: CustomerStatusCounts;
+}
+
+/** The transaction resource family a `GET /transactions` page belongs to. */
+export type TransactionResourceType = components['schemas']['TransactionResourceType'];
+
+/**
+ * Meta on a transaction list page.
+ *
+ * The shared pagination meta plus `transaction_type`, which names the family
+ * the server actually listed — so an empty page still says what it searched,
+ * and `total_count` is read as a count of that family alone.
+ */
+export type TransactionListMeta = components['schemas']['TransactionListMeta'];
+
+/** Filters every transaction family accepts. */
+export interface TransactionListParamsBase extends ListParams {
   customer_id?: string;
+  /** Free-text search across the family's rows. */
+  search?: string;
+  sort_by?: 'amount' | 'created_at' | 'customer_name' | 'status';
+  sort_dir?: 'asc' | 'desc';
+  /** RFC 3339 lower bound on `created_at`, inclusive. */
+  created_at_from?: string;
+  /** RFC 3339 upper bound on `created_at`, inclusive. */
+  created_at_to?: string;
+  /** Decimal string, e.g. `'100.00'`. */
+  amount_min?: string;
+  /** Decimal string, e.g. `'5000.00'`. */
+  amount_max?: string;
+}
+
+/**
+ * Filters for the `one_off` family — the default family of
+ * {@link TransactionsResource.list}.
+ */
+export interface OneOffTransactionListParams extends TransactionListParamsBase {
+  transaction_type?: 'one_off';
   destination_id?: string;
   status?: TransactionStatus;
+  /** Several statuses at once, comma-separated (e.g. `'pending,completed'`). */
+  statuses?: string;
   source_network_id?: string;
   source_asset?: string;
   destination_asset?: string;
-  /**
-   * Filter wallet transactions by wallet ID.
-   * Only valid with `transaction_type: 'wallet'`.
-   */
+}
+
+/**
+ * Filters for the `wallet` family.
+ *
+ * `transaction_type: 'wallet'` is REQUIRED — it is the only way to reach this
+ * family, and the server rejects `wallet_id` or `direction` without it with a
+ * 400 rather than inferring it.
+ */
+export interface WalletTransactionListParams extends TransactionListParamsBase {
+  transaction_type: 'wallet';
+  /** Filter to one wallet. */
   wallet_id?: string;
   /**
-   * Filter wallet transactions by direction relative to the wallet:
-   * - `'out'` — transactions sent FROM the wallet
-   * - `'in'` — transactions recorded with the wallet as the recipient
-   *
-   * Only valid with `transaction_type: 'wallet'`.
+   * Direction relative to the wallet:
+   * - `'out'` — sent FROM the wallet
+   * - `'in'` — recorded with the wallet as the recipient
    */
   direction?: 'in' | 'out';
+}
+
+/**
+ * Filters for the `auto_account` family.
+ *
+ * `customer_id` is required: the server rejects
+ * `transaction_type=auto_account` without one with a 400.
+ */
+export interface AutoAccountTransactionListParams extends TransactionListParamsBase {
+  transaction_type: 'auto_account';
+  customer_id: string;
+}
+
+/**
+ * Transaction list parameters, discriminated by family.
+ *
+ * `GET /transactions` serves three families from one path and infers the
+ * family from the filters when `transaction_type` is absent — so the type is
+ * a union rather than one bag of optional fields, and a wallet-only filter
+ * cannot be written without naming the wallet family.
+ */
+export type TransactionListParams =
+  | OneOffTransactionListParams
+  | WalletTransactionListParams
+  | AutoAccountTransactionListParams;
+
+/**
+ * Auto-transaction list parameters.
+ *
+ * `statuses` and `types` take a COMMA-SEPARATED string, not an array. Dates
+ * are Unix epoch SECONDS, not ISO strings — unlike every other list endpoint
+ * here.
+ */
+export interface AutoTransactionListParams extends ListParams {
+  auto_account_id?: string;
+  destination_id?: string;
+  status?: TransactionStatus;
+  /** Several statuses at once, comma-separated (e.g. `'pending,processing'`). */
+  statuses?: string;
+  type?: string;
+  /** Several types at once, comma-separated (e.g. `'onramp,offramp'`). */
+  types?: string;
+  provider_id?: string;
+  source_crypto_address?: string;
+  destination_crypto_address?: string;
+  source_network_id?: string;
+  destination_network_id?: string;
+  transaction_hash?: string;
+  /** Created on or after this instant. Epoch SECONDS. */
+  start_date?: number;
+  /** Created on or before this instant. Epoch SECONDS. */
+  end_date?: number;
+  input_asset?: string;
+  destination_asset?: string;
+  /** Decimal string, e.g. `'100.00'`. */
+  outgoing_amount_min?: string;
+  /** Decimal string, e.g. `'5000.00'`. */
+  outgoing_amount_max?: string;
+  /** Only `created_at` is supported today, which is also the default. */
+  sort_by?: 'created_at';
+  /** Defaults to `desc`. */
+  sort_dir?: 'asc' | 'desc';
+}
+
+/** Destination list parameters. */
+export interface DestinationListParams extends ListParams {
+  destination_type?: 'crypto' | 'fiat_us' | 'fiat_iban';
+}
+
+/** User list parameters. */
+export interface UserListParams extends ListParams {
+  /** Fuzzy match across first/last name, email, and user id. */
+  search?: string;
+  /** ISO 8601, e.g. `'2026-01-01T00:00:00Z'`. */
+  created_at_from?: string;
+  /** ISO 8601, e.g. `'2026-12-31T23:59:59Z'`. */
+  created_at_to?: string;
+  /** One or more roles, comma-separated (e.g. `'admin,member'`). */
+  roles?: string;
+  /** Defaults to `created_at`. */
+  sort_by?: 'created_at' | 'email' | 'name' | 'role';
+  /** Defaults to `desc`. */
+  sort_dir?: 'asc' | 'desc';
+}
+
+/**
+ * Which extra sections to inline on an application read.
+ *
+ * Comma-separated, e.g. `'entities,validation'`, or `'all'`. Each section adds
+ * weight to the response — `'all'` carries the full KYB record, including every
+ * associated individual's date of birth, nationality and email — so ask for
+ * what the page renders rather than defaulting to `'all'`.
+ *
+ * To render an accept-agreements page, use
+ * {@link ApplicationsResource.getLegalAcceptance} instead: it returns exactly
+ * that page's inputs and none of the personal data.
+ */
+export interface ApplicationGetParams {
+  include?: string;
 }
 
 /** Event list parameters */
@@ -1263,4 +1575,23 @@ export interface ScheduledPaymentListParams extends ListParams {
    * combination, e.g. 'scheduled,executed'. Omit for all.
    */
   status?: NonNullable<ScheduledPayment['status']> | (string & NonNullable<unknown>);
+  /**
+   * Only payments that executed under this VERSION of the mandate — "which
+   * payments were judged against v2's caps".
+   *
+   * Use together with `mandate_id`, and like it this matches EXECUTED rows
+   * only: the version is stamped at fire time, so a scheduled-but-unfired row
+   * carries none.
+   */
+  mandate_version?: number;
+  /**
+   * 1-based page number, used only alongside `limit`.
+   *
+   * On its own it has nothing to page through and is ignored. A page past the
+   * end is an empty list, not an error.
+   *
+   * Note this endpoint returns EVERY matching payment when `limit` is omitted
+   * — the iterator's usual cursor paging does not apply here.
+   */
+  page?: number;
 }

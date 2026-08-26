@@ -11,9 +11,9 @@
 import type { DakotaClient } from '../client/client.js';
 import type {
   AgenticBlocker,
-  AgenticClientPolicy,
   AgenticProposal,
   AgenticProposalsResult,
+  DeveloperFee,
 } from '../client/types.js';
 
 /**
@@ -146,19 +146,19 @@ export interface AgentConversationOptions {
   timeout?: number;
 
   /**
-   * Per-turn `client_policy` override — the vocabulary and payout
-   * constraints the agent drafts under.
+   * Your developer fee, declared PER PAYOUT TYPE — `swap_bps` for a crypto
+   * payout, `offramp_bps` for a bank one. The two are independent, so one
+   * conversation can charge a swap and stay silent about a bank payout.
    *
-   * This is a DEVELOPMENT override. It wins for the turns of this
-   * conversation and the server logs that it did. For production, register
-   * the policy once with `client.agenticPolicy.set(policy)`
-   * instead: forgetting to pass it here fails SILENTLY — the agent simply
-   * narrates in the platform's nouns again, with no error anywhere.
+   * Set it here as well as on `instructions.create()`, not instead of it.
+   * The accept is what CHARGES the fee; declaring it on the drafting turn is
+   * what lets the agent MENTION it — omit it and the agent is told nothing
+   * about a fee it could name, so the customer approves a summary that never
+   * disclosed one and then gets charged it.
    *
-   * Resolution per request is: a non-empty policy here, else the client's
-   * registration, else platform defaults.
+   * Resent on every turn, since the endpoint is stateless.
    */
-  clientPolicy?: AgenticClientPolicy;
+  developerFee?: DeveloperFee;
 }
 
 /**
@@ -178,7 +178,7 @@ export class AgentConversation {
   private readonly paymentAgentId: string;
   private readonly timezone?: string;
   private readonly timeout?: number;
-  private readonly clientPolicy?: AgenticClientPolicy;
+  private readonly developerFee?: DeveloperFee;
   private history: ChatMessage[] = [];
 
   constructor(
@@ -191,7 +191,7 @@ export class AgentConversation {
     this.paymentAgentId = paymentAgentId;
     this.timezone = options?.timezone;
     this.timeout = options?.timeout;
-    this.clientPolicy = options?.clientPolicy;
+    this.developerFee = options?.developerFee;
     if (history && history.length > 0) {
       this.history = history.map(cloneMessage);
     }
@@ -248,12 +248,10 @@ export class AgentConversation {
         this.paymentAgentId,
         {
           messages,
-          // Resent on EVERY turn — the endpoint is stateless, so a zone given
-          // once would be forgotten on the next one. Same for the policy
-          // override: an omitted one silently falls back to the client's
-          // registration (or platform defaults).
+          // Resent on EVERY turn — the endpoint is stateless, so a value
+          // given once would be forgotten on the next one.
           ...(this.timezone ? { timezone: this.timezone } : {}),
-          ...(this.clientPolicy ? { client_policy: this.clientPolicy } : {}),
+          ...(this.developerFee ? { developer_fee: this.developerFee } : {}),
         },
         this.timeout !== undefined ? { timeout: this.timeout } : undefined
       );

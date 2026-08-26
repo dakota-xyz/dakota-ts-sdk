@@ -21,10 +21,22 @@ const OVERLAY = resolve(ROOT, 'openapi.agentic.yaml');
 // allowlist because YAML has no marker on schemas equivalent to `x-alpha`
 // on paths — and because a couple names (Mandate, MandateRule) do not
 // share a common prefix.
+//
+// It lists only schemas the alpha paths OWN. Shared ones they also reference
+// (Address, KSUID, Meta, NetworkId, ProblemDetails, RecipientRequest,
+// ValidationError) are reachable from non-alpha paths too, so a sync that
+// stripped the alpha surface would still leave them in the base — copying
+// them here would only create a second definition to keep in step.
+//
+// `tests/client/spec-guards.test.ts` fails if an alpha path starts
+// referencing an agentic-only schema this list does not carry.
 const AGENTIC_SCHEMAS = new Set([
   'PaymentAgentResponse',
   'PaymentAgentSignerGroupRef',
   'AgenticAction',
+  'AgenticBlocker',
+  'AgenticClientPolicy',
+  'AgenticProposalsProgress',
   'AgenticActionDownstream',
   'AgenticAttachment',
   'AgenticChatMessage',
@@ -33,6 +45,7 @@ const AGENTIC_SCHEMAS = new Set([
   'AgenticInstructionsResult',
   'AgenticProposal',
   'AgenticProposalsResult',
+  'AmendMandateRequest',
   'ApproveMandateRequest',
   'CancelMandateRequest',
   'CreatePaymentAgentRequest',
@@ -45,6 +58,12 @@ const AGENTIC_SCHEMAS = new Set([
   'CreateScheduledPaymentsAction',
   'CreateAutoAccountAction',
   'CreateScheduledPaymentRequest',
+  'DeveloperFee',
+  'MandateBudget',
+  'MandateBudgetLine',
+  'MandateVersion',
+  'RegisteredAgenticClientPolicy',
+  'ScheduledPaymentList',
   'Mandate',
   'MandateResponse',
   'MandateRule',
@@ -55,9 +74,6 @@ const AGENTIC_SCHEMAS = new Set([
   'InsightSnapshotUpcoming',
   'InsightSnapshot',
   'InsightReport',
-  'InsightChatMessage',
-  'InsightChatRequest',
-  'InsightChatResponse',
 ]);
 
 const base = yaml.load(readFileSync(BASE, 'utf8'));

@@ -4,6 +4,177 @@ All notable changes to the Dakota TypeScript SDK are documented in this file.
 
 ## [Unreleased]
 
+### Changed — spec sync with platform main
+
+The vendored `openapi.yaml` was three weeks behind platform main. It is now a
+copy of platform `openapi.public.yaml` at `2ca79f60`, minus the one deviation
+below, and byte-identical to the spec go-sdk carries at its own main. That is 5
+new operations, 17 new schemas, and shape changes on 21 existing ones.
+
+`src/generated/api.ts` is regenerated from it. Since the generated types are a
+documented part of this SDK's surface, a few names moved:
+`Paginated{OneOff,Wallet,Customer}TransactionResponse.meta` is now
+`TransactionListMeta` (the same three pagination fields plus a required
+`transaction_type` naming the family the page listed).
+
+The overlay allowlist in `scripts/extract-agentic.mjs` had drifted ten schemas
+behind the alpha paths, and still listed the three `InsightChat` schemas the
+removal below deleted. Because the base spec currently carries the alpha
+surface itself, the gap was invisible — it would have surfaced only on the sync
+the overlay exists to survive, as dangling `$ref`s. The list is corrected, and
+`tests/client/spec-guards.test.ts` now derives the required set from the spec
+rather than trusting the list.
+
+### Breaking
+
+- **`AgentConversationOptions.clientPolicy` is gone.** platform `1f108a6a`
+  dropped `client_policy` from the proposals and instructions request bodies
+  deliberately: a policy belongs to the client, not to a request, and carrying
+  one per request let a draft and its accept be judged by different rules.
+
+  The SDK kept sending it. It was spread into the body rather than assigned, so
+  TypeScript's excess-property check never fired and the field simply stopped
+  doing anything — silently, since the agent just narrates in platform nouns
+  again ("destination", "mandate") with no error anywhere. Deleting the option
+  turns that silence into a compile error.
+
+  Register once with `client.agenticPolicy.set(policy)` instead. `timezone` and
+  `timeout` are unaffected. (go-sdk removed `WithClientPolicy` in the same
+  cycle.)
+
+- **`TransactionListParams` is now a union discriminated on
+  `transaction_type`.** The wallet-only filters (`wallet_id`, `direction`) can
+  no longer be written without naming the `wallet` family — the combination the
+  server answers with a 400. See the fix below. It also picks up the filters the
+  spec has carried for a while and the type never exposed: `search`, `sort_by`,
+  `sort_dir`, `created_at_from`/`created_at_to`, `amount_min`/`amount_max`,
+  `statuses`.
+
+### Fixed
+
+- **`transactions.list()` could return another family's rows.**
+  `GET /transactions` serves three resource families from one path, and with
+  `transaction_type` omitted the server INFERS the family from the other
+  filters — `customer_id` alone infers `auto_account`. `list()` named no
+  family, so the obvious spelling of "this customer's one-off transactions":
+
+  ```typescript
+  client.transactions.list({ customer_id });
+  ```
+
+  returned that customer's **auto-account** transactions. They parse into
+  `OneOffTransaction` with missing fields rather than failing, and the return
+  type said `OneOffTransaction` throughout, so nothing surfaced the
+  substitution. README and AGENTS.md both taught this exact call.
+
+  `list()` now always names the family on the wire, defaulting to `one_off`,
+  and verifies the family the response reports before yielding a page — a
+  POSITIVE mismatch only, since an absent `meta.transaction_type` means the
+  response made no claim rather than that it served the wrong family. The
+  synced spec is what made the check possible.
+
+  The element type now follows the family rather than asserting one:
+  `list({ transaction_type: 'wallet' })` yields `WalletTransaction`,
+  `'auto_account'` yields `AutoTransaction`, anything else `OneOffTransaction`.
+
+- **`selfServe.listLedger()` could silently drop rows at a page boundary.** The
+  ledger's `cursor` is a timestamp, and entries written in one transaction
+  share a `created_at` — so ordering by it alone is not total, and a page
+  boundary landing inside such a group lost the rest of it. `cursor_id` is the
+  tiebreaker that completes the ordering; pass the last entry's `id` alongside
+  its `created_at`.
+
+### Added
+
+- **`AgentConversationOptions.developerFee`.** The proposals request gained
+  `developer_fee` in this sync, and `AgentConversation` builds that body
+  itself, so there was no way to declare a fee on a drafting turn.
+
+  Declare it in BOTH places, not one or the other: the accept is what CHARGES
+  the fee, and the drafting turn is what lets the agent MENTION it. Set it only
+  on `instructions.create()` and the customer approves a summary that never
+  disclosed a fee, then gets charged it. Resent on every turn, since the
+  endpoint is stateless — and, like `timezone`, it must be passed again to
+  `resumeAgentConversation`, which restores the transcript, not the options.
+
+- **Legal documents (`client.legal`).** `list()` returns the in-force revision
+  of every published document as an index without the text; `get(key, version?)`
+  returns one document's text, either the revision in force or a specific one.
+  Both are **unauthenticated** — integrators need them before a customer
+  relationship exists. A revision is immutable, so a fetched `(key, version)`
+  can be cached indefinitely; `list()` cannot, since it names whichever revision
+  is in force now.
+
+- **`applications.getLegalAcceptance(applicationId)`.** What an
+  accept-agreements page renders: the agreements still owed, the ones already
+  accepted, and the people permitted to accept them. It exists so that page does
+  not call `applications.get()`, which would answer with the whole KYB record —
+  the business entity and every individual's date of birth, nationality and
+  email. The link that reaches it is emailed and travels in a URL query string,
+  so its credential is scoped to this call and the attestation submission.
+
+  Pair it with `legal.get()` for the text, and pass the `version` you displayed
+  back as `legal_document_version` on `submitAttestation` so the acceptance
+  record names the exact words the customer saw.
+
+- **RD marketing-fee statements (`client.rdMarketingFee`).** `listMonths()`
+  returns the months the calling client has a statement for, newest first;
+  `getStatement(month)` returns one row per calendar day, read from the stored
+  daily principals rather than recomputed, so what a client reads and what
+  Dakota priced cannot drift. Absent is not zero throughout: an absent
+  `balance_minor` means the day is not stamped yet, `'0'` means the client
+  genuinely held no RD. A client with no contract gets a 404; an empty month
+  list means the contract is real but starts later.
+
+- **`customers.listPage(params?)`.** One page of customers plus `status_counts`
+  — the per-status counts a dashboard header renders, which `list()` cannot
+  reach because it iterates rows and drops the envelope. The counts are computed
+  under the same filters but ignoring the `status` selection, so a chip keeps
+  its count while it is the active filter.
+
+- **The unified customer status.** `Customer.status` collapses the frozen
+  state, the application decision, and the application lifecycle into one
+  client-facing value (`CustomerStatus`). `CustomerListParams` gains `status`
+  plus `kyb_statuses`, `kyc_statuses` and `application_statuses` — all
+  comma-separated strings, not arrays — and `sort_by`, `sort_dir`,
+  `created_at_from`, `created_at_to`.
+
+- **`APIError.userMessage` and `APIError.resolutionUrl`.** `message` names
+  request fields and actions so a machine caller can self-correct;
+  `userMessage` says the same thing without API vocabulary, for relaying into a
+  human surface. `resolutionUrl` is a token-gated link that CLEARS the problem,
+  present today on `terms-not-accepted`, pointing at the hosted flow where the
+  outstanding agreement can be signed. Both are `null` when the problem carries
+  neither.
+
+- **Typed list filters that the spec already accepted.** These are not new
+  upstream — the SDK's params types simply never named them, and since
+  `ListParams` carries an index signature they always reached the wire if you
+  knew they existed. Now they are discoverable:
+
+  | Where | Gained |
+  |-------|--------|
+  | `autoTransactions.list()` | `AutoTransactionListParams` — 20 filters incl. `statuses`, `types`, `start_date`/`end_date` (epoch **seconds**), `outgoing_amount_min`/`max`, `sort_by`/`sort_dir` |
+  | `users.list()` | `UserListParams` — `search`, `roles`, `created_at_from`/`to`, `sort_by`/`sort_dir` |
+  | `destinations.list()` | `DestinationListParams` — `destination_type` |
+  | `scheduledPayments.list()` | `mandate_version`, `page` |
+  | `applications.get()` | `{ include }` — `entities`, `validation`, `edd`, `attestations`, `all` |
+
+- Type aliases for the rest of the new surface: `CustomerStatus`,
+  `CustomerStatusCounts`, `LegalDocument`, `OutstandingLegalDocument`,
+  `AcceptedAgreement`, `LegalAcceptanceAttestor`, `LegalAcceptanceContext`,
+  `RDMarketingFeeStatement`, `RDMarketingFeeDailyRow`, `RFIRequestedItems`,
+  `TransactionResourceType`, `TransactionListMeta`, `CustomerPage`.
+
+  Also generated and reachable through the types: the RFI resubmission scope on
+  `Application` (`rfi_requested_items`, `rfi_resubmitted`), attestation
+  readiness (`AttestationValidation.ready` / `missing_documents`,
+  `AttestationSubmitRequest.legal_document_version`), the inbound deposit
+  attribution reference on `BankAccount.payment_reference`, per-pair transfer
+  fee overrides (`ClientPricingConfig.transferFeeOverrides`), card settlement
+  (`EnableCardSettlementIntent`), and `net_recovered_amount` on one-off and
+  auto-account transactions.
+
 ### Removed — `insights.chat` (ALPHA)
 
 `client.insights.chat(customerId, …)` is gone, along with the
@@ -20,6 +191,10 @@ This is the alpha caveat doing its job: the hosted agentic surface is
 without a major-version bump. Platform kept the conversational core deliberately
 and expects to bring it back in a reshaped form after the beta; when it does, it
 will arrive as a new addition here rather than as a restoration of this method.
+
+Until the platform's published spec drops the operation, a wholesale re-sync
+reintroduces it and regenerates a type for a method this SDK no longer has.
+Two guards in `tests/client/spec-guards.test.ts` hold the removal in place.
 
 The 180s `AGENTIC_MODEL_TIMEOUT_MS` default now applies to proposal drafting
 alone.

@@ -8,7 +8,7 @@ import type {
   User,
   UserCreateRequest,
   UserUpdateRequest,
-  ListParams,
+  UserListParams,
   RequestOptions,
 } from '../types.js';
 
@@ -38,7 +38,7 @@ export class UsersResource extends BaseResource {
    * @param params - Pagination parameters
    * @returns Async iterator of users
    */
-  list(params?: ListParams): PaginatedIterator<User> {
+  list(params?: UserListParams): PaginatedIterator<User> {
     return this.paginate<User>('/users', params);
   }
 

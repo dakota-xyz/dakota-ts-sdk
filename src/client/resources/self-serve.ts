@@ -90,11 +90,25 @@ export class SelfServeResource extends BaseResource {
    *   type: 'purchase',
    *   limit: 50,
    * });
+   *
+   * // Paging: carry BOTH halves of the cursor. Entries written in one
+   * // transaction share a created_at, so a page boundary inside such a
+   * // group drops rows when only `cursor` is sent.
+   * const last = purchases.entries[purchases.entries.length - 1];
+   * const next = await client.selfServe.listLedger({
+   *   type: 'purchase',
+   *   limit: 50,
+   *   cursor: last.created_at,
+   *   cursor_id: last.id,
+   * });
    * ```
    */
   async listLedger(params?: SelfServeCreditsLedgerParams): Promise<SelfServeCreditsLedgerResponse> {
     const query: Record<string, string | number | boolean | undefined> = {};
     if (params?.cursor !== undefined) query.cursor = params.cursor;
+    // Ignored by the server without `cursor`, and the ordering it completes is
+    // what stops a page boundary splitting one transaction's entries.
+    if (params?.cursor_id !== undefined) query.cursor_id = params.cursor_id;
     if (params?.limit !== undefined) query.limit = params.limit;
     if (params?.type !== undefined) query.type = params.type;
 

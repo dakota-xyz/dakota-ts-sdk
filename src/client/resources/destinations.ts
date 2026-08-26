@@ -7,8 +7,8 @@ import { PaginatedIterator } from '../pagination.js';
 import type {
   Destination,
   DestinationCreateResponse,
+  DestinationListParams,
   DestinationRequest,
-  ListParams,
   RequestOptions,
 } from '../types.js';
 
@@ -82,7 +82,7 @@ export class DestinationsResource extends BaseResource {
    * }
    * ```
    */
-  list(recipientId: string, params?: ListParams): PaginatedIterator<Destination> {
+  list(recipientId: string, params?: DestinationListParams): PaginatedIterator<Destination> {
     return this.paginate<Destination>(
       `/recipients/${recipientId}/destinations`,
       params,

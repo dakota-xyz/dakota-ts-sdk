@@ -38,6 +38,8 @@ src/
 │       ├── users.ts         # Users API
 │       ├── webhooks.ts      # Webhooks API
 │       ├── info.ts          # Capabilities Info API
+│       ├── legal.ts         # Legal documents (unauthenticated)
+│       ├── rd-marketing-fee.ts # Reserve-management fee statements
 │       ├── fee-payout-destination.ts # Developer-fee payout destination
 │       └── sandbox.ts       # Sandbox Simulation API
 ├── generated/
@@ -70,7 +72,13 @@ client.{resource}.delete(id)           // Deletes item (not all resources)
 
 **Resources WITHOUT update():** policies, signerGroups, destinations, apiKeys, autoTransactions, signers
 **Resources WITHOUT delete():** transactions, autoTransactions
-**Read-only resources:** autoTransactions (list + get only), info (getCountries + getNetworks only)
+**Read-only resources:** autoTransactions (list + get only), info (getCountries + getNetworks only), legal, rdMarketingFee
+
+`transactions.list()` is not a plain list: `GET /transactions` serves three
+resource families from one path, and the family decides the row shape. The SDK
+always names the family on the wire (defaulting to `one_off`) because the
+server otherwise INFERS it from the other filters — `customer_id` alone infers
+`auto_account`. The element type follows `transaction_type`.
 
 ### Additional Resources
 - `client.autoTransactions` - List and get automated transactions (created from accounts)
@@ -83,13 +91,26 @@ client.{resource}.delete(id)           // Deletes item (not all resources)
   `listPersonaImportJobs` / `getPersonaImportJob` (asynchronous job)
 - `client.mandates` (ALPHA) carries `amend` / `listVersions` / `getBudget` alongside
   approve/cancel — see `mandateAmendSignPayload` for the amend signing bytes
+- `client.legal` - The published terms customers accept (`list`, `get`).
+  UNAUTHENTICATED, so it is callable before a customer relationship exists.
+  Pair with `applications.getLegalAcceptance(id)`, which returns just what an
+  accept-agreements page needs rather than the whole KYB record
+- `client.rdMarketingFee` - Reserve-management statements for the calling
+  client (`listMonths`, `getStatement`). No id to pass; the client comes from
+  the session
+- `client.customers.listPage()` returns one page PLUS `status_counts`, which
+  `list()` cannot reach because it iterates rows and drops the envelope
 
 ### For Environment Questions
 - Default: Sandbox (`https://api.platform.sandbox.dakota.xyz`)
 - Production: Set `environment: Environment.Production`
 
 ### For Error Handling
-Always catch `APIError` and `TransportError`:
+Always catch `APIError` and `TransportError`. When relaying an error to a
+PERSON, show `error.userMessage ?? error.message` — `message` names request
+fields so a machine caller can self-correct, `userMessage` says it without API
+vocabulary — and offer `error.resolutionUrl` when present (a token-gated link
+that clears the problem):
 ```typescript
 import { DakotaClient, APIError, TransportError } from '@dakota-xyz/ts-sdk';
 

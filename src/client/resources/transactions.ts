@@ -4,14 +4,32 @@
 
 import { BaseResource } from './base.js';
 import { PaginatedIterator } from '../pagination.js';
+import { APIError } from '../errors.js';
 import type {
   OneOffTransaction,
   OneOffTransactionRequest,
   AutoTransaction,
+  AutoTransactionListParams,
   TransactionListParams,
-  ListParams,
+  TransactionResourceType,
+  WalletTransaction,
   RequestOptions,
 } from '../types.js';
+
+/**
+ * The row shape `GET /transactions` yields for a given set of filters.
+ *
+ * The family decides the shape, so the filters decide the element type: name
+ * `wallet` or `auto_account` and you get that family's rows, anything else is
+ * the `one_off` family this endpoint defaults to.
+ */
+export type TransactionRowFor<P extends TransactionListParams | undefined> = P extends {
+  transaction_type: 'wallet';
+}
+  ? WalletTransaction
+  : P extends { transaction_type: 'auto_account' }
+    ? AutoTransaction
+    : OneOffTransaction;
 
 /**
  * Transactions API resource.
@@ -63,25 +81,56 @@ export class TransactionsResource extends BaseResource {
   }
 
   /**
-   * List one-off transactions.
+   * List transactions.
+   *
+   * `GET /transactions` serves three resource families from one path, and the
+   * family decides the row shape — so the family you ask for decides what this
+   * iterator yields:
+   *
+   * | `transaction_type` | Yields |
+   * |--------------------|--------|
+   * | omitted or `'one_off'` | {@link OneOffTransaction} |
+   * | `'wallet'` | {@link WalletTransaction} |
+   * | `'auto_account'` | {@link AutoTransaction} (requires `customer_id`) |
+   *
+   * **The family is always named on the wire.** Left to the server, it is
+   * INFERRED from the other filters, and `customer_id` on its own infers
+   * `auto_account` — so `list({ customer_id })` would return that customer's
+   * auto-account transactions while this method's type promised one-off ones.
+   * Those rows parse into `OneOffTransaction` with missing fields rather than
+   * failing, so nothing surfaced the substitution. Omitting the family here
+   * therefore sends `transaction_type=one_off` rather than leaving it open.
+   *
+   * The family the server reports back (`meta.transaction_type`) is checked
+   * against the one requested, and a mismatch throws instead of yielding rows
+   * of the wrong shape.
    *
    * @param params - Filter and pagination parameters
-   * @returns Async iterator of transactions
+   * @returns Async iterator over the requested family
    *
    * @example
    * ```typescript
-   * // List all transactions
+   * // One-off transactions (the default family)
    * for await (const tx of client.transactions.list()) {
    *   console.log(tx.id, tx.status);
    * }
    *
-   * // Filter by customer and status
+   * // This customer's ONE-OFF transactions
    * const completed = client.transactions.list({
    *   customer_id: customerId,
    *   status: 'completed',
    * });
    *
-   * // Wallet-scoped filters (require transaction_type: 'wallet')
+   * // This customer's AUTO-ACCOUNT transactions — a different family,
+   * // and a different row shape
+   * for await (const tx of client.transactions.list({
+   *   transaction_type: 'auto_account',
+   *   customer_id: customerId,
+   * })) {
+   *   console.log(tx.id);
+   * }
+   *
+   * // Wallet transactions
    * const sent = client.transactions.list({
    *   transaction_type: 'wallet',
    *   wallet_id: walletId,
@@ -89,8 +138,20 @@ export class TransactionsResource extends BaseResource {
    * });
    * ```
    */
-  list(params?: TransactionListParams): PaginatedIterator<OneOffTransaction> {
-    return this.paginate<OneOffTransaction>('/transactions', params);
+  list<P extends TransactionListParams | undefined = undefined>(
+    params?: P
+  ): PaginatedIterator<TransactionRowFor<P>> {
+    // Name the family rather than letting the server infer one. See the doc
+    // comment: an inferred family is how `{ customer_id }` came back as
+    // auto-account rows typed as one-off ones.
+    const requested: TransactionResourceType = params?.transaction_type ?? 'one_off';
+
+    return this.paginate<TransactionRowFor<P>>(
+      '/transactions',
+      { ...params, transaction_type: requested },
+      undefined,
+      (meta) => assertFamily(meta, requested)
+    );
   }
 
   /**
@@ -138,16 +199,55 @@ export class TransactionsResource extends BaseResource {
 }
 
 /**
+ * Fail a page whose family is not the one asked for.
+ *
+ * A POSITIVE mismatch only. An absent `transaction_type` means the response
+ * made no claim about its family — older servers and the bare-array list
+ * shapes do not send one — and treating silence as a mismatch would turn a
+ * backstop into a new way for a working call to fail.
+ */
+function assertFamily(
+  meta: Record<string, unknown> | undefined,
+  requested: TransactionResourceType
+): void {
+  const served = meta?.transaction_type;
+  if (typeof served !== 'string' || served === requested) return;
+
+  throw new APIError(
+    200,
+    'transaction_family_mismatch',
+    `Asked for ${requested} transactions but the server listed ${served}. ` +
+      'The rows in this page are not the shape this iterator yields, so they ' +
+      'are not returned.',
+    { details: { requested, served } }
+  );
+}
+
+/**
  * Auto Transactions API resource.
  */
 export class AutoTransactionsResource extends BaseResource {
   /**
    * List auto transactions.
    *
-   * @param params - Pagination parameters
+   * `statuses` and `types` take a comma-separated string, not an array, and
+   * `start_date` / `end_date` are Unix epoch SECONDS rather than the ISO
+   * strings the other list endpoints take.
+   *
+   * @param params - Filter and pagination parameters
    * @returns Async iterator of auto transactions
+   *
+   * @example
+   * ```typescript
+   * const recent = client.autoTransactions.list({
+   *   auto_account_id: accountId,
+   *   statuses: 'pending,processing',
+   *   start_date: Math.floor(Date.now() / 1000) - 86_400,
+   *   sort_dir: 'desc',
+   * });
+   * ```
    */
-  list(params?: ListParams): PaginatedIterator<AutoTransaction> {
+  list(params?: AutoTransactionListParams): PaginatedIterator<AutoTransaction> {
     return this.paginate<AutoTransaction>('/auto-transactions', params);
   }
 

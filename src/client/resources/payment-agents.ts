@@ -97,10 +97,10 @@ export class PaymentAgentsResource extends BaseResource {
    * alternatives. Branch on `blocker.code`, not on `reply`, and ignore codes
    * you do not recognize.
    *
-   * `data.client_policy` is a DEVELOPMENT override of the vocabulary the
-   * agent drafts under; prefer registering it once with
-   * `client.agenticPolicy.set()`, since forgetting to send it here fails
-   * silently.
+   * The vocabulary the agent drafts under is the one registered with
+   * `client.agenticPolicy.set()`. It is not a property of this request —
+   * a policy sent here is ignored, which is why the option to send one is
+   * gone.
    *
    * @param paymentAgentId - Payment agent ID
    * @param data - Prompt and/or messages

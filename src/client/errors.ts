@@ -21,6 +21,26 @@ export class APIError extends Error {
   readonly rawBody: string | null;
   /** Whether this error is safe to retry */
   readonly retryable: boolean;
+  /**
+   * A plain-language rendition of the problem, written for the END CUSTOMER,
+   * when one exists for this error.
+   *
+   * `message` names request fields and actions so a machine caller can
+   * self-correct. This says the same thing without API vocabulary. Show it
+   * when relaying an error into a human surface (chat, email, UI), and fall
+   * back to `message` when it is null.
+   */
+  readonly userMessage: string | null;
+  /**
+   * A link the customer can follow to CLEAR this error, present only on
+   * problems with a concrete self-service remedy.
+   *
+   * Today `terms-not-accepted` returns one, pointing at the hosted flow where
+   * the outstanding agreement can be signed. It is token-gated and usable
+   * as-is — send the customer to it rather than parsing one out of the
+   * message.
+   */
+  readonly resolutionUrl: string | null;
 
   constructor(
     statusCode: number,
@@ -30,6 +50,8 @@ export class APIError extends Error {
       details?: Record<string, unknown> | null;
       requestId?: string | null;
       rawBody?: string | null;
+      userMessage?: string | null;
+      resolutionUrl?: string | null;
     }
   ) {
     super(message);
@@ -40,6 +62,8 @@ export class APIError extends Error {
     this.requestId = options?.requestId ?? null;
     this.rawBody = options?.rawBody ?? null;
     this.retryable = RETRYABLE_STATUS_CODES.has(statusCode);
+    this.userMessage = options?.userMessage ?? null;
+    this.resolutionUrl = options?.resolutionUrl ?? null;
 
     // Maintains proper stack trace for where our error was thrown (only available on V8)
     if (Error.captureStackTrace) {
@@ -56,6 +80,8 @@ export class APIError extends Error {
     let code = `http_${response.status}`;
     let message = response.statusText || 'Unknown error';
     let details: Record<string, unknown> | null = null;
+    let userMessage: string | null = null;
+    let resolutionUrl: string | null = null;
 
     try {
       rawBody = await response.text();
@@ -91,6 +117,15 @@ export class APIError extends Error {
       if (parsed.details && typeof parsed.details === 'object') {
         details = parsed.details;
       }
+
+      // RFC 9457 extensions. `message` stays the machine-facing rendition;
+      // these two are what a human surface should show instead.
+      if (typeof parsed.user_message === 'string') {
+        userMessage = parsed.user_message;
+      }
+      if (typeof parsed.resolution_url === 'string') {
+        resolutionUrl = parsed.resolution_url;
+      }
     } catch {
       // Failed to parse JSON, use defaults
     }
@@ -99,6 +134,8 @@ export class APIError extends Error {
       details,
       requestId,
       rawBody,
+      userMessage,
+      resolutionUrl,
     });
   }
 

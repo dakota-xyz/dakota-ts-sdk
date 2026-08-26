@@ -295,7 +295,10 @@ const firstCustomer = await client.customers.list().first();
 // With filters
 const activeCustomers = client.customers.list({ kyb_status: 'active' });
 
-// Iterate transactions with filters
+// Iterate transactions with filters. The SDK always names the transaction
+// family on the wire, so this is that customer's ONE-OFF transactions — a
+// raw GET /transactions?customer_id=... would infer the auto_account family
+// and return those instead.
 const completedTxs = client.transactions.list({
   customer_id: customerId,
   status: 'completed',
@@ -317,6 +320,18 @@ try {
 
     if (error.retryable) {
       // Safe to retry (429, 503, etc.)
+    }
+
+    // Showing the error to a PERSON? `message` names request fields and
+    // actions so a machine caller can self-correct. `userMessage` says the
+    // same thing without API vocabulary, when the problem carries one.
+    showToCustomer(error.userMessage ?? error.message);
+
+    // Some problems carry a link that CLEARS them — today `terms-not-accepted`
+    // points at the hosted flow where the agreement can be signed. It is
+    // token-gated and usable as-is.
+    if (error.resolutionUrl) {
+      offerLink(error.resolutionUrl);
     }
   }
 
@@ -524,6 +539,7 @@ Manage customer entities representing businesses and organizations.
 |--------|-------------|
 | `customers.create(data)` | Create a customer (triggers KYB) |
 | `customers.list(params?)` | List all customers (paginated) |
+| `customers.listPage(params?)` | One page + `status_counts` for a status header |
 | `customers.get(id)` | Get customer by ID |
 | `customers.delete(id)` | Soft-delete a customer (blocked if it has accounts) |
 | `customers.getCapabilities(id)` | Capabilities + outstanding requirements to unlock each |
@@ -532,6 +548,25 @@ Manage customer entities representing businesses and organizations.
 | `customers.importPersonaTokens(data)` | Import from Persona Connect share tokens (async job) |
 | `customers.listPersonaImportJobs(params?)` | List Persona import jobs, newest first |
 | `customers.getPersonaImportJob(jobId, params?)` | Job status + per-token results |
+
+`Customer.status` is the single client-facing status — one value collapsing the
+frozen state, the application decision, and the application lifecycle. Filter on
+it with `status`, which takes a **comma-separated string**, not an array:
+
+```typescript
+const needsAttention = client.customers.list({ status: 'info_requested,frozen' });
+
+// `list()` iterates rows and drops the envelope, so the per-status counts a
+// dashboard header renders come from `listPage()` instead. They are computed
+// ignoring the `status` selection, so every chip keeps its count while one of
+// them is the active filter.
+const page = await client.customers.listPage({ limit: 25 });
+console.log(page.status_counts?.info_requested ?? 0);
+```
+
+`kyb_statuses`, `kyc_statuses` and `application_statuses` take the same
+comma-separated form, and `sort_by` / `sort_dir` / `created_at_from` /
+`created_at_to` are also accepted.
 
 ### Recipients
 
@@ -571,9 +606,24 @@ Create and manage one-off transactions.
 | Method | Description |
 |--------|-------------|
 | `transactions.create(data)` | Create one-off transaction |
-| `transactions.list(params?)` | List transactions |
+| `transactions.list(params?)` | List transactions (see the family table below) |
 | `transactions.get(id)` | Get transaction by ID |
 | `transactions.cancel(id)` | Cancel pending transaction |
+
+`GET /transactions` serves three resource families from one path, and the
+family decides the row shape. `list()` names the family on the wire and types
+its rows to match:
+
+| `transaction_type` | Yields | Notes |
+|--------------------|--------|-------|
+| omitted or `'one_off'` | `OneOffTransaction` | The default |
+| `'wallet'` | `WalletTransaction` | Required for the `wallet_id` / `direction` filters |
+| `'auto_account'` | `AutoTransaction` | Requires `customer_id` |
+
+Left to the server the family is **inferred** from the other filters, and
+`customer_id` on its own infers `auto_account` — so name it, or let the SDK
+name `one_off` for you. If a response reports a family other than the one
+requested, the iterator throws rather than yielding rows of the wrong shape.
 
 ### Auto Transactions
 
@@ -706,6 +756,64 @@ Query platform capabilities.
 | `info.getCountries()` | Get supported countries |
 | `info.getNetworks()` | Get supported networks |
 
+### Legal Documents
+
+The published terms a customer accepts during onboarding. **Unauthenticated** —
+integrators need these before a customer relationship exists, so both calls are
+safe from a signup page.
+
+| Method | Description |
+|--------|-------------|
+| `legal.list()` | The in-force revision of every document, WITHOUT the text |
+| `legal.get(key, version?)` | One document's text — the in-force revision, or a specific one |
+
+```typescript
+const tos = await client.legal.get('dakota_tos');
+render(tos.content);
+
+// Record what the customer actually saw, not whichever revision was current
+// when the request landed.
+await client.applications.submitAttestation(applicationId, {
+  attestation_type: 'terms_of_service',
+  legal_document_version: tos.version,
+  // ...
+});
+```
+
+A revision is immutable, so a fetched `(key, version)` can be cached forever.
+`legal.list()` is not: it names whichever revision is in force *now*.
+
+To render an acceptance page, `applications.getLegalAcceptance(applicationId)`
+returns just what that page needs — the agreements still owed and the people
+permitted to accept them — instead of the full KYB record `applications.get()`
+would return. The link that reaches it is emailed, so its token is scoped to
+this call and the attestation submission.
+
+### RD Marketing Fee
+
+Reserve-management statements for the calling client. The client comes from the
+session, so there is no id to pass.
+
+| Method | Description |
+|--------|-------------|
+| `rdMarketingFee.listMonths()` | The months with a statement, newest first |
+| `rdMarketingFee.getStatement(month)` | One month, one row per calendar day |
+
+```typescript
+const months = await client.rdMarketingFee.listMonths();
+const statement = await client.rdMarketingFee.getStatement(months[0]);
+
+for (const day of statement.daily) {
+  // Absent is not zero: absent means the day is not derived yet, '0' means
+  // the client genuinely held no RD. Do not render them alike.
+  console.log(day.date, day.balance_minor ?? 'not yet derived');
+}
+```
+
+A client with no contract gets a **404**; an empty month list means the
+contract is real but starts later. The running month is included, with its fee
+figures absent rather than zero.
+
 ### Sandbox
 
 Test simulations (sandbox environment only).
@@ -770,9 +878,33 @@ await client.agenticPolicy.set({
 ```
 
 It is a **full replace, not a merge** — an omitted field means you no longer
-want it. You can also pass `clientPolicy` per conversation, but that is a
-development override: forgetting it fails *silently*, and the agent quietly
-goes back to saying "destination" and "mandate".
+want it.
+
+Your developer fee is separate, and belongs in **both** places:
+
+```typescript
+// The drafting turn — this is what lets the agent MENTION the fee.
+const conv = client.newAgentConversation(agentId, {
+  developerFee: { swap_bps: 50, offramp_bps: 25 },
+});
+
+// The accept — this is what CHARGES it.
+await client.instructions.create({
+  payment_agent_id: agentId,
+  proposals: turn.proposals,
+  developer_fee: { swap_bps: 50, offramp_bps: 25 },
+});
+```
+
+Declare it only on the accept and the customer approves a summary that never
+disclosed a fee, then gets charged it.
+
+Registering is the **only** way to set a policy. It belongs to the client, not
+to a request, so a drafting turn and the accept that follows it cannot be
+judged by different rules. The per-conversation `clientPolicy` option is gone:
+the platform stopped reading `client_policy` from request bodies, and
+one sent there is ignored — the agent quietly goes back to saying "destination"
+and "mandate" with nothing reporting the fallback.
 
 ### Mandates (Alpha)
 

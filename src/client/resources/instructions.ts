@@ -23,7 +23,7 @@ export class InstructionsResource extends BaseResource {
   /**
    * Accept proposals — actuate them into persisted instructions.
    *
-   * Two optional fields shape the actuation:
+   * One optional field shapes the actuation:
    *
    * - `developer_fee` declares your fee PER PAYOUT TYPE — `swap_bps` for a
    *   crypto payout, `offramp_bps` for a bank payout. They are independent,
@@ -33,8 +33,10 @@ export class InstructionsResource extends BaseResource {
    *   amount, and the agent is told nothing about a fee it could mention.
    *   Both are DEFAULTS for the auto-accounts this request creates — an
    *   action-level `fee_bps` still wins outright.
-   * - `client_policy` is the same development override the proposals call
-   *   takes. Prefer registering it once with `client.agenticPolicy.set()`.
+   *
+   * The vocabulary the actuation is judged against comes from the policy
+   * registered with `client.agenticPolicy.set()` — the same one the drafting
+   * turn used, which is the point of registering it rather than sending it.
    *
    * @param data - The payment agent id and the proposals to accept
    * @returns instruction_ids + the mandates the batch drafted (in full
