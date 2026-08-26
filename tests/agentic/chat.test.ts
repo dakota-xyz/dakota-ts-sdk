@@ -182,6 +182,46 @@ describe('AgentConversation.send', () => {
     expect(policyOf(requests[1])).toBeUndefined();
   });
 
+  it('resends developer_fee on EVERY turn, and omits it when unset', async () => {
+    const { fetch, requests } = createRoutedFetch({
+      [`POST ${PROPOSALS_PATH}`]: () => ({ status: 200, body: { reply: 'ok' } }),
+    });
+    const client = makeClient(fetch as unknown as typeof globalThis.fetch);
+    const fee = { swap_bps: 50, offramp_bps: 25 };
+
+    // Declaring it on the DRAFTING turn is what lets the agent mention the
+    // fee. Sending it only on the accept charges a fee the summary the
+    // customer approved never disclosed.
+    const priced = client.newAgentConversation(AGENT_ID, { developerFee: fee });
+    await priced.send('pay alice');
+    await priced.send('and bob');
+    expect(developerFeeOf(requests[0])).toEqual(fee);
+    expect(developerFeeOf(requests[1])).toEqual(fee);
+
+    const plain = client.newAgentConversation(AGENT_ID);
+    await plain.send('pay alice');
+    expect(developerFeeOf(requests[2])).toBeUndefined();
+  });
+
+  it('a resumed conversation keeps sending the fee it was rebuilt with', async () => {
+    const { fetch, requests } = createRoutedFetch({
+      [`POST ${PROPOSALS_PATH}`]: () => ({ status: 200, body: { reply: 'ok' } }),
+    });
+    const client = makeClient(fetch as unknown as typeof globalThis.fetch);
+    const fee = { swap_bps: 50 };
+
+    // Options are not part of the transcript, so a resume has to be given
+    // them again — this asserts the factory actually forwards them.
+    const resumed = client.resumeAgentConversation(
+      AGENT_ID,
+      [{ role: 'user', content: 'pay alice' }],
+      { developerFee: fee }
+    );
+    await resumed.send('and bob');
+
+    expect(developerFeeOf(requests[0])).toEqual(fee);
+  });
+
   it('a rejected_input turn leaves the transcript untouched and is never re-sent', async () => {
     let turn = 0;
     const { fetch, requests } = createRoutedFetch({
@@ -296,6 +336,11 @@ describe('AgentConversation.send', () => {
 function policyOf(req: RecordedRequest | undefined): unknown {
   if (!req || !req.body || typeof req.body !== 'object') return undefined;
   return (req.body as { client_policy?: unknown }).client_policy;
+}
+
+function developerFeeOf(req: RecordedRequest | undefined): unknown {
+  if (!req || !req.body || typeof req.body !== 'object') return undefined;
+  return (req.body as { developer_fee?: unknown }).developer_fee;
 }
 
 function timezoneOf(req: RecordedRequest | undefined): string | undefined {

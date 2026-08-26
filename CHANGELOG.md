@@ -86,6 +86,17 @@ rather than trusting the list.
 
 ### Added
 
+- **`AgentConversationOptions.developerFee`.** The proposals request gained
+  `developer_fee` in this sync, and `AgentConversation` builds that body
+  itself, so there was no way to declare a fee on a drafting turn.
+
+  Declare it in BOTH places, not one or the other: the accept is what CHARGES
+  the fee, and the drafting turn is what lets the agent MENTION it. Set it only
+  on `instructions.create()` and the customer approves a summary that never
+  disclosed a fee, then gets charged it. Resent on every turn, since the
+  endpoint is stateless — and, like `timezone`, it must be passed again to
+  `resumeAgentConversation`, which restores the transcript, not the options.
+
 - **Legal documents (`client.legal`).** `list()` returns the in-force revision
   of every published document as an index without the text; `get(key, version?)`
   returns one document's text, either the revision in force or a specific one.

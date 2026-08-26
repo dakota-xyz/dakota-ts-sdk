@@ -880,6 +880,25 @@ await client.agenticPolicy.set({
 It is a **full replace, not a merge** — an omitted field means you no longer
 want it.
 
+Your developer fee is separate, and belongs in **both** places:
+
+```typescript
+// The drafting turn — this is what lets the agent MENTION the fee.
+const conv = client.newAgentConversation(agentId, {
+  developerFee: { swap_bps: 50, offramp_bps: 25 },
+});
+
+// The accept — this is what CHARGES it.
+await client.instructions.create({
+  payment_agent_id: agentId,
+  proposals: turn.proposals,
+  developer_fee: { swap_bps: 50, offramp_bps: 25 },
+});
+```
+
+Declare it only on the accept and the customer approves a summary that never
+disclosed a fee, then gets charged it.
+
 Registering is the **only** way to set a policy. It belongs to the client, not
 to a request, so a drafting turn and the accept that follows it cannot be
 judged by different rules. The per-conversation `clientPolicy` option is gone:

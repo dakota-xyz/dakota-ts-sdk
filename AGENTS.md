@@ -822,9 +822,17 @@ await client.agenticPolicy.set({
 // strict, so an unknown key or an unimplemented label concept is a 400 HERE
 // rather than a surprise on a customer's first conversation.
 
-// Declare your developer fee PER PAYOUT TYPE when accepting proposals. The
-// two rates are independent — omit one and that payout type carries no fee,
-// and the agent is told nothing about a fee it could mention.
+// Declare your developer fee PER PAYOUT TYPE. The two rates are independent —
+// omit one and that payout type carries no fee.
+//
+// Declare it in BOTH places, not one or the other. The drafting turn is what
+// lets the agent MENTION the fee; the accept is what CHARGES it. Set it only
+// on the accept and the customer approves a summary that never disclosed a
+// fee and is then charged it.
+const priced = client.newAgentConversation(agent.id!, {
+  developerFee: { swap_bps: 50, offramp_bps: 25 },
+});
+
 await client.instructions.create({
   payment_agent_id: agent.id!,
   proposals: turn.proposals,

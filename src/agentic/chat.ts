@@ -9,7 +9,12 @@
  */
 
 import type { DakotaClient } from '../client/client.js';
-import type { AgenticBlocker, AgenticProposal, AgenticProposalsResult } from '../client/types.js';
+import type {
+  AgenticBlocker,
+  AgenticProposal,
+  AgenticProposalsResult,
+  DeveloperFee,
+} from '../client/types.js';
 
 /**
  * MIME types the platform accepts for a document attachment.
@@ -139,6 +144,21 @@ export interface AgentConversationOptions {
    * short global deadline will cut turns off unless you raise it here.
    */
   timeout?: number;
+
+  /**
+   * Your developer fee, declared PER PAYOUT TYPE — `swap_bps` for a crypto
+   * payout, `offramp_bps` for a bank one. The two are independent, so one
+   * conversation can charge a swap and stay silent about a bank payout.
+   *
+   * Set it here as well as on `instructions.create()`, not instead of it.
+   * The accept is what CHARGES the fee; declaring it on the drafting turn is
+   * what lets the agent MENTION it — omit it and the agent is told nothing
+   * about a fee it could name, so the customer approves a summary that never
+   * disclosed one and then gets charged it.
+   *
+   * Resent on every turn, since the endpoint is stateless.
+   */
+  developerFee?: DeveloperFee;
 }
 
 /**
@@ -158,6 +178,7 @@ export class AgentConversation {
   private readonly paymentAgentId: string;
   private readonly timezone?: string;
   private readonly timeout?: number;
+  private readonly developerFee?: DeveloperFee;
   private history: ChatMessage[] = [];
 
   constructor(
@@ -170,6 +191,7 @@ export class AgentConversation {
     this.paymentAgentId = paymentAgentId;
     this.timezone = options?.timezone;
     this.timeout = options?.timeout;
+    this.developerFee = options?.developerFee;
     if (history && history.length > 0) {
       this.history = history.map(cloneMessage);
     }
@@ -226,9 +248,10 @@ export class AgentConversation {
         this.paymentAgentId,
         {
           messages,
-          // Resent on EVERY turn — the endpoint is stateless, so a zone given
-          // once would be forgotten on the next one.
+          // Resent on EVERY turn — the endpoint is stateless, so a value
+          // given once would be forgotten on the next one.
           ...(this.timezone ? { timezone: this.timezone } : {}),
+          ...(this.developerFee ? { developer_fee: this.developerFee } : {}),
         },
         this.timeout !== undefined ? { timeout: this.timeout } : undefined
       );
