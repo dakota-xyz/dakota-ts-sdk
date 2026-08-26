@@ -48,6 +48,17 @@ for await (const customer of client.customers.list()) {
 // List with filters
 const active = client.customers.list({ kyb_status: 'active' });
 
+// `status` is the SINGLE client-facing status — one value collapsing the
+// frozen state, the application decision, and the application lifecycle.
+// The *_statuses filters take a COMMA-SEPARATED STRING, not an array.
+const needsAttention = client.customers.list({ status: 'info_requested,frozen' });
+
+// list() iterates rows and drops the envelope, so the per-status counts a
+// dashboard header renders come from listPage(). They ignore the `status`
+// selection, so every chip keeps its count while one is the active filter.
+const page = await client.customers.listPage({ limit: 25, sort_by: 'created_at' });
+console.log(page.status_counts?.info_requested ?? 0);
+
 // List sub-clients only
 const subClients = client.customers.list({ is_sub_client: true });
 
@@ -591,6 +602,59 @@ for (const network of networks) {
 }
 ```
 
+### Legal Documents
+
+```typescript
+// UNAUTHENTICATED — callable before a customer relationship exists.
+// An index without the text; fetch the one you will display.
+for (const doc of await client.legal.list()) {
+  console.log(doc.key, doc.version, doc.title);
+}
+
+const tos = await client.legal.get('dakota_tos');
+render(tos.content);
+
+// A revision is IMMUTABLE, so cache (key, version) forever. legal.list() is
+// not cacheable — it names whichever revision is in force NOW.
+const older = await client.legal.get('dakota_tos', '2026-07-23');
+
+// Record what the customer actually saw, not whichever revision was current
+// when the request landed.
+await client.applications.submitAttestation(applicationId, {
+  attestation_type: 'terms_of_service',
+  legal_document_version: tos.version,
+  applicant_id: attestorId,
+});
+
+// The accept-agreements page context: what is still owed and who may accept
+// it. Deliberately NOT the application — applications.get() would return the
+// whole KYB record, and the link reaching this endpoint is emailed, so its
+// token is scoped to this call and the attestation submission.
+const ctx = await client.applications.getLegalAcceptance(applicationId);
+// A business may have several control persons; an individual application has
+// exactly one permissible attestor, so there is nobody to pick.
+const attestor = ctx.application_type === 'individual' ? ctx.attestors[0] : pick(ctx.attestors);
+```
+
+### RD Marketing Fee
+
+```typescript
+// The client comes from the session — no id to pass. A client with no
+// contract gets a 404; an EMPTY list means the contract starts later.
+const months = await client.rdMarketingFee.listMonths(); // newest first
+const statement = await client.rdMarketingFee.getStatement(months[0]);
+
+for (const day of statement.daily) {
+  // ABSENT is not zero: absent means the day is not derived yet, '0' means
+  // the client genuinely held no RD. Do not render them alike.
+  console.log(day.date, day.balance_minor ?? 'not yet derived');
+}
+
+// The running month is included, with its fee figures absent rather than
+// zero — the bank's interest posts the month after it is earned.
+console.log(statement.owed_minor ?? 'not priced yet');
+```
+
 ### Sandbox (Testing)
 
 ```typescript
@@ -832,6 +896,12 @@ try {
     console.log('Request ID:', error.requestId);
     console.log('Retryable:', error.retryable);
     console.log('Details:', error.details);
+    // For a HUMAN surface: `message` names request fields so a machine caller
+    // can self-correct; `userMessage` says it without API vocabulary.
+    console.log('Show a person:', error.userMessage ?? error.message);
+    // A link that CLEARS the problem, when one exists (today:
+    // terms-not-accepted). Token-gated and usable as-is.
+    console.log('Resolution:', error.resolutionUrl);
   }
   if (error instanceof TransportError) {
     console.log('Transport error:', error.message);

@@ -17,6 +17,8 @@ export { ApiKeysResource } from './api-keys.js';
 export { UsersResource } from './users.js';
 export { WebhooksResource } from './webhooks.js';
 export { InfoResource } from './info.js';
+export { LegalResource } from './legal.js';
+export { RDMarketingFeeResource } from './rd-marketing-fee.js';
 export { SandboxResource } from './sandbox.js';
 export { SelfServeResource } from './self-serve.js';
 export { FeePayoutDestinationResource } from './fee-payout-destination.js';

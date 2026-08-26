@@ -22,6 +22,7 @@ import type {
   IndividualDocumentUploadRequest,
   IndividualDocumentUploadUrlRequest,
   IndividualRequest,
+  LegalAcceptanceContext,
   ListParams,
   RequestOptions,
   UploadedDocumentMetadata,
@@ -202,6 +203,49 @@ export class ApplicationsResource extends BaseResource {
   // ==========================================================================
   // Attestations
   // ==========================================================================
+
+  /**
+   * What this application still needs to accept, and who may accept it.
+   *
+   * Exactly what an accept-agreements page renders, and deliberately nothing
+   * more. `get(applicationId)` would answer with the full KYB record — the
+   * business entity, and every associated individual's date of birth,
+   * nationality and email — none of which that page displays. The link that
+   * reaches this endpoint is EMAILED and travels in a URL query string, so its
+   * credential is scoped to this call and the attestation submission, and
+   * cannot read the application.
+   *
+   * Authenticates with an Application Token (`X-Application-Token`), including
+   * the narrow legal-acceptance token a terms refusal issues.
+   *
+   * The documents come back as identity only. Fetch the text to display with
+   * `client.legal.get(key)`, then pass the `version` you displayed back as
+   * `legal_document_version` on {@link submitAttestation}.
+   *
+   * @param applicationId - Application ID
+   * @returns Outstanding agreements, prior acceptances, and permitted attestors
+   *
+   * @example
+   * ```typescript
+   * const ctx = await client.applications.getLegalAcceptance(applicationId);
+   *
+   * for (const doc of ctx.outstanding_documents) {
+   *   const text = await client.legal.get(doc.key, doc.version);
+   *   render(text.content);
+   * }
+   *
+   * // A business may have several control persons; an individual application
+   * // has exactly one permissible attestor, so there is nobody to pick.
+   * const attestor =
+   *   ctx.application_type === 'individual' ? ctx.attestors[0] : await pick(ctx.attestors);
+   * ```
+   */
+  async getLegalAcceptance(applicationId: string): Promise<LegalAcceptanceContext> {
+    return this.transport.request<LegalAcceptanceContext>({
+      method: 'GET',
+      path: `/applications/${applicationId}/legal-acceptance`,
+    });
+  }
 
   /**
    * Submit an attestation for an application.

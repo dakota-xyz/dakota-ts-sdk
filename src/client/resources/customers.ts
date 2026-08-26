@@ -12,6 +12,7 @@ import type {
   CustomerCreateRequest,
   CustomerCreateResponse,
   CustomerListParams,
+  CustomerPage,
   CustomerReEngagementResponse,
   ImportPersonaTokensRequest,
   ImportPersonaTokensResponse,
@@ -94,12 +95,50 @@ export class CustomersResource extends BaseResource {
    * // With filters
    * const active = client.customers.list({ kyb_status: 'active' });
    *
+   * // Several statuses at once — one comma-separated string, not an array
+   * const needsAttention = client.customers.list({
+   *   status: 'info_requested,frozen',
+   * });
+   *
    * // Collect all to array
    * const all = await client.customers.list().toArray();
    * ```
    */
   list(params?: CustomerListParams): PaginatedIterator<Customer> {
     return this.paginate<Customer>('/customers', params);
+  }
+
+  /**
+   * One page of customers, with the per-status counts.
+   *
+   * {@link list} iterates rows and drops the envelope, so `status_counts` —
+   * the counts a dashboard's status header renders — is unreachable through
+   * it. This returns the raw page instead: same filters, one request, no
+   * iteration.
+   *
+   * The counts are computed under the same filters but IGNORING the `status`
+   * selection, so every chip keeps its count while one of them is the active
+   * filter.
+   *
+   * @param params - The same filters {@link list} accepts
+   * @returns One page: rows, pagination meta, and `status_counts`
+   *
+   * @example
+   * ```typescript
+   * const page = await client.customers.listPage({ limit: 25 });
+   * console.log(page.status_counts?.info_requested ?? 0);
+   * for (const customer of page.data) {
+   *   console.log(customer.name, customer.status);
+   * }
+   * ```
+   */
+  async listPage(params?: CustomerListParams): Promise<CustomerPage> {
+    const page = await this.transport.request<CustomerPage>({
+      method: 'GET',
+      path: '/customers',
+      query: params as Record<string, string | number | boolean | undefined> | undefined,
+    });
+    return { ...page, data: page.data ?? [] };
   }
 
   /**

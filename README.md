@@ -321,6 +321,18 @@ try {
     if (error.retryable) {
       // Safe to retry (429, 503, etc.)
     }
+
+    // Showing the error to a PERSON? `message` names request fields and
+    // actions so a machine caller can self-correct. `userMessage` says the
+    // same thing without API vocabulary, when the problem carries one.
+    showToCustomer(error.userMessage ?? error.message);
+
+    // Some problems carry a link that CLEARS them — today `terms-not-accepted`
+    // points at the hosted flow where the agreement can be signed. It is
+    // token-gated and usable as-is.
+    if (error.resolutionUrl) {
+      offerLink(error.resolutionUrl);
+    }
   }
 
   if (error instanceof TransportError) {
@@ -527,6 +539,7 @@ Manage customer entities representing businesses and organizations.
 |--------|-------------|
 | `customers.create(data)` | Create a customer (triggers KYB) |
 | `customers.list(params?)` | List all customers (paginated) |
+| `customers.listPage(params?)` | One page + `status_counts` for a status header |
 | `customers.get(id)` | Get customer by ID |
 | `customers.delete(id)` | Soft-delete a customer (blocked if it has accounts) |
 | `customers.getCapabilities(id)` | Capabilities + outstanding requirements to unlock each |
@@ -535,6 +548,25 @@ Manage customer entities representing businesses and organizations.
 | `customers.importPersonaTokens(data)` | Import from Persona Connect share tokens (async job) |
 | `customers.listPersonaImportJobs(params?)` | List Persona import jobs, newest first |
 | `customers.getPersonaImportJob(jobId, params?)` | Job status + per-token results |
+
+`Customer.status` is the single client-facing status — one value collapsing the
+frozen state, the application decision, and the application lifecycle. Filter on
+it with `status`, which takes a **comma-separated string**, not an array:
+
+```typescript
+const needsAttention = client.customers.list({ status: 'info_requested,frozen' });
+
+// `list()` iterates rows and drops the envelope, so the per-status counts a
+// dashboard header renders come from `listPage()` instead. They are computed
+// ignoring the `status` selection, so every chip keeps its count while one of
+// them is the active filter.
+const page = await client.customers.listPage({ limit: 25 });
+console.log(page.status_counts?.info_requested ?? 0);
+```
+
+`kyb_statuses`, `kyc_statuses` and `application_statuses` take the same
+comma-separated form, and `sort_by` / `sort_dir` / `created_at_from` /
+`created_at_to` are also accepted.
 
 ### Recipients
 
@@ -724,6 +756,64 @@ Query platform capabilities.
 | `info.getCountries()` | Get supported countries |
 | `info.getNetworks()` | Get supported networks |
 
+### Legal Documents
+
+The published terms a customer accepts during onboarding. **Unauthenticated** —
+integrators need these before a customer relationship exists, so both calls are
+safe from a signup page.
+
+| Method | Description |
+|--------|-------------|
+| `legal.list()` | The in-force revision of every document, WITHOUT the text |
+| `legal.get(key, version?)` | One document's text — the in-force revision, or a specific one |
+
+```typescript
+const tos = await client.legal.get('dakota_tos');
+render(tos.content);
+
+// Record what the customer actually saw, not whichever revision was current
+// when the request landed.
+await client.applications.submitAttestation(applicationId, {
+  attestation_type: 'terms_of_service',
+  legal_document_version: tos.version,
+  // ...
+});
+```
+
+A revision is immutable, so a fetched `(key, version)` can be cached forever.
+`legal.list()` is not: it names whichever revision is in force *now*.
+
+To render an acceptance page, `applications.getLegalAcceptance(applicationId)`
+returns just what that page needs — the agreements still owed and the people
+permitted to accept them — instead of the full KYB record `applications.get()`
+would return. The link that reaches it is emailed, so its token is scoped to
+this call and the attestation submission.
+
+### RD Marketing Fee
+
+Reserve-management statements for the calling client. The client comes from the
+session, so there is no id to pass.
+
+| Method | Description |
+|--------|-------------|
+| `rdMarketingFee.listMonths()` | The months with a statement, newest first |
+| `rdMarketingFee.getStatement(month)` | One month, one row per calendar day |
+
+```typescript
+const months = await client.rdMarketingFee.listMonths();
+const statement = await client.rdMarketingFee.getStatement(months[0]);
+
+for (const day of statement.daily) {
+  // Absent is not zero: absent means the day is not derived yet, '0' means
+  // the client genuinely held no RD. Do not render them alike.
+  console.log(day.date, day.balance_minor ?? 'not yet derived');
+}
+```
+
+A client with no contract gets a **404**; an empty month list means the
+contract is real but starts later. The running month is included, with its fee
+figures absent rather than zero.
+
 ### Sandbox
 
 Test simulations (sandbox environment only).
@@ -792,8 +882,8 @@ want it.
 
 Registering is the **only** way to set a policy. It belongs to the client, not
 to a request, so a drafting turn and the accept that follows it cannot be
-judged by different rules. The per-conversation `clientPolicy` option is gone
-(2.3.0): the platform stopped reading `client_policy` from request bodies, and
+judged by different rules. The per-conversation `clientPolicy` option is gone:
+the platform stopped reading `client_policy` from request bodies, and
 one sent there is ignored — the agent quietly goes back to saying "destination"
 and "mandate" with nothing reporting the fallback.
 

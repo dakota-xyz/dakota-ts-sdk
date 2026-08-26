@@ -21,6 +21,8 @@ import {
   UsersResource,
   WebhooksResource,
   InfoResource,
+  LegalResource,
+  RDMarketingFeeResource,
   SandboxResource,
   SelfServeResource,
   FeePayoutDestinationResource,
@@ -104,6 +106,10 @@ export class DakotaClient {
   readonly webhooks: WebhooksResource;
   /** Info API - query platform capabilities */
   readonly info: InfoResource;
+  /** Legal API - the published terms customers accept (unauthenticated) */
+  readonly legal: LegalResource;
+  /** RD Marketing Fee API - this client's reserve-management statements */
+  readonly rdMarketingFee: RDMarketingFeeResource;
   /** Sandbox API - testing simulations (sandbox only) */
   readonly sandbox: SandboxResource;
   /** Self-Serve Credits API - manage prepaid transfer credits */
@@ -176,6 +182,8 @@ export class DakotaClient {
     this.users = new UsersResource(this.transport);
     this.webhooks = new WebhooksResource(this.transport);
     this.info = new InfoResource(this.transport);
+    this.legal = new LegalResource(this.transport);
+    this.rdMarketingFee = new RDMarketingFeeResource(this.transport);
     this.sandbox = new SandboxResource(this.transport);
     this.selfServe = new SelfServeResource(this.transport);
     this.feePayoutDestination = new FeePayoutDestinationResource(this.transport);
