@@ -933,6 +933,123 @@ paths:
                 title: Not Found
                 status: 404
                 detail: customer not found
+  /agentic-policy:
+    x-alpha: true
+    put:
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      tags:
+        - Agentic Payments
+      summary: Register the client's agentic policy (ALPHA)
+      description: |
+        > **Alpha** — early access.
+
+        Registers (or fully replaces) this client's `client_policy` — the ONLY way to set one. A client declares its vocabulary once, and every drafting turn and every accept then resolve it from here.
+
+        Registration is deliberately the only path. The policy was once also accepted in the `POST /payment-agents/{payment_agent_id}/proposals` and `POST /instructions` bodies, and that made a two-call conversation able to disagree with itself: a proposal drafted under one policy and accepted without it is judged by different rules, so a legal draft was refused at the customer's approval click. A policy is a property of the CLIENT, not of a request, and it now lives in exactly one place.
+
+        A full replace, not a merge: send the whole policy every time. Changing one takes effect on the next turn — there is no cache — so this is also how you TEST a policy. Register, run a conversation, register something else. Validation happens HERE: an unknown key, an unknown value, or a label for a concept the server does not implement is a 400 at registration, not a surprise on a customer's first conversation.
+
+        FULL REPLACE, not a merge: the registration IS the client's declared vocabulary, so an omitted field means the client no longer wants it. An empty body (`{}`) therefore clears the registration back to platform defaults.
+      operationId: updateClientAgenticPolicy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgenticClientPolicy'
+            example:
+              payee_model: flat
+              mandate_strategy: external_only
+              payout_route: bank_only
+              labels:
+                limit: spending limit
+                limit_unit: USD
+                payee: recipient
+      responses:
+        '200':
+          description: The registered policy, normalized as it will be applied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisteredAgenticClientPolicy'
+              example:
+                policy:
+                  payee_model: flat
+                  mandate_strategy: external_only
+                  payout_route: bank_only
+                  labels:
+                    limit: spending limit
+                    limit_unit: USD
+                    payee: recipient
+                created_at: 1761600000
+                updated_at: 1761686400
+        '400':
+          description: |
+            The policy is not one this server can enforce — an unknown key, an unsupported value, or a label for an unimplemented concept.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+    get:
+      tags:
+        - Agentic Payments
+      summary: Get the client's registered agentic policy (ALPHA)
+      description: |
+        > **Alpha** — early access.
+
+        Returns the `client_policy` registered for the CALLING client — the vocabulary and payout constraints every drafting turn and every accept uses. Scoped to the caller by construction: the client is resolved from the API key, so there is no id to pass and no other client's policy to address.
+
+        No registration is a 404 — which is not an error condition but the default: with no registration and no body policy the agent drafts on platform defaults, exactly as it did before registration existed.
+      operationId: getClientAgenticPolicy
+      responses:
+        '200':
+          description: The client's registered agentic policy, normalized.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisteredAgenticClientPolicy'
+              example:
+                policy:
+                  payee_model: flat
+                  mandate_strategy: external_only
+                  payout_route: bank_only
+                  labels:
+                    limit: spending limit
+                    limit_unit: USD
+                    payee: recipient
+                created_at: 1761600000
+                updated_at: 1761686400
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: This client has no registered policy.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /mandates/{mandate_id}/amend:
     x-alpha: true
     post:
@@ -1340,119 +1457,6 @@ paths:
                 title: Not Found
                 status: 404
                 detail: agentic payments are not enabled
-  /agentic-policy:
-    x-alpha: true
-    get:
-      tags:
-        - Agentic Payments
-      summary: Get the client's registered agentic policy (ALPHA)
-      description: |
-        Returns the `client_policy` registered for the CALLING client — the vocabulary and payout constraints every drafting turn and every accept uses. Scoped to the caller by construction: the client is resolved from the API key, so there is no id to pass and no other client's policy to address.
-
-        No registration is a 404 — which is not an error condition but the default: with no registration and no body policy the agent drafts on platform defaults, exactly as it did before registration existed.
-      operationId: getClientAgenticPolicy
-      responses:
-        '200':
-          description: The client's registered agentic policy, normalized.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RegisteredAgenticClientPolicy'
-              example:
-                policy:
-                  payee_model: flat
-                  mandate_strategy: external_only
-                  payout_route: bank_only
-                  labels:
-                    limit: spending limit
-                    limit_unit: USD
-                    payee: recipient
-                created_at: 1761600000
-                updated_at: 1761686400
-        '400':
-          description: Bad Request
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
-          description: Unauthorized
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '404':
-          description: This client has no registered policy.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-    put:
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKeyHeader'
-      tags:
-        - Agentic Payments
-      summary: Register the client's agentic policy (ALPHA)
-      description: |
-        Registers (or fully replaces) this client's `client_policy` — the ONLY way to set one. A client declares its vocabulary once, and every drafting turn and every accept then resolve it from here.
-
-        Registration is deliberately the only path. The policy was once also accepted in the `POST /payment-agents/{payment_agent_id}/proposals` and `POST /instructions` bodies, and that made a two-call conversation able to disagree with itself: a proposal drafted under one policy and accepted without it is judged by different rules, so a legal draft was refused at the customer's approval click. A policy is a property of the CLIENT, not of a request, and it now lives in exactly one place.
-
-        A full replace, not a merge: send the whole policy every time. Changing one takes effect on the next turn — there is no cache — so this is also how you TEST a policy. Register, run a conversation, register something else. Validation happens HERE: an unknown key, an unknown value, or a label for a concept the server does not implement is a 400 at registration, not a surprise on a customer's first conversation.
-
-        FULL REPLACE, not a merge: the registration IS the client's declared vocabulary, so an omitted field means the client no longer wants it. An empty body (`{}`) therefore clears the registration back to platform defaults.
-      operationId: updateClientAgenticPolicy
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AgenticClientPolicy'
-            example:
-              payee_model: flat
-              mandate_strategy: external_only
-              payout_route: bank_only
-              labels:
-                limit: spending limit
-                limit_unit: USD
-                payee: recipient
-      responses:
-        '200':
-          description: The registered policy, normalized as it will be applied.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RegisteredAgenticClientPolicy'
-              example:
-                policy:
-                  payee_model: flat
-                  mandate_strategy: external_only
-                  payout_route: bank_only
-                  labels:
-                    limit: spending limit
-                    limit_unit: USD
-                    payee: recipient
-                created_at: 1761600000
-                updated_at: 1761686400
-        '400':
-          description: |
-            The policy is not one this server can enforce — an unknown key, an unsupported value, or a label for an unimplemented concept.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
-          description: Unauthorized
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '404':
-          description: Not Found
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
 components:
   schemas:
     PaymentAgentResponse:
@@ -1527,6 +1531,129 @@ components:
           $ref: '#/components/schemas/CreateScheduledPaymentsAction'
         create_auto_account:
           $ref: '#/components/schemas/CreateAutoAccountAction'
+    AgenticBlocker:
+      type: object
+      description: |
+        One machine-actionable reason a drafting turn produced no proposals. Verified server-side before it is returned.
+      required:
+        - code
+      properties:
+        code:
+          type: string
+          enum:
+            - mandate_does_not_cover_payee
+            - no_mandate
+          description: |
+            `mandate_does_not_cover_payee` — a spending limit is in force but its rule does not reach the named payee. This is the ACTIONABLE one: the limit can be amended to ADD the payee as a target, which changes nothing else and so can never raise the limit; collect the customer's signature for that amendment and run the turn again. `no_mandate` — no active limit exists at all, so there is nothing to amend and the customer must establish one first. The two are kept distinct so a client never opens an amend flow against a limit that does not exist.
+        mandate_id:
+          $ref: '#/components/schemas/KSUID'
+        payee_name:
+          type: string
+          description: |
+            The payee the customer named, verbatim. A NAME and not an id, because in the case this exists for the payee does not exist yet — which is why nothing covers them.
+        detail:
+          type: string
+          description: Short human-readable note. Advisory only — branch on `code`.
+    AgenticClientPolicy:
+      type: object
+      description: |
+        ALPHA — how THIS client's product speaks, and what the agent may propose for it. It reshapes what the drafting model SEES (tool results, tool descriptions, prompt sections) and constrains what it may PROPOSE, so the agent narrates in the client's own nouns instead of platform ones.
+
+        SCOPE: this is a per-CLIENT policy — it belongs to the `client_id` behind the API key, never to a key (api keys are N:1 to clients, so a per-key policy would fragment for a client running one service key per deployment). REGISTER IT at `PUT /agentic-policy`, which resolves the client from the API key: there is no id to pass and no other client's policy to address.
+
+        DELIVERY: registration only. A request body never carries this object — a conversation is two calls (draft, then accept) judged independently, and a per-request policy let them disagree, so a draft that was legal under one could be refused at the customer's approval click.
+
+        STRICT: an unknown key, an unknown value, or a label for a concept the server does not implement is a 400 — "accepted" always means "enforced". Absent (or every field empty) ⇒ platform defaults, byte-for-byte the behaviour of a request that never mentioned it.
+      additionalProperties: true
+      properties:
+        payee_model:
+          type: string
+          enum:
+            - ''
+            - nested
+            - flat
+          description: |
+            How payees are shaped in tool results. `nested` (the default, and what an absent policy means) returns ONE payee carrying N payout methods. `flat` returns one entry PER payout method — a payee is a name plus one way of being paid — each with `payee_ref` (the id to pass straight through wherever a payout method is referenced), `entity_ref` (the person behind the entry; several entries can share one, and it is what binds a new payout method to an existing person instead of duplicating them), `name`, and `paid_by` (a rendered human phrase such as `bank account at Chase ****4321` or `base-sepolia 0x1234…cdef`). A payout method never pins an asset, so `paid_by` never names one.
+          example: flat
+        payout_assets:
+          type: array
+          items:
+            type: string
+          description: |
+            The assets a PAYEE may receive — what a conversion may output, and what a direct payment may send. Absent or empty means unrestricted, which is the platform default.
+
+            State it when your product's FUNDING asset is not something a payee is ever paid in. Platform's asset registry only knows which assets settle on which chain, so it cannot tell that your funding stablecoin is a category error as a payout — it will happily draft one if a customer names it, and because that route needs no conversion account it also creates a duplicate payee for someone already saved. Declaring the allowlist turns both into a refusal the model sees before the customer does.
+
+            Case-insensitive and de-duplicated; the order you send is the order quoted back to the customer.
+          example:
+            - USDC
+            - USDT
+        labels:
+          type: object
+          additionalProperties:
+            type: string
+          description: |
+            Platform concept → the noun THIS client's customers use for it. The noun replaces the platform word in the tool results the agent reads AND in what it writes to the customer. Implemented concepts: `limit` (the spending limit; platform calls it a mandate), `payee` (the person being paid), and `limit_unit` (the UNIT the limit's amounts are quoted in, e.g. `USD`). Any other key is a 400 — a label for a concept the server does not implement would be accepted and then ignored.
+
+            `limit` and `payee` are nouns and must match `^[a-z][a-z0-9 _-]{0,30}$`. `limit_unit` is a unit code and must match `^[A-Za-z][A-Za-z0-9]{0,9}$`, so it may be uppercase. Never a phrase, never a sentence.
+
+            `limit_unit` matters most under a `payout_route` that forces a conversion account: the limit governs the DEPOSIT leg, so its own asset is the funding asset the customer has never heard of. With the unit set the agent quotes the caps and remaining budget in it ("your spending limit is 10 USD per month, 0.98 left") instead of reaching for the funding asset.
+
+            Labelling `payee` also renames the flat view's keys: the container becomes the label plus `s` and each entry's ref becomes the label plus `_ref` — so `{"payee": "recipient"}` yields `recipients[]` with `recipient_ref`. `entity_ref` is NOT renamed; it is an opaque handle to the person behind the entry, not the labelled concept. The plural is a literal `+s` (the charset restricts labels to simple lowercase nouns), so an irregular noun gets an odd but harmless plural.
+          example:
+            limit: spending limit
+            limit_unit: USD
+            payee: recipient
+        mandate_strategy:
+          type: string
+          enum:
+            - ''
+            - external_only
+          description: |
+            `external_only`: spending limits live entirely OUTSIDE this conversation — the client creates and amends them in its own limit editor through the customer-signed amend API. The agent never drafts one; a drafted payment must fit an existing active limit's remaining budget, and when nothing covers it the agent says so and points the customer at the app instead of proposing a limit. Absent ⇒ the agent drafts limits as usual.
+          example: external_only
+        payout_route:
+          type: string
+          enum:
+            - ''
+            - conversion_account_only
+            - bank_only
+          description: |
+            Restricts how the money may leave. `conversion_account_only`: every scheduled payment must fund a conversion account — no direct wallet-to-address send. `bank_only`: on top of that the payout must land in a bank account — an outbound bank rail is required and no crypto payout method may be created. Absent ⇒ any supported route.
+
+            Either value also makes the FUNDING leg system-chosen, which changes two things. The payment has two legs and the customer only names one: what they ask for is what ARRIVES (the conversion's output), while what LEAVES the wallet is the conversion deposit. The spending limit governs the DEPOSIT leg, so (a) the asset or chain the customer names can never put a payment outside the limit — coverage is judged on the per-payment cap and the remaining budget alone — and (b) the deposit's asset and network move out of the limit's `rule` into a `funding_leg_internal` block in the `active_mandates` result, which the agent copies into the conversion account and never says out loud. Pair this with `labels.limit_unit` so the agent has a unit to quote the limit in.
+          example: conversion_account_only
+    AgenticProposalsProgress:
+      type: object
+      description: |
+        Live snapshot of an in-flight proposal-drafting turn. Coarse and customer-safe: a phase enum, one human sentence, and the model round. Tool counts only — never payee names, amounts, or addresses.
+      required:
+        - active
+      properties:
+        active:
+          type: boolean
+          description: |
+            True while a drafting turn is publishing progress for this agent. False when idle or just finished — show a generic spinner instead.
+        phase:
+          type: string
+          description: 'Coarse machine phase: reading | working | drafting | revising | finalizing.'
+          enum:
+            - reading
+            - working
+            - drafting
+            - revising
+            - finalizing
+        detail:
+          type: string
+          description: Human line to show under the spinner.
+          example: Looking up 8 payees · checking balances
+        iteration:
+          type: integer
+          description: Model round (1-based) the turn is on.
+        updated_at:
+          type: integer
+          format: int64
+          description: Unix seconds when this snapshot was published.
     AgenticActionDownstream:
       type: object
       properties:
@@ -1673,6 +1800,29 @@ components:
             - blocked
             - rejected_input
           description: How the boundary screen treated this turn. `ok` is a normal payments turn; `warned` means the request was off-topic and the customer was warned but may continue; `blocked` means the conversation has been terminated (repeated off-topic turns or a manipulation attempt) — the client should stop serving it and offer a fresh chat. `rejected_input` means this message was refused wholesale (e.g. more payees than one conversation supports) and should NOT be added to the conversation history — the reply explains what to resend; the conversation itself continues unaffected.
+    AmendMandateRequest:
+      type: object
+      required:
+        - signer_public_key
+        - signature
+        - rule
+      description: |
+        A new version of an active mandate's rule, signed by a recognized signer of the mandate's customer other than the bound one (§8).
+
+        The `rule` below is taken VERBATIM — it is stored, and the signature is verified, exactly as sent. Unlike mandate creation, this endpoint does NOT normalize it: a rule that is not already canonical is refused with 400 naming the offending field, rather than being rewritten into something you cannot reproduce. So `window` must be present and non-empty (send "NONE" for a lifetime window), `targets` must be recipient ids and never payee names, and `asset` must already be uppercase. This is what lets you compute the signed bytes from the body you are about to send.
+      properties:
+        signer_public_key:
+          type: string
+          description: The amending signer's public key. Must differ from the mandate's bound signer.
+        signature:
+          type: string
+          description: |
+            Signature over the JCS-canonical amend payload — the same shape as the approve/cancel payload with `action` set to "amend", `rule` set to the NEW rule below EXACTLY as you send it, and one extra key, `version`, set to the version being created (the mandate's current `version` + 1). Including the version is what stops a signature for v2 from being replayed to create v3. Because the rule is never normalized on this path, the bytes you sign are the bytes the server verifies.
+        rule:
+          allOf:
+            - $ref: '#/components/schemas/MandateRule'
+          description: |
+            The complete NEW rule, not a patch, in canonical form — it is stored and signed verbatim, never normalized. `window` is REQUIRED here (use "NONE" for a lifetime window) even though it is optional when creating; `targets` must be recipient ids, not payee names; `asset` must be uppercase. Anything else is refused with 400 naming the field, not silently rewritten. `target_type`, `window`, `asset` and `network_id` must additionally match the current version exactly; only the amount fields and `targets` may differ.
     ApproveMandateRequest:
       type: object
       required:
@@ -1748,8 +1898,6 @@ components:
         - payment_agent_id
         - proposals
       properties:
-        client_policy:
-          $ref: '#/components/schemas/AgenticClientPolicy'
         payment_agent_id:
           type: string
         proposals:
@@ -1811,14 +1959,14 @@ components:
           description: The conversation so far, oldest first.
           items:
             $ref: '#/components/schemas/AgenticChatMessage'
+        developer_fee:
+          $ref: '#/components/schemas/DeveloperFee'
         timezone:
           type: string
           maxLength: 64
           description: |
             The customer's IANA timezone (e.g. "America/Los_Angeles"). When present, the agent resolves every relative date ("tomorrow", "Friday") and clock time ("10 am") in THIS timezone; a date without a time is drafted for the first working hours of the local day (10:00) and the draft summary states the resolved local time; a time without a date means its next local occurrence. Absent or unrecognized ⇒ times resolve as UTC and the agent says so when a specific clock time matters. Send it on EVERY turn — the server is stateless. Note: the zone's UTC offset is captured at drafting time, so a DST transition before a far-future fire date shifts the fire time by the DST delta.
           example: America/Los_Angeles
-        client_policy:
-          $ref: '#/components/schemas/AgenticClientPolicy'
     CreateScheduledPaymentsAction:
       type: object
       required:
@@ -1832,6 +1980,18 @@ components:
           description: The funding wallet for these payments — one the agent recognizes. Optional only when the agent recognizes exactly one wallet (used by default); otherwise required, since a signer can recognize several and the choice cannot be deferred to fire time. Its chain family must match the payment network.
         amount:
           type: string
+          description: |
+            Decimal string. What this MEANS depends on `amount_includes_fee` below: by default it is what the PAYEE RECEIVES, and the server grosses it up so the fee comes out on top.
+        amount_includes_fee:
+          type: boolean
+          description: |
+            Whose side of the conversion fee `amount` is on.
+
+            Absent or `false` (the DEFAULT): `amount` is what the payee RECEIVES. The server adds the fee on top, so slightly more leaves the funding wallet. This is what "pay Bruno 10 USDC" means to a person, and it matches the same payment made through a client's own form.
+
+            `true`: `amount` is what LEAVES the wallet, and the payee receives less the fee. Use it only when the customer says so — "send 10 in total", "including the fee".
+
+            The gross-up is done SERVER-SIDE from the fee on the request; the agent never computes it, so it can neither get the arithmetic wrong nor be talked out of the fee. With no fee configured the two are identical.
         asset:
           type: string
         network_id:
@@ -1950,6 +2110,165 @@ components:
           type: integer
           format: int64
           description: First due time (0 ⇒ now).
+    DeveloperFee:
+      type: object
+      description: |
+        Your developer fee, declared per payout type. A conversion is charged the rate for the kind of payout it funds: `swap_bps` for a crypto payout, `offramp_bps` for a bank payout. Omit a rate, or send zero, and that payout type carries no fee at all — nothing is charged, nothing is added to the amount, and the agent is told nothing about a fee it could mention. The two are independent, so one conversation can charge a swap and stay silent about a bank payout in the same turn.
+
+        Both rates are DEFAULTS for the auto-accounts a request creates. An action-level `fee_bps` is an explicit override and still wins outright, for either type.
+      properties:
+        swap_bps:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 10000
+          description: |
+            Rate for a crypto payout — a `create_auto_account` naming no `rail`.
+        offramp_bps:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 10000
+          description: |
+            Rate for a bank payout — a `create_auto_account` naming a `rail`. An offramp converts too (it just settles on a rail instead of a chain), so charging it is a pricing decision that belongs to you. Zero or omitted means the payout is free of a conversion fee.
+    MandateBudget:
+      type: object
+      required:
+        - mandate_id
+        - version
+        - as_of
+        - window
+        - per_target
+        - aggregate
+      description: |
+        A mandate's remaining spend budget at a point in time. Advisory: nothing here reserves budget, and the mandate gate remains the authority at fire time.
+      properties:
+        mandate_id:
+          type: string
+        version:
+          type: integer
+          description: |
+            The version whose caps these figures are metered against. Amending a mandate changes the caps but NOT the spend — usage accrues to the mandate, so a raised limit leaves the window's consumption intact and a lowered one can leave zero remaining rather than a negative balance.
+        as_of:
+          type: integer
+          format: int64
+          description: |
+            Unix time the windows were derived and the sums taken. Budget is a function of time — a MONTHLY bucket empties at the rollover — so the figures below are only interpretable against this instant.
+        window:
+          type: string
+          description: |
+            The rule's `window` verbatim (`NONE`, `DAILY`, `WEEKLY`, `MONTHLY`) — the period each `bucket` spans and the cadence at which budget resets. `NONE` is a lifetime cap: one bucket, labelled `lifetime`, that never resets.
+        per_target:
+          type: array
+          description: |
+            Per-payee lines, metered against `max_amount_per_target_in_window` and `max_count_per_target_in_window`. Every configured payee appears for the current window even if it has never been paid, so an empty budget is reported as zeros rather than as a missing line.
+          items:
+            $ref: '#/components/schemas/MandateBudgetLine'
+        aggregate:
+          type: array
+          description: |
+            One line per window bucket summing EVERY payee, metered against the agent-wide `max_amount_in_window` and `max_count_in_window`. This is the ceiling on the agent as a whole; honour it alongside `per_target`, never instead of it.
+          items:
+            $ref: '#/components/schemas/MandateBudgetLine'
+    MandateBudgetLine:
+      type: object
+      required:
+        - target
+        - bucket
+        - committed_count
+        - committed_amount
+        - open_count
+        - open_amount
+      description: |
+        One budget line: a window bucket, what has been spent in it, what is earmarked against it, and what is left.
+
+        Amounts are decimal strings in the mandate rule's `asset`, matching the `rule` fields they are metered against. Counts and amounts are reported independently because the rule can cap either, both, or neither.
+      properties:
+        target:
+          type: string
+          description: |
+            Which payee this line is about — a recipient id under `target_type: recipient`, an address under `address`. Empty for `target_type: any` (there is one bucket for everything) and always empty on `aggregate` lines, which are the roll-up across every payee.
+        bucket:
+          type: string
+          description: |
+            The window period this line covers, identified as a date: `"2026-07"` for MONTHLY, `"2026-07-13..2026-07-19"` (the full inclusive range) for WEEKLY, `"2026-07-13"` for DAILY, and `"lifetime"` for window `NONE`, whose single bucket never resets.
+
+            Lines are chronological within a payee (`aggregate`, having no payee, is chronological outright), so a payee's CURRENT bucket comes first — later buckets exist only where payments are already scheduled into future windows, and no bucket earlier than the current one is ever reported.
+        committed_count:
+          type: integer
+          description: Payments that have already fired and spent from this bucket.
+        committed_amount:
+          type: string
+          description: Sum of those spends, as a decimal string.
+        open_count:
+          type: integer
+          description: |
+            Scheduled payments that have NOT fired yet but will consume this bucket at their due date.
+        open_amount:
+          type: string
+          description: Sum of those earmarks, as a decimal string.
+        remaining_count:
+          type: integer
+          description: |
+            Payments still permitted in this bucket after committed and open ones, floored at 0. ABSENT when the rule sets no count cap for this line's scope — absence means "not capped", never "none left".
+        remaining_amount:
+          type: string
+          description: |
+            Amount still permitted in this bucket after committed spend and open earmarks, floored at 0 and returned as a decimal string. ABSENT when the rule sets no amount cap for this line's scope — absence means "not capped", never "nothing left".
+
+            **`"?"` means the figure could not be summed and MUST be treated as no headroom.** A stored amount or cap in this bucket did not parse as a decimal; the mandate gate fails closed on the same data, so a payment sent against this bucket will be denied. Do not coerce `"?"` to 0 and do not fall back to the rule's cap — both read as headroom that is not there.
+    MandateVersion:
+      type: object
+      description: |
+        One immutable, independently signed version of a mandate's rule. Append-only — a version's rule is never rewritten.
+      properties:
+        version:
+          type: integer
+          description: 1-based. Version 1 is the rule the mandate was created and approved with.
+        rule:
+          $ref: '#/components/schemas/MandateRule'
+        approved_by_signer_id:
+          type: string
+          description: |
+            The §8 signer that signed this version into force — for v1 the approver, for later versions the amender. Absent while a v1 is still pending approval.
+        approved_at:
+          type: integer
+          format: int64
+          description: Unix time this version was signed into force; absent until then.
+        created_at:
+          type: integer
+          format: int64
+    RegisteredAgenticClientPolicy:
+      type: object
+      description: |
+        A client's registered `client_policy` (ALPHA) with its registration timestamps.
+
+        `policy` is the NORMALIZED form — what the server will actually apply, not an echo of what was sent. Values that mean "the default" are normalized away (`payee_model: nested` becomes absent, because an explicit nested and an absent policy have to be the same value rather than two values that merely behave alike today).
+      required:
+        - policy
+      properties:
+        policy:
+          $ref: '#/components/schemas/AgenticClientPolicy'
+        created_at:
+          type: integer
+          format: int64
+          description: Unix time this client first registered a policy.
+        updated_at:
+          type: integer
+          format: int64
+          description: Unix time the registration was last replaced.
+    ScheduledPaymentList:
+      type: object
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/ScheduledPaymentResponse'
+        meta:
+          $ref: '#/components/schemas/Meta'
     Mandate:
       type: object
       properties:
@@ -2098,8 +2417,10 @@ components:
           description: AUDIT — the money-path transaction created when this payment fired. Absent until the payment executes.
         amount:
           type: string
+          description: What LEAVES the funding wallet, denominated in `asset` on `network_id`. For a DIRECT payment that is also what the payee receives. For a CONVERTED payment (the payee settles on a different asset or chain) it is the DEPOSIT into the conversion account, grossed up so the payee nets the requested figure — so it is LARGER than the payout and in a DIFFERENT asset. Never render it against `output_asset`.
         asset:
           type: string
+          description: The asset `amount` is denominated in — the asset that LEAVES the wallet. For a converted payment this is the deposit asset, not the one the payee receives (see `output_asset`).
         failure_reason:
           type: string
           description: Why the payment failed (e.g. the mandate gate's denied dimensions); absent unless status is failed.
@@ -2123,7 +2444,7 @@ components:
           description: For a `bank` destination, the payout rail (e.g. ach, fedwire, swift). Absent for crypto.
         output_asset:
           type: string
-          description: The asset the recipient ULTIMATELY receives. For an offramp this is the fiat currency (e.g. USD) the deposit converts to; for a direct crypto payment it equals `asset`. Stablecoin conversion is 1:1, so the output AMOUNT equals `amount`.
+          description: 'The asset the recipient ULTIMATELY receives. For an offramp this is the fiat currency (e.g. USD) the deposit converts to; for a direct crypto payment it equals `asset`. DO NOT PAIR THIS WITH `amount`: for a converted payment `amount` is the DEPOSIT — what leaves the wallet, in the deposit''s own asset — and it is grossed up so the payee nets the requested figure, so a real payment reads amount 0.211112 and pays out 0.19. The rate is 1:1; the fee is not. This response carries no output amount, so a converted payment''s payout figure is not available here.'
         output_network:
           type: string
           description: For a crypto destination, the network the recipient ULTIMATELY receives on — for a cross-family swap this differs from `network_id` (the DEPOSIT network the wallet pays), e.g. output_network solana-devnet while network_id is base-sepolia. Equals `network_id` for a direct crypto payment; absent for a bank offramp (fiat has no network).

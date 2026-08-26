@@ -270,7 +270,21 @@ export type paths = {
         };
         /**
          * List transactions
-         * @description List transactions across supported transaction resource families.
+         * @description List transactions across the supported transaction resource families: `one_off`, `auto_account`, and `wallet`. Each returned row carries a `resource_type` discriminator, and a single response contains rows from exactly one family.
+         *
+         *     **The response family is selected as follows.** Set `transaction_type` to choose the family explicitly. The `wallet` family is only reachable this way: `transaction_type=wallet`. The `wallet_id` and `direction` filters require `transaction_type=wallet`, and supplying either without it is rejected with `400`, not routed to the wallet family. The `auto_account` family requires `customer_id`: `transaction_type=auto_account` without a `customer_id` is rejected with `400`.
+         *
+         *     If you omit `transaction_type`, the family is inferred from the other query parameters, between `one_off` and `auto_account` only:
+         *
+         *     - `destination_id`, `status`, `source_network_id`, `source_asset`, or `destination_asset` present → `one_off`.
+         *     - `customer_id` present (and none of the above) → `auto_account`.
+         *     - none of the above (no filters) → `one_off`.
+         *
+         *     **Because `customer_id` on its own selects the `auto_account` family,** `GET /transactions?customer_id=X` returns that customer's auto-account transactions, not their one-off transactions, even though an unfiltered `GET /transactions` returns one-off transactions. `meta.total_count` reflects only the selected family, so it is not a count across all of a customer's transactions. To list a customer's one-off transactions, send `transaction_type=one_off&customer_id=X`; to list their auto-account transactions explicitly, send `transaction_type=auto_account&customer_id=X`.
+         *
+         *     The selected family is reported back on the response as `meta.transaction_type`, so an empty page still tells you which family was listed.
+         *
+         *     Filters documented below as applying to "one-off transactions" only take effect within the `one_off` family; combine them with `transaction_type=one_off` to be explicit.
          */
         readonly get: operations["listTransactions"];
         readonly put?: never;
@@ -396,7 +410,7 @@ export type paths = {
             readonly cookie?: never;
         };
         /**
-         * List all recipients
+         * List a customer's recipients
          * @description Get a list of all recipients for the given customer ID
          */
         readonly get: operations["listRecipients"];
@@ -719,6 +733,38 @@ export type paths = {
          *     Application tokens are scoped to a single application for use in public-facing flows.
          */
         readonly get: operations["getApplication"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/applications/{application_id}/legal-acceptance": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * What this application still needs to accept, and who may accept it
+         * @description Returns exactly what the accept-agreements page renders: the agreements
+         *     this application still owes, and the people permitted to accept them.
+         *
+         *     This exists so that page does not need `GET /applications/{application_id}?include=all`.
+         *     That response carries the full KYB record — the business entity, and every
+         *     associated individual's date of birth, nationality and email address —
+         *     none of which this page displays. The link that reaches this endpoint is
+         *     emailed and travels in a URL query string, so the credential it carries
+         *     is scoped to this endpoint and the attestation submission, and cannot
+         *     read the application.
+         *
+         *     **Authentication:** Accepts Application Token (X-Application-Token header),
+         *     including the narrow legal-acceptance token issued by a terms refusal.
+         */
+        readonly get: operations["getLegalAcceptanceContext"];
         readonly put?: never;
         readonly post?: never;
         readonly delete?: never;
@@ -1356,7 +1402,7 @@ export type paths = {
         readonly post?: never;
         /**
          * Delete a signer by public key
-         * @description Soft-deletes all signers with the given public key. Returns `404` when no signer exists for the given public key and `409` when the signer is still a member of an active signer group.
+         * @description Soft-deletes your signer with the given public key. Only the signer's owner can delete it, so a public key belonging to another organization is reported as `404` exactly like one that does not exist. Returns `404` when you have no signer for the given public key, `409` when that signer is still a member of an active signer group, and `403` when the key is a platform-managed settlement signer, which is retired only through platform-internal offboarding.
          */
         readonly delete: operations["deleteSigner"];
         readonly options?: never;
@@ -1958,6 +2004,32 @@ export type paths = {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/legal/documents/{document_key}": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Get a legal document
+         * @description Returns the revision of one document that is currently in force, or a
+         *     specific revision when `version` is supplied.
+         *
+         *     Pass the `version` you displayed back as `legal_document_version` when
+         *     submitting an attestation, so the acceptance record names the exact text
+         *     the customer saw rather than whichever revision happened to be current
+         *     when the request arrived.
+         */
+        readonly get: operations["getLegalDocument"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/payment-agents/{payment_agent_id}": {
         readonly parameters: {
             readonly query?: never;
@@ -2124,6 +2196,73 @@ export type paths = {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/rd-marketing-fee/statements/{month}": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * One month of this client's marketing-fee statement
+         * @description One row per calendar day: the date, the RD balance, and that day's fee.
+         *
+         *     The rows are the stored daily principals, read rather than recomputed,
+         *     so what the client reads and what Dakota priced cannot drift.
+         *
+         *     A balance is absent when the day has not been derived yet, and "0" when
+         *     the client genuinely held no RD. Fees are absent for every day of a
+         *     month whose rate has not been derived. Neither unknown is reported as a
+         *     zero.
+         *
+         *     The client comes from the session. A month the client was not entitled
+         *     to gets 404, as does a client who has never had a rate.
+         */
+        readonly get: operations["getRDMarketingFeeStatement"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/legal/documents": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * List current legal documents
+         * @description Returns the revision of every legal document that is currently in force.
+         *
+         *     An index, not a bundle: each entry identifies a document and the
+         *     revision in force, WITHOUT the document text. `content` is omitted
+         *     here — fetch `GET /legal/documents/{document_key}` for the one document
+         *     you are going to display. Inlining every document would make this
+         *     response carry the entire corpus on every call.
+         *
+         *     Unauthenticated: these are public documents, and integrators need them
+         *     before a customer relationship exists.
+         *
+         *     No cache headers are set, and this list is not safe to cache
+         *     indefinitely: it names whichever revision is currently IN FORCE, and
+         *     that changes when a new one is published. A specific `(key, version)`
+         *     from `GET /legal/documents/{key}` is a different matter — revisions are
+         *     immutable, so once fetched its text can be cached for as long as you
+         *     like.
+         */
+        readonly get: operations["listLegalDocuments"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/self-serve/credits/balance": {
         readonly parameters: {
             readonly query?: never;
@@ -2199,6 +2338,74 @@ export type paths = {
          */
         readonly get: operations["getSelfServeCreditsPricing"];
         readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/rd-marketing-fee/statements": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * The months this client has a marketing-fee statement for
+         * @description The months a reserve-management rate was in force for the calling
+         *     client, newest first, from the start of their contract to the running
+         *     month.
+         *
+         *     The client comes from the session and is never named in the request.
+         *
+         *     The running month IS included. It cannot be priced yet — the bank's
+         *     interest posts in the month after it is earned — but the balance is
+         *     real and accruing, and a client checking mid-month must be able to see
+         *     it. Its fee figures are absent rather than zero.
+         *
+         *     A client who has never had a rate gets 404. Having a rate is what being
+         *     in the programme means; there is no separate entitlement record.
+         */
+        readonly get: operations["listRDMarketingFeeStatements"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/agentic-policy": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Get the client's registered agentic policy (ALPHA)
+         * @description > **Alpha** — early access.
+         *
+         *     Returns the `client_policy` registered for the CALLING client — the vocabulary and payout constraints every drafting turn and every accept uses. Scoped to the caller by construction: the client is resolved from the API key, so there is no id to pass and no other client's policy to address.
+         *
+         *     No registration is a 404 — which is not an error condition but the default: with no registration and no body policy the agent drafts on platform defaults, exactly as it did before registration existed.
+         */
+        readonly get: operations["getClientAgenticPolicy"];
+        /**
+         * Register the client's agentic policy (ALPHA)
+         * @description > **Alpha** — early access.
+         *
+         *     Registers (or fully replaces) this client's `client_policy` — the ONLY way to set one. A client declares its vocabulary once, and every drafting turn and every accept then resolve it from here.
+         *
+         *     Registration is deliberately the only path. The policy was once also accepted in the `POST /payment-agents/{payment_agent_id}/proposals` and `POST /instructions` bodies, and that made a two-call conversation able to disagree with itself: a proposal drafted under one policy and accepted without it is judged by different rules, so a legal draft was refused at the customer's approval click. A policy is a property of the CLIENT, not of a request, and it now lives in exactly one place.
+         *
+         *     A full replace, not a merge: send the whole policy every time. Changing one takes effect on the next turn — there is no cache — so this is also how you TEST a policy. Register, run a conversation, register something else. Validation happens HERE: an unknown key, an unknown value, or a label for a concept the server does not implement is a 400 at registration, not a surprise on a customer's first conversation.
+         *
+         *     FULL REPLACE, not a merge: the registration IS the client's declared vocabulary, so an omitted field means the client no longer wants it. An empty body (`{}`) therefore clears the registration back to platform defaults.
+         */
+        readonly put: operations["updateClientAgenticPolicy"];
         readonly post?: never;
         readonly delete?: never;
         readonly options?: never;
@@ -2382,42 +2589,75 @@ export type paths = {
         readonly patch?: never;
         readonly trace?: never;
     };
-    readonly "/agentic-policy": {
-        readonly parameters: {
-            readonly query?: never;
-            readonly header?: never;
-            readonly path?: never;
-            readonly cookie?: never;
-        };
-        /**
-         * Get the client's registered agentic policy (ALPHA)
-         * @description Returns the `client_policy` registered for the CALLING client — the vocabulary and payout constraints every drafting turn and every accept uses. Scoped to the caller by construction: the client is resolved from the API key, so there is no id to pass and no other client's policy to address.
-         *
-         *     No registration is a 404 — which is not an error condition but the default: with no registration and no body policy the agent drafts on platform defaults, exactly as it did before registration existed.
-         */
-        readonly get: operations["getClientAgenticPolicy"];
-        /**
-         * Register the client's agentic policy (ALPHA)
-         * @description Registers (or fully replaces) this client's `client_policy` — the ONLY way to set one. A client declares its vocabulary once, and every drafting turn and every accept then resolve it from here.
-         *
-         *     Registration is deliberately the only path. The policy was once also accepted in the `POST /payment-agents/{payment_agent_id}/proposals` and `POST /instructions` bodies, and that made a two-call conversation able to disagree with itself: a proposal drafted under one policy and accepted without it is judged by different rules, so a legal draft was refused at the customer's approval click. A policy is a property of the CLIENT, not of a request, and it now lives in exactly one place.
-         *
-         *     A full replace, not a merge: send the whole policy every time. Changing one takes effect on the next turn — there is no cache — so this is also how you TEST a policy. Register, run a conversation, register something else. Validation happens HERE: an unknown key, an unknown value, or a label for a concept the server does not implement is a 400 at registration, not a surprise on a customer's first conversation.
-         *
-         *     FULL REPLACE, not a merge: the registration IS the client's declared vocabulary, so an omitted field means the client no longer wants it. An empty body (`{}`) therefore clears the registration back to platform defaults.
-         */
-        readonly put: operations["updateClientAgenticPolicy"];
-        readonly post?: never;
-        readonly delete?: never;
-        readonly options?: never;
-        readonly head?: never;
-        readonly patch?: never;
-        readonly trace?: never;
-    };
 };
 export type webhooks = Record<string, never>;
 export type components = {
     schemas: {
+        readonly RDMarketingFeeStatementList: {
+            /**
+             * @description Newest first. EMPTY means the client's contract is real but no
+             *     month has started yet (it starts next month or later) — the page
+             *     says "starting soon" rather than denying the contract. A client
+             *     who has never had a contract gets 404 instead, and the portal
+             *     hides the section entirely. The two are different answers.
+             */
+            readonly months: readonly string[];
+        };
+        readonly RDMarketingFeeStatement: {
+            /** Format: date */
+            readonly month: string;
+            /**
+             * Format: double
+             * @description The rate in force for THIS month, in monthly basis points. A later rate change does not rewrite it.
+             */
+            readonly y_bps_monthly: number;
+            /**
+             * @description What the month owes this client, RD minor units. ABSENT until the
+             *     month is priced — never zero, which would state that nothing is
+             *     owed.
+             */
+            readonly owed_minor?: string;
+            /** @description The mean of the month's stored daily principals. Absent while the month is incomplete. */
+            readonly avg_daily_balance_minor?: string;
+            /** @description Calendar days in the month — the divisor, never the number of rows stored. */
+            readonly days_in_month: number;
+            /**
+             * @description Days whose principal is stored. Lower than days_in_month while the
+             *     month is still being derived or still running, which is how a
+             *     partial month is shown as partial rather than as a complete small
+             *     one.
+             */
+            readonly days_stamped: number;
+            readonly daily: readonly components["schemas"]["RDMarketingFeeDailyRow"][];
+        };
+        readonly RDMarketingFeeDailyRow: {
+            /** Format: date */
+            readonly date: string;
+            /**
+             * @description The client's stored daily principal for that day, minor units, as a
+             *     decimal string. This is read, never recomputed: it is the same
+             *     figure the month was priced on, so what is shown and what was paid
+             *     cannot drift.
+             *
+             *     Every calendar day of the month gets a row. ABSENT means the day is
+             *     not stamped yet — a repairable gap, resolved by the derivation on
+             *     its own. A present "0" means the client genuinely held no RD that
+             *     day. The two are different facts and must not render alike.
+             */
+            readonly balance_minor?: string;
+            /**
+             * @description That day's share of the month's fee, minor units, as a decimal
+             *     string. These decompose the snapshot's owed proportionally by
+             *     balance and sum to exactly that total.
+             *
+             *     ABSENT for every day of a month that has not been priced. The fee
+             *     is a property of the month, not of the day, so it is unknown for
+             *     all days at once until the month's Dakota rate is derived. A zero
+             *     here would state that nothing is owed, which is a different claim
+             *     from "not yet known".
+             */
+            readonly fee_minor?: string;
+        };
         readonly AgenticActionDownstream: {
             readonly recipient_id?: string;
             readonly destination_id?: string;
@@ -2635,7 +2875,18 @@ export type components = {
             readonly destination_id?: string;
             /** @description The funding wallet for these payments — one the agent recognizes. Optional only when the agent recognizes exactly one wallet (used by default); otherwise required, since a signer can recognize several and the choice cannot be deferred to fire time. Its chain family must match the payment network. */
             readonly wallet_id?: string;
+            /** @description Decimal string. What this MEANS depends on `amount_includes_fee` below: by default it is what the PAYEE RECEIVES, and the server grosses it up so the fee comes out on top. */
             readonly amount: string;
+            /**
+             * @description Whose side of the conversion fee `amount` is on.
+             *
+             *     Absent or `false` (the DEFAULT): `amount` is what the payee RECEIVES. The server adds the fee on top, so slightly more leaves the funding wallet. This is what "pay Bruno 10 USDC" means to a person, and it matches the same payment made through a client's own form.
+             *
+             *     `true`: `amount` is what LEAVES the wallet, and the payee receives less the fee. Use it only when the customer says so — "send 10 in total", "including the fee".
+             *
+             *     The gross-up is done SERVER-SIDE from the fee on the request; the agent never computes it, so it can neither get the arithmetic wrong nor be talked out of the fee. With no fee configured the two are identical.
+             */
+            readonly amount_includes_fee?: boolean;
             readonly asset: string;
             /**
              * @description The chain THIS payment settles on. The network belongs to the payment, not to the payee: an address belongs to a whole family, so which chain a given payment uses is chosen when the payment is made. Optional — the destination's own network is used when omitted. When the destination pins a DIFFERENT one in the same family, this payment's network wins (the pin records what an earlier payment did, not a restriction on the address). Across chain FAMILIES the address does not carry at all, and that is refused.
@@ -2731,7 +2982,6 @@ export type components = {
             readonly offramp_bps?: number;
         };
         readonly CreateInstructionsRequest: {
-            readonly client_policy?: components["schemas"]["AgenticClientPolicy"];
             readonly payment_agent_id: string;
             readonly proposals: readonly components["schemas"]["AgenticProposal"][];
             readonly developer_fee?: components["schemas"]["DeveloperFee"];
@@ -2747,12 +2997,12 @@ export type components = {
             readonly prompt?: string;
             /** @description The conversation so far, oldest first. */
             readonly messages?: readonly components["schemas"]["AgenticChatMessage"][];
+            readonly developer_fee?: components["schemas"]["DeveloperFee"];
             /**
              * @description The customer's IANA timezone (e.g. "America/Los_Angeles"). When present, the agent resolves every relative date ("tomorrow", "Friday") and clock time ("10 am") in THIS timezone; a date without a time is drafted for the first working hours of the local day (10:00) and the draft summary states the resolved local time; a time without a date means its next local occurrence. Absent or unrecognized ⇒ times resolve as UTC and the agent says so when a specific clock time matters. Send it on EVERY turn — the server is stateless. Note: the zone's UTC offset is captured at drafting time, so a DST transition before a far-future fire date shifts the fire time by the DST delta.
              * @example America/Los_Angeles
              */
             readonly timezone?: string;
-            readonly client_policy?: components["schemas"]["AgenticClientPolicy"];
         };
         /**
          * @description ALPHA — how THIS client's product speaks, and what the agent may propose for it. It reshapes what the drafting model SEES (tool results, tool descriptions, prompt sections) and constrains what it may PROPOSE, so the agent narrates in the client's own nouns instead of platform ones.
@@ -3037,7 +3287,9 @@ export type components = {
             readonly mandate_version?: number;
             /** @description AUDIT — the money-path transaction created when this payment fired. Absent until the payment executes. */
             readonly wallet_transaction_id?: string;
+            /** @description What LEAVES the funding wallet, denominated in `asset` on `network_id`. For a DIRECT payment that is also what the payee receives. For a CONVERTED payment (the payee settles on a different asset or chain) it is the DEPOSIT into the conversion account, grossed up so the payee nets the requested figure — so it is LARGER than the payout and in a DIFFERENT asset. Never render it against `output_asset`. */
             readonly amount?: string;
+            /** @description The asset `amount` is denominated in — the asset that LEAVES the wallet. For a converted payment this is the deposit asset, not the one the payee receives (see `output_asset`). */
             readonly asset?: string;
             /** @description Why the payment failed (e.g. the mandate gate's denied dimensions); absent unless status is failed. */
             readonly failure_reason?: string;
@@ -3054,7 +3306,7 @@ export type components = {
             readonly destination_label?: string;
             /** @description For a `bank` destination, the payout rail (e.g. ach, fedwire, swift). Absent for crypto. */
             readonly destination_rail?: string;
-            /** @description The asset the recipient ULTIMATELY receives. For an offramp this is the fiat currency (e.g. USD) the deposit converts to; for a direct crypto payment it equals `asset`. Stablecoin conversion is 1:1, so the output AMOUNT equals `amount`. */
+            /** @description The asset the recipient ULTIMATELY receives. For an offramp this is the fiat currency (e.g. USD) the deposit converts to; for a direct crypto payment it equals `asset`. DO NOT PAIR THIS WITH `amount`: for a converted payment `amount` is the DEPOSIT — what leaves the wallet, in the deposit's own asset — and it is grossed up so the payee nets the requested figure, so a real payment reads amount 0.211112 and pays out 0.19. The rate is 1:1; the fee is not. This response carries no output amount, so a converted payment's payout figure is not available here. */
             readonly output_asset?: string;
             /** @description For a crypto destination, the network the recipient ULTIMATELY receives on — for a cross-family swap this differs from `network_id` (the DEPOSIT network the wallet pays), e.g. output_network solana-devnet while network_id is base-sepolia. Equals `network_id` for a direct crypto payment; absent for a bank offramp (fiat has no network). */
             readonly output_network?: string;
@@ -3244,19 +3496,70 @@ export type components = {
              * @example 9000000
              */
             readonly transfer_capacity_cents: number;
+            /**
+             * @description Server-owned balance health. Computed live from the same snapshot as
+             *     `percent_remaining`, so the two can never disagree. Clients MUST
+             *     render this rather than deriving bands themselves; treat an
+             *     unrecognised value as `healthy`.
+             * @example healthy
+             * @enum {string}
+             */
+            readonly health?: "healthy" | "low" | "critical" | "empty";
+            /**
+             * Format: int64
+             * @description Denominator for `percent_remaining`: the balance at the client's most
+             *     recent deliberate top-up, ratcheted upward by any incidental credit
+             *     since. `0` means *no baseline* and must never be used as a divisor.
+             * @example 100000
+             */
+            readonly balance_baseline_cents?: number;
+            /**
+             * @description `balance_cents` as a whole percentage of `balance_baseline_cents`,
+             *     floored. Omitted when `balance_baseline_cents` is 0.
+             * @example 45
+             */
+            readonly percent_remaining?: number;
+            /**
+             * Format: int64
+             * @description Transfer volume at which health becomes `low` — the capacity of the
+             *     largest balance that still classifies `low`. Omitted when
+             *     `balance_baseline_cents` is 0.
+             * @example 8000000
+             */
+            readonly low_at_transfer_capacity_cents?: number;
+            /**
+             * Format: int64
+             * @description Cheapest total fee any configured rail can charge. Below this, rail
+             *     transfers are held.
+             * @example 51
+             */
+            readonly min_next_transfer_fee_cents?: number;
+            /**
+             * Format: float
+             * @description The client's transfer fee rate, so callers stop hardcoding 0.25%.
+             * @example 25
+             */
+            readonly transfer_fee_bps?: number;
         };
         readonly SelfServeCreditsLedgerEntry: {
             /** @example 34o8dS2h9c7n1V8qLpY2Zx6TwUa */
             readonly id: string;
-            /** @enum {string} */
-            readonly entry_type: "purchase" | "deduction" | "refund";
+            /**
+             * @description `bonus` is a promotional grant written alongside a bulk-tier
+             *     `purchase` row in the same transaction; its `amount_cents` is the
+             *     bonus only and it carries no Stripe session id. `adjustment` has been
+             *     emitted since the adjustment entry type shipped and was missing from
+             *     this enum.
+             * @enum {string}
+             */
+            readonly entry_type: "purchase" | "bonus" | "deduction" | "refund" | "adjustment";
             /**
              * @description Sub-category that distinguishes transaction fees from compliance
              *     fees and similar for refunds. `unknown` indicates a legacy row
              *     written before this column existed.
              * @enum {string}
              */
-            readonly category: "transaction_fee" | "compliance_fee" | "transaction_refund" | "compliance_refund" | "purchase" | "adjustment" | "unknown";
+            readonly category: "transaction_fee" | "compliance_fee" | "transaction_refund" | "compliance_refund" | "purchase" | "bonus" | "adjustment" | "unknown";
             /**
              * Format: int64
              * @example -5000
@@ -3286,12 +3589,39 @@ export type components = {
         readonly SelfServeCreditTier: {
             /**
              * Format: int64
-             * @example 10000
+             * @description Amount charged via Stripe Checkout, in USD cents.
+             * @example 3600000
              */
             readonly price_cents: number;
             /**
              * Format: int64
-             * @example 2000000
+             * @description Total credit balance granted for this tier, in USD cents of transfer
+             *     fee. Equal to `price_cents` for standard tiers; larger for bulk
+             *     tiers, where the difference is `bonus_cents`.
+             * @example 6000000
+             */
+            readonly credit_cents?: number;
+            /**
+             * Format: int64
+             * @description Promotional credit granted on top of `price_cents`, i.e.
+             *     `credit_cents - price_cents`. `0` for standard tiers.
+             * @example 2400000
+             */
+            readonly bonus_cents?: number;
+            /**
+             * Format: float
+             * @description Blended rate this tier delivers, rounded to two decimals:
+             *     `transfer_fee_bps * price_cents / credit_cents`. Credits are still
+             *     consumed at the client's `transfer_fee_bps`; the discount is
+             *     delivered entirely as `bonus_cents` at purchase time.
+             * @example 15
+             */
+            readonly effective_fee_bps?: number;
+            /**
+             * Format: int64
+             * @description Transfer volume `credit_cents` buys at the client's `transfer_fee_bps`,
+             *     floored. Banking and compliance fees are charged on top and reduce it.
+             * @example 2400000000
              */
             readonly transfer_capacity_cents: number;
         };
@@ -3416,6 +3746,35 @@ export type components = {
              * @example 2024-01-01T00:00:00Z
              */
             readonly updatedAt: string;
+            /**
+             * @description Per-asset-pair transfer fee exceptions. Always present; empty
+             *     when the client has none, in which case transferFeeBps applies
+             *     to every pair.
+             */
+            readonly transferFeeOverrides: readonly components["schemas"]["TransferFeeOverride"][];
+        };
+        /**
+         * @description Overrides transferFeeBps for exactly one (sourceAsset,
+         *     destinationAsset) pair. Assets are network-agnostic symbols: USDC on
+         *     any chain is the same key.
+         */
+        readonly TransferFeeOverride: {
+            /**
+             * @description Asset symbol the transfer moves from, network-agnostic.
+             * @example USDT
+             */
+            readonly sourceAsset: string;
+            /**
+             * @description Asset symbol the transfer moves to, network-agnostic.
+             * @example RD
+             */
+            readonly destinationAsset: string;
+            /**
+             * Format: float
+             * @description Transfer fee in basis points for this pair. Whole numbers only.
+             * @example 5
+             */
+            readonly feeBps: number;
         };
         /** @description Request body for creating a new client user */
         readonly CreateClientUserRequest: {
@@ -3475,6 +3834,37 @@ export type components = {
              */
             readonly has_more_before: boolean;
         };
+        /** @description Reviewer-selected resubmission scope for an RFI. */
+        readonly RFIRequestedItems: {
+            /** @description Whether the applicant may edit the business description on the resubmit page. */
+            readonly business_description?: boolean;
+            readonly documents?: readonly {
+                /** @enum {string} */
+                readonly category: "business" | "individual" | "edd";
+                /** @description Entity id for individual docs; empty for business/edd. */
+                readonly individual_id?: string;
+                /** @description document_id|document_type for an on-file doc, or purpose for a missing doc. */
+                readonly ref: string;
+            }[];
+            /**
+             * @description Free-text compliance questions the reviewer is asking. Rendered on
+             *     the resubmit page as required answer fields, tracked separately from
+             *     the standard application questions.
+             */
+            readonly questions?: readonly {
+                /** @description Stable identifier for this question; generated if omitted. Used to store the applicant's answer. */
+                readonly key?: string;
+                /** @description The free-text question the reviewer is asking the applicant. */
+                readonly prompt: string;
+                /** @description Whether the applicant must also attach a document when answering this question. */
+                readonly require_document?: boolean;
+            }[];
+        };
+        /** @description Meta information about a transaction list response. Extends the shared pagination meta with the transaction resource family the request resolved to, so an empty page is self-explaining. */
+        readonly TransactionListMeta: components["schemas"]["Meta"] & {
+            /** @description The transaction resource family this response lists. Either the `transaction_type` that was requested, or the family inferred from the other query parameters. `total_count` counts only this family. */
+            readonly transaction_type: components["schemas"]["TransactionResourceType"];
+        };
         readonly PersonaImportJobSummary: {
             readonly job_id?: string;
             /** @description running, paused, cancelled, or completed */
@@ -3501,6 +3891,66 @@ export type components = {
             readonly error?: string;
             /** Format: int64 */
             readonly token_expires_at?: number;
+        };
+        /**
+         * Legal Document
+         * @description One published revision of a legal document.
+         *
+         *     A revision is IMMUTABLE: `version` identifies an exact text, and that
+         *     text never changes once published. Correcting a document produces a new
+         *     revision rather than editing an existing one, so an acceptance recorded
+         *     against a version always refers to the same words.
+         */
+        readonly LegalDocument: {
+            /**
+             * @description Stable identifier for the document across all its revisions.
+             * @example dakota_tos
+             */
+            readonly key: string;
+            /**
+             * @description The published revision identifier, taken from the document itself.
+             *     Treat it as opaque — do not parse or compare it for ordering.
+             * @example 2026-07-23
+             */
+            readonly version: string;
+            /**
+             * @description Monotonic ordinal within `key`. Unlike `version`, this is ordered:
+             *     a higher number is a later revision.
+             * @example 4
+             */
+            readonly revision: number;
+            /** @example Dakota Terms of Service */
+            readonly title?: string;
+            /**
+             * @description The document text, in `content_type` format. Render this to your
+             *     customer before capturing acceptance.
+             *
+             *     Present when a single document is fetched by key. OMITTED from the
+             *     `GET /legal/documents` index, which carries identity and revision
+             *     only — fetch the document you intend to display.
+             * @example This Platform Services Agreement (the "Agreement")…
+             */
+            readonly content?: string;
+            /**
+             * @description Media type of `content`.
+             * @default text/markdown
+             * @example text/markdown
+             */
+            readonly content_type: string;
+            /**
+             * @description Where the document is published for humans to read.
+             * @example https://dakota.xyz/terms
+             */
+            readonly content_url?: string;
+            /**
+             * @description The date printed inside the document — what the customer reads as
+             *     "Last Updated". Show this alongside the text.
+             *
+             *     Absent for imported historical revisions whose stated date could not
+             *     be established.
+             * @example 2026-07-23
+             */
+            readonly effective_date?: string;
         };
         /**
          * @description Error response following RFC 9457 Problem Details.
@@ -3550,6 +4000,30 @@ export type components = {
             readonly request_id?: string;
             /** @description Field-level validation errors (present for validation failures). */
             readonly errors?: readonly components["schemas"]["ValidationError"][];
+            /**
+             * Format: uri
+             * @description A link the customer can follow to CLEAR this error, present only on
+             *     problems with a concrete self-service remedy.
+             *
+             *     Today this is returned by
+             *     `#terms-not-accepted`, where it points at the hosted flow in which
+             *     the outstanding agreement can be signed. The link is token-gated and
+             *     usable as-is — send the customer to it directly rather than parsing
+             *     it out of `detail`.
+             * @example https://onboarding.dakota.xyz/applications/2abc123?token=tok_7f3a8b2c
+             */
+            readonly resolution_url?: string;
+            /**
+             * @description A plain-language rendition of `detail` written for the end
+             *     customer, present when one exists for this error. `detail` names
+             *     request fields and actions so a machine caller (such as a payment
+             *     agent drafting proposals) can self-correct; `user_message` says the
+             *     same thing without API vocabulary. Clients that relay errors into a
+             *     human surface (chat, email, UI) should show `user_message` when
+             *     present and fall back to `detail`.
+             * @example ACH payments pay out USD, so a USDC payout isn't possible on this rail. Change the payout currency to USD and try again.
+             */
+            readonly user_message?: string;
         };
         readonly ValidationError: {
             /**
@@ -3774,7 +4248,7 @@ export type components = {
             readonly application_url: string;
             /**
              * Format: int64
-             * @description Unix timestamp (nanoseconds) when the application token expires (30 days from creation)
+             * @description Unix timestamp (nanoseconds) when the application token expires (90 days from creation)
              * @example 1734567890000000000
              */
             readonly application_expires_at: number;
@@ -3872,6 +4346,36 @@ export type components = {
              */
             readonly severity: "required" | "requested";
         };
+        /**
+         * @description The single client-facing customer status. One value collapses the
+         *     frozen state, the application decision, and the application lifecycle,
+         *     so the dashboard shows, filters, and counts by one status. See the
+         *     `status` field on `Customer` for the derivation precedence.
+         * @example info_requested
+         * @enum {string}
+         */
+        readonly CustomerStatus: "frozen" | "declined" | "withdrawn" | "approved" | "info_requested" | "submitted" | "pending";
+        /**
+         * @description Count of customers per unified `CustomerStatus`, for the dashboard's
+         *     status header. Every field is optional; a status absent from the object
+         *     has a count of zero.
+         */
+        readonly CustomerStatusCounts: {
+            /** @example 2 */
+            readonly frozen?: number;
+            /** @example 4 */
+            readonly declined?: number;
+            /** @example 1 */
+            readonly withdrawn?: number;
+            /** @example 128 */
+            readonly approved?: number;
+            /** @example 7 */
+            readonly info_requested?: number;
+            /** @example 12 */
+            readonly submitted?: number;
+            /** @example 9 */
+            readonly pending?: number;
+        };
         /** @description Response containing the current status of a KYB verification process including provider-specific statuses. */
         readonly Customer: {
             readonly id: components["schemas"]["KSUID"];
@@ -3963,10 +4467,54 @@ export type components = {
              */
             readonly decision?: "approved" | "declined" | "auto_declined" | "withdrawn";
             /**
-             * @description URL for accessing the onboarding application
+             * @description Why the application was decided. Populated for withdrawn/declined
+             *     applications — for example, the fixed reason recorded when an
+             *     applicant withdraws from an RFI resubmission email. Omitted when there
+             *     is no decision or no reason was recorded.
+             * @example User withdrew the application from the request-for-information (RFI) email
+             */
+            readonly decision_reason?: string;
+            /**
+             * @description The single client-facing status for this customer, derived
+             *     server-side. It collapses three signals into one badge so a client
+             *     never has to reconcile `kyb_status`, `kyc_status`, and
+             *     `application_status` by hand.
+             *
+             *     **Precedence (first match wins):**
+             *     1. `frozen` — the customer has an open freeze; surfaced over a stale
+             *        approval so an actionable freeze is never masked.
+             *     2. the most-recent application's decision — `approved`, `declined`
+             *        (declined or auto_declined), or `withdrawn`.
+             *     3. the most-recent application's lifecycle — `info_requested` when a
+             *        request for information is open (the customer owes a response);
+             *        the internal in-review states collapse to `submitted`; `pending`
+             *        otherwise.
+             *     4. `pending` when the customer has no application yet.
+             *
+             *     Once a customer is `approved` / `declined` / `withdrawn`, that is the
+             *     final answer and `kyb_status` / `kyc_status` do not change it. Use
+             *     those fields only for the underlying breakdown.
+             */
+            readonly status?: components["schemas"]["CustomerStatus"];
+            /**
+             * @description URL for accessing the onboarding application. Always present when the
+             *     customer has an onboarding application, including during an open RFI
+             *     loop. In an RFI loop the additive `resubmit_url` is returned as well,
+             *     and the dashboard links to that resubmission page rather than this
+             *     plain application view.
              * @example https://onboarding.example.com/applications/abc123?token=xyz789
              */
             readonly application_url?: string;
+            /**
+             * @description The resubmission link for a customer in an open RFI loop — the exact
+             *     `/applications/{id}/resubmit?token=…` URL the applicant receives in
+             *     the RFI email, built from the customer's existing onboarding token
+             *     (no new token is minted on read). Present only when `status` is
+             *     `info_requested`, and returned alongside `application_url` rather than
+             *     in place of it.
+             * @example https://onboarding.example.com/applications/abc123/resubmit?token=xyz789
+             */
+            readonly resubmit_url?: string;
             /**
              * @description Timestamp of when the link was created
              * @example 1234567890
@@ -4152,7 +4700,11 @@ export type components = {
         readonly TransactionResourceType: "one_off" | "wallet" | "auto_account";
         /**
          * Capabilities
-         * @description List of payment capabilities supported by a rail. Currently, as input, you can only request one in this list. This constraint will be loosened in the future.
+         * @description List of payment capabilities supported by a rail. Multiple values may
+         *     be supplied; the list is not limited to one entry. Which values are
+         *     valid depends on the resource: on-ramp accounts accept any rail and
+         *     expand `us_bank_account` to `ach` and `fedwire`; IBAN destinations
+         *     accept `swift` and `sepa` only.
          * @example [
          *       "ach",
          *       "fedwire"
@@ -4169,6 +4721,43 @@ export type components = {
         /**
          * Account Create Request
          * @description Unified account create request for onramp/offramp/swap.
+         *
+         *     One schema serves all three account types, so its properties are the
+         *     UNION of the three shapes: `account_type` decides which of them are
+         *     read. `account_type` is therefore the only field this schema can mark
+         *     required — everything else is required *per type*, and that contract is
+         *     this table:
+         *
+         *     | Field | `onramp` | `offramp` | `swap` |
+         *     | --- | --- | --- | --- |
+         *     | `capabilities` | **required** | ignored | ignored |
+         *     | `rail` | optional | **required** | ignored |
+         *     | `crypto_destination_id` | **required** | ignored | **required** |
+         *     | `fiat_destination_id` | ignored | **required** | ignored |
+         *     | `destination_network_id` | **required** | ignored | **required** |
+         *     | `source_network_id` | ignored | **required** | **required** |
+         *     | `source_asset` | **required** | **required** | **required** |
+         *     | `destination_asset` | **required** | **required** | **required** |
+         *     | `payment_reference` | rejected | optional | rejected |
+         *     | `return_address` | ignored | optional | ignored |
+         *     | `return_crypto_address` | ignored | ignored | optional |
+         *
+         *     "Ignored" means the field is accepted and has no effect — sending it
+         *     does not create the routing it names, so do not rely on it. The one
+         *     exception is `payment_reference`, which is REJECTED rather than ignored
+         *     on the types that cannot deliver it (see that field).
+         *
+         *     `rail` on an `onramp` is optional because the account's inbound rails
+         *     come from `capabilities`. `swift` and `sepa` must appear in
+         *     `capabilities` and narrow the account to that rail. `ach`, `fedwire`
+         *     and `fednow` must also appear in `capabilities`, but all resolve to
+         *     `us_bank_account` — the same result as omitting `rail` when the
+         *     capabilities include a US rail. `us_bank_account` itself is accepted
+         *     as `rail` regardless of the capabilities list.
+         *
+         *     A required field that you omit returns `400` (`invalid-request` or
+         *     `invalid-identifier`, depending on the field), with a `detail` that
+         *     identifies the problem.
          */
         readonly AccountCreateRequest: {
             readonly account_type: components["schemas"]["AccountType"];
@@ -4402,6 +4991,11 @@ export type components = {
              * @example +12345678900
              */
             readonly bank_phone?: string;
+            /**
+             * @description Deposit attribution reference. When present, include it in the reference/memo field of any payment sent to this account, so the arriving funds can be matched to it. It is required whenever the deposit instructions above point at an account shared with other customers, where the account number alone does not identify the depositor. Null when the provider does not require one — the funds are then attributed by the account details alone. This is inbound and provider-issued, unlike the account-level `payment_reference` on an account create request, which is a memo carried on the payments this account sends OUT.
+             * @example PRIFWEW6DDH
+             */
+            readonly payment_reference?: string | null;
         };
         /**
          * Destination Request Union
@@ -4826,8 +5420,10 @@ export type components = {
             readonly sender_details?: components["schemas"]["SenderDetails"];
         };
         readonly TransactionResource: components["schemas"]["OneOffTransaction"] | components["schemas"]["WalletTransaction"] | components["schemas"]["Transaction"];
-        readonly PaginatedCustomerTransactionResponse: components["schemas"]["PaginatedListResponse"] & {
-            readonly data?: readonly components["schemas"]["Transaction"][];
+        /** @description Wrapper for a paginated list of auto-account transactions. */
+        readonly PaginatedCustomerTransactionResponse: {
+            readonly data: readonly components["schemas"]["Transaction"][];
+            readonly meta: components["schemas"]["TransactionListMeta"];
         };
         readonly PaginatedTransactionResourceResponse: components["schemas"]["PaginatedOneOffTransactionResponse"] | components["schemas"]["PaginatedCustomerTransactionResponse"] | components["schemas"]["PaginatedWalletTransactionResponse"];
         /** @description An amount of money with its asset. */
@@ -5137,6 +5733,11 @@ export type components = {
              */
             readonly return_deadline?: number;
             /**
+             * @description Decimal amount actually recovered when a returned transaction settled short, denominated in the transaction's own currency (the same basis as its face amount), so face amount minus this value is exactly what the bank withheld. Present only when a return came back short — absent when the full amount was recovered, or when the rail reports no net figure at all (ACH never does). Absent means the face amount is authoritative; it never means zero.
+             * @example 24955
+             */
+            readonly net_recovered_amount?: string | null;
+            /**
              * @description Lead Bank ACH reversal reason when the originator reverses the transaction (e.g., duplicate, receiver_incorrect).
              * @example duplicate
              */
@@ -5391,6 +5992,11 @@ export type components = {
              */
             readonly return_deadline?: number;
             /**
+             * @description Decimal amount actually recovered when a returned transaction settled short, denominated in the transaction's own currency (the same basis as its face amount), so face amount minus this value is exactly what the bank withheld. Present only when a return came back short — absent when the full amount was recovered, or when the rail reports no net figure at all (ACH never does). Absent means the face amount is authoritative; it never means zero.
+             * @example 24955
+             */
+            readonly net_recovered_amount?: string | null;
+            /**
              * @description Lead Bank ACH reversal reason when the originator reverses the transaction (e.g., duplicate, receiver_incorrect).
              * @example duplicate
              */
@@ -5412,11 +6018,15 @@ export type components = {
          * @enum {string}
          */
         readonly OneOffTransactionStatus: "pending" | "processing" | "completed" | "failed" | "cancelled" | "reversed" | "pending_return" | "returned" | "pending_reversal";
-        readonly PaginatedOneOffTransactionResponse: components["schemas"]["PaginatedListResponse"] & {
-            readonly data?: readonly components["schemas"]["OneOffTransaction"][];
+        /** @description Wrapper for a paginated list of one-off transactions. */
+        readonly PaginatedOneOffTransactionResponse: {
+            readonly data: readonly components["schemas"]["OneOffTransaction"][];
+            readonly meta: components["schemas"]["TransactionListMeta"];
         };
-        readonly PaginatedWalletTransactionResponse: components["schemas"]["PaginatedListResponse"] & {
-            readonly data?: readonly components["schemas"]["WalletTransaction"][];
+        /** @description Wrapper for a paginated list of wallet transactions. */
+        readonly PaginatedWalletTransactionResponse: {
+            readonly data: readonly components["schemas"]["WalletTransaction"][];
+            readonly meta: components["schemas"]["TransactionListMeta"];
         };
         /** @description Non-custodial wallet managed by Dakota Platform with a single address usable across networks within the same family. */
         readonly Wallet: {
@@ -5603,7 +6213,12 @@ export type components = {
         readonly SignerGroupCreateRequest: {
             /** @description Name of the signer group */
             readonly name: string;
-            /** @description Public keys of the members that make up the signer group */
+            /**
+             * @description Public keys of the members that make up the signer group. At most
+             *     64 keys: each key is parsed and checked against the platform's
+             *     managed signing identities before the group is created, so an
+             *     unbounded list would let one request drive unbounded work.
+             */
             readonly member_keys: readonly string[];
         };
         readonly Policy: {
@@ -5671,10 +6286,21 @@ export type components = {
              */
             readonly action: "allow" | "deny";
             /**
-             * @description Rule-specific configuration as JSON
+             * @description Rule-specific configuration. The keys present depend on `rule_type`.
+             *     - `amount_threshold`: `min_amount` (integer), `threshold` (integer),
+             *       and `asset` (object) carrying `id`, the asset symbol, stored
+             *       upper case; `name` appears only when the rule was created with
+             *       one. `min_amount` is in the asset's smallest unit, and
+             *       `threshold` is the number of authorized endorsements required.
+             *     - `approval_threshold`: `threshold` (integer) and, when one was set,
+             *       `description` (string).
+             *     - `address_list`: `addresses` (array of strings).
              * @example {
-             *       "min_amount": 0,
-             *       "threshold": 1000000
+             *       "min_amount": 10000000000,
+             *       "threshold": 2,
+             *       "asset": {
+             *         "id": "USDC"
+             *       }
              *     }
              */
             readonly definition: Record<string, never>;
@@ -5717,10 +6343,36 @@ export type components = {
              */
             readonly action: "allow" | "deny";
             /**
-             * @description Rule-specific configuration as JSON
+             * @description Rule-specific configuration. When a policy is created or a rule is
+             *     added, the accepted keys depend on `rule_type`. A key that is not
+             *     listed below is rejected with `400`, and the response names it.
+             *     - `amount_threshold`: `min_amount` (integer, 0 or greater,
+             *       required), `threshold` (integer, 1 or greater, required), and
+             *       `asset` (object, required) with `id` - the asset symbol, one of
+             *       `USDC`, `USDT`, or `RD`, stored upper case; optionally
+             *       `name`, a display label that plays no part in matching. Any other
+             *       key inside `asset` is rejected. There is no way to omit the
+             *       asset: a missing asset, or an `asset.id` that is empty or `any`,
+             *       is rejected with `400`. The rule governs transactions in that
+             *       asset on every network, unless the stored asset names one.
+             *       `min_amount` is an amount of that asset in its smallest unit -
+             *       USDC has 6 decimals, so 10000000000 is 10,000 USDC - and
+             *       `threshold` is the number of authorized endorsements required
+             *       once a transaction reaches `min_amount`.
+             *     - `approval_threshold`: `threshold` (integer, 1 or greater,
+             *       required), `description` (string, optional).
+             *     - `address_list`: `addresses` (array of one or more strings,
+             *       required).
+             *     Every integer must be whole. The server rejects a fractional value
+             *     instead of truncating it.
+             *     Updating an existing rule is validated more strictly - see
+             *     `updated_definition`.
              * @example {
-             *       "min_amount": 0,
-             *       "threshold": 1000000
+             *       "min_amount": 10000000000,
+             *       "threshold": 2,
+             *       "asset": {
+             *         "id": "USDC"
+             *       }
              *     }
              */
             readonly definition: Record<string, never>;
@@ -5729,7 +6381,7 @@ export type components = {
             /** @description List of signatures over the intent */
             readonly signatures: readonly string[];
             /** @description The intent being endorsed */
-            readonly intent: components["schemas"]["SendTransactionIntent"] | components["schemas"]["AttachGroupToWalletIntent"] | components["schemas"]["DetachGroupFromWalletIntent"] | components["schemas"]["AttachPolicyToWalletIntent"] | components["schemas"]["DetachPolicyFromWalletIntent"] | components["schemas"]["AddPolicyRuleIntent"] | components["schemas"]["RemovePolicyRuleIntent"] | components["schemas"]["UpdatePolicyRuleIntent"] | components["schemas"]["DeletePolicyIntent"];
+            readonly intent: components["schemas"]["SendTransactionIntent"] | components["schemas"]["AttachGroupToWalletIntent"] | components["schemas"]["DetachGroupFromWalletIntent"] | components["schemas"]["AttachPolicyToWalletIntent"] | components["schemas"]["DetachPolicyFromWalletIntent"] | components["schemas"]["AddPolicyRuleIntent"] | components["schemas"]["RemovePolicyRuleIntent"] | components["schemas"]["UpdatePolicyRuleIntent"] | components["schemas"]["DeletePolicyIntent"] | components["schemas"]["EnableCardSettlementIntent"];
         };
         readonly SendTransactionIntent: {
             /** @description Unique identifier for the wallet */
@@ -5879,7 +6531,30 @@ export type components = {
              */
             readonly action: "allow" | "deny";
             /**
-             * @description Rule-specific configuration. Structure depends on rule_type
+             * @description Rule-specific configuration. When a policy is created or a rule is
+             *     added, the accepted keys depend on `rule_type`. A key that is not
+             *     listed below is rejected with `400`, and the response names it.
+             *     - `amount_threshold`: `min_amount` (integer, 0 or greater,
+             *       required), `threshold` (integer, 1 or greater, required), and
+             *       `asset` (object, required) with `id` - the asset symbol, one of
+             *       `USDC`, `USDT`, or `RD`, stored upper case; optionally
+             *       `name`, a display label that plays no part in matching. Any other
+             *       key inside `asset` is rejected. There is no way to omit the
+             *       asset: a missing asset, or an `asset.id` that is empty or `any`,
+             *       is rejected with `400`. The rule governs transactions in that
+             *       asset on every network, unless the stored asset names one.
+             *       `min_amount` is an amount of that asset in its smallest unit -
+             *       USDC has 6 decimals, so 10000000000 is 10,000 USDC - and
+             *       `threshold` is the number of authorized endorsements required
+             *       once a transaction reaches `min_amount`.
+             *     - `approval_threshold`: `threshold` (integer, 1 or greater,
+             *       required), `description` (string, optional).
+             *     - `address_list`: `addresses` (array of one or more strings,
+             *       required).
+             *     Every integer must be whole. The server rejects a fractional value
+             *     instead of truncating it.
+             *     Updating an existing rule is validated more strictly - see
+             *     `updated_definition`.
              * @example {
              *       "threshold": 2,
              *       "description": "Require 2 approvals"
@@ -5931,13 +6606,41 @@ export type components = {
              */
             readonly rule_id: string;
             /**
-             * @description The updated rule definition as JSON string
-             * @example {"amount": "15000", "currency": "USD"}
+             * @description The updated rule definition as a JSON string. It replaces the existing definition, so it must be complete and must match the schema of the rule's type; any key outside that schema is rejected. An `amount_threshold` definition requires `asset.id`, a `threshold` greater than zero and a `min_amount` of zero or more. The remaining asset fields are optional — whatever the stored rule already records for the same asset is kept.
+             * @example {"min_amount": 100, "threshold": 1, "asset": {"id": "USDC"}}
              */
             readonly updated_definition: string;
             /**
              * @description A unique key to ensure idempotency of the request
              * @example idem_2N4YkKpKu7M3mKpGYmF8kcJ8oZT
+             */
+            readonly idempotency_key: string;
+        };
+        /**
+         * @description Intent to enable card settlement on a wallet. It grants the client's
+         *     settlement signer the ability to pull funds from the wallet to exactly
+         *     `settlement_destination` — and nothing else. The intent is semantic
+         *     and client-constructible; it never names internal policy or group ids.
+         */
+        readonly EnableCardSettlementIntent: {
+            /**
+             * @example enable_card_settlement
+             * @enum {string}
+             */
+            readonly type: "enable_card_settlement";
+            /** @description The wallet to enable card settlement on */
+            readonly wallet_id: string;
+            /**
+             * @description The only address the settlement signer may pull funds to. Must
+             *     match the platform-configured settlement destination returned by
+             *     the card-enablement discovery endpoint.
+             */
+            readonly settlement_destination: string;
+            /**
+             * @description A unique key to ensure idempotency of the request. Must be a UUID:
+             *     this key is part of the endorsed intent and the policy engine
+             *     requires that form, so anything else is rejected with a 400.
+             * @example 7d3f6c2e-9a41-4f3b-bd1c-2e5a8f0c4b19
              */
             readonly idempotency_key: string;
         };
@@ -6163,7 +6866,7 @@ export type components = {
          * @example articles_of_incorporation
          * @enum {string}
          */
-        readonly ApplicationDocumentType: "certificate_of_incorporation" | "articles_of_incorporation" | "certificate_of_good_standing" | "corporate_registry_extract" | "shareholder_registry" | "bank_reference_letter" | "operating_agreement" | "memorandum" | "articles_of_association" | "proof_of_address" | "bank_statement" | "utility_bill" | "source_of_funds" | "crypto_statement" | "investment_statement" | "subscription_agreement" | "safe_agreement" | "convertible_note" | "loan_agreement" | "promissory_note" | "pitch_deck" | "marketing_material" | "business_plan" | "regulatory_license" | "payslip" | "employment_contract" | "shareholders_agreement" | "income_verification_letter" | "savings_statement" | "ein_confirmation_letter" | "authorization_document";
+        readonly ApplicationDocumentType: "certificate_of_incorporation" | "articles_of_incorporation" | "certificate_of_good_standing" | "corporate_registry_extract" | "shareholder_registry" | "bank_reference_letter" | "operating_agreement" | "memorandum" | "articles_of_association" | "proof_of_address" | "bank_statement" | "utility_bill" | "source_of_funds" | "crypto_statement" | "investment_statement" | "subscription_agreement" | "safe_agreement" | "convertible_note" | "loan_agreement" | "promissory_note" | "pitch_deck" | "marketing_material" | "business_plan" | "regulatory_license" | "payslip" | "employment_contract" | "shareholders_agreement" | "income_verification_letter" | "savings_statement" | "ein_confirmation_letter" | "authorization_document" | "other";
         /** @description Request to upload an application-level document */
         readonly ApplicationDocumentUploadRequest: {
             readonly document_type: components["schemas"]["ApplicationDocumentType"];
@@ -6197,10 +6900,12 @@ export type components = {
             readonly document_type: components["schemas"]["ApplicationDocumentType"];
             readonly file_type: components["schemas"]["FileType"];
             /**
-             * @description ISO 3166-1 alpha-2 country code for the document
+             * @description ISO 3166-1 alpha-2 country code for the document. Optional: some
+             *     supporting documents (e.g. the generic `other` type) have no issuing
+             *     country.
              * @example US
              */
-            readonly country: string;
+            readonly country?: string;
             /** @description Optional ID/registration number. Required for formation documents. */
             readonly id_number?: string;
             /**
@@ -6973,6 +7678,15 @@ export type components = {
         };
         /** @description Attestation validation state */
         readonly AttestationValidation: {
+            /**
+             * @description Whether every required attestation has been collected, in a valid
+             *     order, by an applicant whose name still matches the application.
+             *
+             *     Unaffected by `missing_documents`, which reports documents never
+             *     accepted at all.
+             * @example true
+             */
+            readonly ready: boolean;
             /** @description Attestations that have been completed with details */
             readonly completed: readonly components["schemas"]["CompletedAttestation"][];
             /**
@@ -6983,6 +7697,48 @@ export type components = {
              *     ]
              */
             readonly missing: readonly components["schemas"]["AttestationType"][];
+            /**
+             * @description Legal documents the customer has never accepted. Fetch the text to
+             *     display with `GET /legal/documents/{document_key}`.
+             *
+             *     Accepting any revision clears a document from this list — having
+             *     signed an older revision than the one in force does not put it
+             *     back. Informational only: this does not affect `ready`, and note
+             *     that a customer absent from this list may still be refused a
+             *     capability that requires a later revision.
+             */
+            readonly missing_documents?: readonly components["schemas"]["OutstandingLegalDocument"][];
+        };
+        /**
+         * @description A legal document the customer has never accepted.
+         *
+         *     The revision named is the one currently in force. Fetch its text with
+         *     `GET /legal/documents/{document_key}` — it is deliberately not inlined
+         *     here, because these documents run to tens of kilobytes each and this
+         *     field rides on every application read.
+         */
+        readonly OutstandingLegalDocument: {
+            /**
+             * @description Stable identifier of the document
+             * @example dakota_tos
+             */
+            readonly key: string;
+            /**
+             * @description Version of the revision that needs accepting
+             * @example 2026-08-04
+             */
+            readonly version: string;
+            /**
+             * @description Monotonic ordinal of the revision within this document
+             * @example 5
+             */
+            readonly revision: number;
+            /**
+             * @description Human-readable title
+             * @example Dakota Terms of Service
+             */
+            readonly title: string;
+            readonly attestation_type?: components["schemas"]["AttestationType"];
         };
         /** @description Details of a completed attestation */
         readonly CompletedAttestation: {
@@ -6998,6 +7754,17 @@ export type components = {
              * @example John Doe
              */
             readonly attested_by: string;
+            /**
+             * @description Version of the legal document that was accepted. Absent for
+             *     attestations recorded before documents were versioned.
+             * @example 2026-07-23
+             */
+            readonly version?: string;
+            /**
+             * @description Title of the legal document that was accepted
+             * @example Dakota Terms of Service
+             */
+            readonly title?: string;
         };
         /** @description Complete validation state for an application (computed at retrieval time) */
         readonly ApplicationValidation: {
@@ -7037,6 +7804,17 @@ export type components = {
                  * @example John Doe
                  */
                 readonly attested_by: string;
+                /**
+                 * @description Version of the legal document that was accepted. Absent for
+                 *     attestations recorded before documents were versioned.
+                 * @example 2026-07-23
+                 */
+                readonly version?: string;
+                /**
+                 * @description Title of the legal document that was accepted
+                 * @example Dakota Terms of Service
+                 */
+                readonly title?: string;
             };
             /** @description Terms of service attestation (if completed) */
             readonly terms_of_service?: {
@@ -7051,6 +7829,17 @@ export type components = {
                  * @example John Doe
                  */
                 readonly attested_by: string;
+                /**
+                 * @description Version of the legal document that was accepted. Absent for
+                 *     attestations recorded before documents were versioned.
+                 * @example 2026-07-23
+                 */
+                readonly version?: string;
+                /**
+                 * @description Title of the legal document that was accepted
+                 * @example Dakota Terms of Service
+                 */
+                readonly title?: string;
             };
             /** @description Privacy policy attestation (if completed) */
             readonly privacy_policy?: {
@@ -7065,6 +7854,17 @@ export type components = {
                  * @example John Doe
                  */
                 readonly attested_by: string;
+                /**
+                 * @description Version of the legal document that was accepted. Absent for
+                 *     attestations recorded before documents were versioned.
+                 * @example 2026-07-23
+                 */
+                readonly version?: string;
+                /**
+                 * @description Title of the legal document that was accepted
+                 * @example Dakota Terms of Service
+                 */
+                readonly title?: string;
             };
             /** @description Funds transfer agreement attestation (if completed) */
             readonly funds_transfer_agreement?: {
@@ -7079,6 +7879,17 @@ export type components = {
                  * @example John Doe
                  */
                 readonly attested_by: string;
+                /**
+                 * @description Version of the legal document that was accepted. Absent for
+                 *     attestations recorded before documents were versioned.
+                 * @example 2026-07-23
+                 */
+                readonly version?: string;
+                /**
+                 * @description Title of the legal document that was accepted
+                 * @example Dakota Terms of Service
+                 */
+                readonly title?: string;
             };
             /** @description Lead Bank privacy policy attestation (if completed) */
             readonly lead_bank_privacy_policy?: {
@@ -7093,7 +7904,26 @@ export type components = {
                  * @example John Doe
                  */
                 readonly attested_by: string;
+                /**
+                 * @description Version of the legal document that was accepted. Absent for
+                 *     attestations recorded before documents were versioned.
+                 * @example 2026-07-23
+                 */
+                readonly version?: string;
+                /**
+                 * @description Title of the legal document that was accepted
+                 * @example Dakota Terms of Service
+                 */
+                readonly title?: string;
             };
+            /**
+             * @description Legal documents the customer has never accepted. Fetch the text to
+             *     display with `GET /legal/documents/{document_key}`. Accepting any
+             *     revision clears a document from this list. Informational: this does
+             *     NOT affect `validation.ready` or whether an application can be
+             *     submitted.
+             */
+            readonly missing_documents?: readonly components["schemas"]["OutstandingLegalDocument"][];
             /** @description E-sign attestation (if completed) */
             readonly e_sign?: {
                 /**
@@ -7107,6 +7937,17 @@ export type components = {
                  * @example John Doe
                  */
                 readonly attested_by: string;
+                /**
+                 * @description Version of the legal document that was accepted. Absent for
+                 *     attestations recorded before documents were versioned.
+                 * @example 2026-07-23
+                 */
+                readonly version?: string;
+                /**
+                 * @description Title of the legal document that was accepted
+                 * @example Dakota Terms of Service
+                 */
+                readonly title?: string;
             };
         };
         /** @description Application response with separated entity data and validation state */
@@ -7143,6 +7984,9 @@ export type components = {
              * @example 2024-01-17T16:00:00Z
              */
             readonly application_submitted_at?: string | null;
+            readonly rfi_requested_items?: components["schemas"]["RFIRequestedItems"];
+            /** @description Whether the applicant has already submitted in response to the latest scoped RFI (drives the resubmit page's "already submitted" state). */
+            readonly rfi_resubmitted?: boolean;
             /**
              * @description Decision outcome for the application (only present after decision is made). Note: auto_declined is mapped to declined in the API response.
              * @example approved
@@ -7486,6 +8330,74 @@ export type components = {
          */
         readonly AttestationType: "information_accuracy" | "terms_of_service" | "privacy_policy" | "funds_transfer_agreement" | "lead_bank_privacy_policy" | "e_sign";
         /**
+         * @description The minimum an acceptance page needs: what is still owed, and who may
+         *     sign it. Deliberately NOT the application — see the endpoint description.
+         */
+        readonly LegalAcceptanceContext: {
+            /**
+             * @description Decides whether a signer is chosen or stated. A business may have
+             *     several control persons; an individual application has exactly one
+             *     permissible attestor, so asking them to pick themselves from a list
+             *     of one is a step with no purpose.
+             * @enum {string}
+             */
+            readonly application_type: "business" | "individual";
+            /**
+             * @description Agreements this application has not accepted at the revision now in
+             *     force. Identity only — no document text. The bodies are served by
+             *     `GET /legal/documents/{document_key}`, which is cacheable and shared
+             *     with the published pages, and are ~120KB of markdown that would
+             *     otherwise ride this response.
+             */
+            readonly outstanding_documents: readonly components["schemas"]["OutstandingLegalDocument"][];
+            /**
+             * @description People permitted to record an acceptance for this application. For a
+             *     business this is its control persons; the API enforces the same rule
+             *     on submission, so offering anyone else would only produce a 400.
+             */
+            readonly attestors: readonly components["schemas"]["LegalAcceptanceAttestor"][];
+            /**
+             * @description What is already on file, per attestation type. The page compares each
+             *     against the revision now in force to decide whether an agreement is
+             *     genuinely outstanding — having signed an OLDER revision is not the
+             *     same as never having signed, and the two need different copy.
+             *
+             *     Separate from `outstanding_documents`, which reports only documents
+             *     never accepted at all. A customer on a superseded revision appears
+             *     here and not there.
+             */
+            readonly accepted_agreements?: readonly components["schemas"]["AcceptedAgreement"][];
+        };
+        readonly AcceptedAgreement: {
+            /**
+             * @description The attestation type this acceptance was recorded under.
+             * @example terms_of_service
+             */
+            readonly attestation_type: string;
+            /**
+             * @description The revision accepted. Empty for an acceptance predating the registry,
+             *     whose revision is derived from its timestamp rather than stored.
+             * @example 2026-07-23
+             */
+            readonly version?: string;
+        };
+        readonly LegalAcceptanceAttestor: {
+            /**
+             * @description The applicant id to submit as `applicant_id`. This is the
+             *     application-individual link, not the individual — the same value the
+             *     attestation endpoint validates against.
+             */
+            readonly id: components["schemas"]["KSUID"];
+            /**
+             * @description Display name. NOTHING else about the person is returned: this page
+             *     shows a name in a picker, and date of birth, nationality and email
+             *     are exactly the fields the scoped credential exists to keep out of an
+             *     emailed link.
+             * @example Ada Lovelace
+             */
+            readonly name: string;
+        };
+        /**
          * @description Request to submit an attestation for a KYB application.
          *
          *     To accept a banking partner's disclosure online (the customer-facing
@@ -7528,6 +8440,24 @@ export type components = {
              * @example 2026-06
              */
             readonly disclosure_version?: string;
+            /**
+             * @description Optional. The version of the Dakota-published document the customer
+             *     was actually shown, as returned by
+             *     `GET /legal/documents/{document_key}`.
+             *
+             *     Pass it whenever you render the text yourself. Without it the
+             *     acceptance is pinned to whichever revision is in force when the
+             *     request arrives — which is not necessarily the one on the
+             *     customer's screen, if a new revision went live between render and
+             *     submit. Rejected with 400 if that version is not currently in force,
+             *     so a stale page fails loudly instead of recording consent to text
+             *     nobody read.
+             *
+             *     Ignored when `disclosure_id` is present; use `disclosure_version`
+             *     for partner disclosures.
+             * @example 2026-07-23
+             */
+            readonly legal_document_version?: string;
         };
         /** @description Error response when a self-serve client lacks the credits required to perform an action. */
         readonly InsufficientCreditsError: {
@@ -7821,12 +8751,24 @@ export interface operations {
                  *     application are excluded when this filter is set.
                  */
                 readonly application_statuses?: string;
+                /**
+                 * @description Filter customers by one or more unified customer statuses.
+                 *     Comma-separated list (e.g. `frozen,info_requested`). Values mirror
+                 *     the `CustomerStatus` enum (`frozen`, `declined`, `withdrawn`,
+                 *     `approved`, `info_requested`, `submitted`, `pending`).
+                 *
+                 *     This is the single client-facing status that the dashboard shows,
+                 *     filters, and counts by. It collapses the frozen state, the
+                 *     application decision, and the application lifecycle into one value
+                 *     (see the `status` field on `Customer` for the precedence).
+                 */
+                readonly status?: string;
                 /** @description Filter customers by sub-client association. Returns only customers associated with the specified sub-client. */
                 readonly sub_client_id?: components["schemas"]["KSUID"];
                 /** @description When true, returns only customers that are sub-clients (designated as such at creation). When false or omitted, returns all customers. */
                 readonly is_sub_client?: boolean;
                 /** @description Field to sort customers by. Defaults to `name`. */
-                readonly sort_by?: "application_status" | "created_at" | "customer_type" | "id" | "kyb_status" | "kyc_status" | "name";
+                readonly sort_by?: "application_status" | "created_at" | "customer_type" | "id" | "kyb_status" | "kyc_status" | "name" | "status";
                 /** @description Sort direction. Defaults to `asc`. */
                 readonly sort_dir?: "asc" | "desc";
                 /** @description Filter customers created at or after this ISO 8601 datetime (e.g. 2024-01-01T00:00:00Z). */
@@ -7896,6 +8838,13 @@ export interface operations {
                     readonly "application/json": {
                         readonly data: readonly components["schemas"]["Customer"][];
                         readonly meta: components["schemas"]["Meta"];
+                        /**
+                         * @description How many customers hold each unified status, across the
+                         *     same filters (search, date, sub-client) but ignoring the
+                         *     `status` selection itself, so the dashboard can render a
+                         *     count per status chip while a status filter is active.
+                         */
+                        readonly status_counts?: components["schemas"]["CustomerStatusCounts"];
                     };
                 };
             };
@@ -8604,7 +9553,14 @@ export interface operations {
                     readonly "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
-            /** @description Customer has no approved application to re-engage */
+            /**
+             * @description Customer has no approved application to re-engage.
+             *
+             *     A customer whose application is still pending does not need
+             *     re-engagement: reuse the `application_url` already returned by
+             *     `GET /customers/{customer_id}`. That original link stays valid for
+             *     90 days from creation.
+             */
             readonly 409: {
                 headers: {
                     readonly [name: string]: unknown;
@@ -9393,9 +10349,9 @@ export interface operations {
                 readonly ending_before?: components["parameters"]["EndingBeforeParam"];
                 /** @description A limit on the number of objects to be returned. Limit can range between 1 and 100, and the default is 20. */
                 readonly limit?: components["parameters"]["LimitParam"];
-                /** @description Filter by transaction resource family. */
+                /** @description Select the transaction resource family (`one_off`, `auto_account`, or `wallet`) to return. When omitted, the family is inferred from the other parameters (see the endpoint description). */
                 readonly transaction_type?: components["schemas"]["TransactionResourceType"];
-                /** @description Filter transactions by customer ID. */
+                /** @description Filter transactions by customer ID, within the selected resource family. Note: when `transaction_type` is omitted, supplying `customer_id` alone selects the `auto_account` family, so the result is that customer's auto-account transactions. To filter one-off transactions by customer, also send `transaction_type=one_off`. */
                 readonly customer_id?: components["schemas"]["KSUID"];
                 /** @description Filter wallet transactions by wallet ID. Only valid with `transaction_type=wallet`. */
                 readonly wallet_id?: components["schemas"]["KSUID"];
@@ -9525,7 +10481,8 @@ export interface operations {
                      *       "meta": {
                      *         "total_count": 100,
                      *         "has_more_after": true,
-                     *         "has_more_before": false
+                     *         "has_more_before": false,
+                     *         "transaction_type": "one_off"
                      *       }
                      *     }
                      */
@@ -9812,22 +10769,16 @@ export interface operations {
                     readonly "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
-            /** @description Forbidden */
+            /**
+             * @description Forbidden. Returned when the caller is not authorized for the
+             *     operation, or when the transfer would send over a rail covered by
+             *     an agreement the customer has not accepted (`terms_not_accepted`).
+             */
             readonly 403: {
                 headers: {
                     readonly [name: string]: unknown;
                 };
                 content: {
-                    /**
-                     * @example {
-                     *       "type": "https://docs.dakota.xyz/api-reference/errors#forbidden",
-                     *       "title": "Forbidden",
-                     *       "status": 403,
-                     *       "detail": "Forbidden",
-                     *       "instance": "https://api.platform.dakota.xyz/transactions",
-                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
-                     *     }
-                     */
                     readonly "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
@@ -9862,6 +10813,25 @@ export interface operations {
                      *       "title": "Unprocessable entity",
                      *       "status": 422,
                      *       "detail": "Unprocessable entity",
+                     *       "instance": "https://api.platform.dakota.xyz/transactions",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service unavailable */
+            readonly 503: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#eligibility-unavailable",
+                     *       "title": "Service unavailable",
+                     *       "status": 503,
+                     *       "detail": "Eligibility could not be evaluated. Retry shortly.",
                      *       "instance": "https://api.platform.dakota.xyz/transactions",
                      *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
                      *     }
@@ -11458,31 +12428,6 @@ export interface operations {
         };
         readonly requestBody: {
             readonly content: {
-                /**
-                 * @example {
-                 *       "account_type": "onramp",
-                 *       "capabilities": [
-                 *         "ach",
-                 *         "fedwire"
-                 *       ],
-                 *       "rail": "ach",
-                 *       "crypto_destination_id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi",
-                 *       "fiat_destination_id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi",
-                 *       "destination_network_id": "ethereum-mainnet",
-                 *       "source_network_id": "ethereum-mainnet",
-                 *       "source_asset": "USDC",
-                 *       "destination_asset": "USDC",
-                 *       "return_address": {
-                 *         "network_id": "ethereum-mainnet",
-                 *         "crypto_address": "0x165cd37b4c644c2921454429e7f9358d18a45e14"
-                 *       },
-                 *       "return_crypto_address": {
-                 *         "network_id": "ethereum-mainnet",
-                 *         "crypto_address": "0x165cd37b4c644c2921454429e7f9358d18a45e14"
-                 *       },
-                 *       "developer_fee_bps": 50
-                 *     }
-                 */
                 readonly "application/json": components["schemas"]["AccountCreateRequest"];
             };
         };
@@ -11592,9 +12537,11 @@ export interface operations {
             };
             /**
              * @description Forbidden. Returned when the caller is not authorized for the
-             *     operation, or when the requested onramp/swap account would deal in
+             *     operation, when the requested onramp/swap account would deal in
              *     RD but RD is not available in the customer's US state
-             *     (`state_restricted_rd`).
+             *     (`state_restricted_rd`), or when the account would use a rail
+             *     covered by an agreement the customer has not accepted
+             *     (`terms_not_accepted`).
              */
             readonly 403: {
                 headers: {
@@ -12157,22 +13104,18 @@ export interface operations {
                     readonly "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
-            /** @description Forbidden */
+            /**
+             * @description Forbidden. Returned when the caller is not authorized for the
+             *     operation, or when the update would give the account a rail covered
+             *     by an agreement the customer has not accepted (`terms_not_accepted`)
+             *     — for example pointing it at a destination that adds an
+             *     international payout route.
+             */
             readonly 403: {
                 headers: {
                     readonly [name: string]: unknown;
                 };
                 content: {
-                    /**
-                     * @example {
-                     *       "type": "https://docs.dakota.xyz/api-reference/errors#forbidden",
-                     *       "title": "Forbidden",
-                     *       "status": 403,
-                     *       "detail": "Forbidden",
-                     *       "instance": "https://api.platform.dakota.xyz/accounts/example-id",
-                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
-                     *     }
-                     */
                     readonly "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
@@ -14586,6 +15529,7 @@ export interface operations {
                      *           }
                      *         },
                      *         "attestations": {
+                     *           "ready": false,
                      *           "completed": [
                      *             {
                      *               "type": "information_accuracy",
@@ -14723,6 +15667,76 @@ export interface operations {
                      *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
                      *     }
                      */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    readonly getLegalAcceptanceContext: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                /** @description The unique identifier for the application */
+                readonly application_id: components["schemas"]["KSUID"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Outstanding agreements and permitted attestors */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "application_type": "business",
+                     *       "outstanding_documents": [
+                     *         {
+                     *           "key": "dakota_tos",
+                     *           "title": "Dakota Terms of Service",
+                     *           "version": "2026-09",
+                     *           "revision": 4
+                     *         }
+                     *       ],
+                     *       "accepted_agreements": [
+                     *         {
+                     *           "attestation_type": "terms_of_service",
+                     *           "version": "2026-02"
+                     *         },
+                     *         {
+                     *           "attestation_type": "e_sign",
+                     *           "version": "2025-11"
+                     *         }
+                     *       ],
+                     *       "attestors": [
+                     *         {
+                     *           "id": "3H96fIU3lr1KQwe5cXmgD5x6kHy",
+                     *           "name": "Ada Lovelace"
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["LegalAcceptanceContext"];
+                };
+            };
+            /** @description Invalid or expired token, or a token not scoped to this action */
+            readonly 403: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Application not found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
                     readonly "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
@@ -16108,6 +17122,7 @@ export interface operations {
                      *           }
                      *         },
                      *         "attestations": {
+                     *           "ready": false,
                      *           "completed": [
                      *             {
                      *               "type": "information_accuracy",
@@ -17216,6 +18231,7 @@ export interface operations {
                      *         {
                      *           "id": "pol_2N4YkKpKu7M3mKpGYmF8kcJ8oZT",
                      *           "client_id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi",
+                     *           "signer_group_id": "grp_2N4YkKpKu7M3mKpGYmF8kcJ8oZT",
                      *           "version": 1,
                      *           "name": "High Value Transaction Policy",
                      *           "description": "Requires approval for transactions above $10,000",
@@ -17226,8 +18242,11 @@ export interface operations {
                      *               "rule_type": "amount_threshold",
                      *               "action": "deny",
                      *               "definition": {
-                     *                 "min_amount": 0,
-                     *                 "threshold": 1000000
+                     *                 "min_amount": 10000000000,
+                     *                 "threshold": 2,
+                     *                 "asset": {
+                     *                   "id": "USDC"
+                     *                 }
                      *               },
                      *               "created_at": 1640995200
                      *             }
@@ -17367,8 +18386,11 @@ export interface operations {
                  *           "rule_type": "amount_threshold",
                  *           "action": "deny",
                  *           "definition": {
-                 *             "min_amount": 0,
-                 *             "threshold": 1000000
+                 *             "min_amount": 10000000000,
+                 *             "threshold": 2,
+                 *             "asset": {
+                 *               "id": "USDC"
+                 *             }
                  *           }
                  *         }
                  *       ]
@@ -17388,6 +18410,7 @@ export interface operations {
                      * @example {
                      *       "id": "pol_2N4YkKpKu7M3mKpGYmF8kcJ8oZT",
                      *       "client_id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi",
+                     *       "signer_group_id": "grp_2N4YkKpKu7M3mKpGYmF8kcJ8oZT",
                      *       "version": 1,
                      *       "name": "High Value Transaction Policy",
                      *       "description": "Requires approval for transactions above $10,000",
@@ -17398,8 +18421,11 @@ export interface operations {
                      *           "rule_type": "amount_threshold",
                      *           "action": "deny",
                      *           "definition": {
-                     *             "min_amount": 0,
-                     *             "threshold": 1000000
+                     *             "min_amount": 10000000000,
+                     *             "threshold": 2,
+                     *             "asset": {
+                     *               "id": "USDC"
+                     *             }
                      *           },
                      *           "created_at": 1640995200
                      *         }
@@ -17691,7 +18717,7 @@ export interface operations {
                  *         "type": "update_policy_rule",
                  *         "policy_id": "pol_2N4YkKpKu7M3mKpGYmF8kcJ8oZT",
                  *         "rule_id": "rule_2N4YkKpKu7M3mKpGYmF8kcJ8oZT",
-                 *         "updated_definition": "{\"amount\": \"15000\", \"currency\": \"USD\"}",
+                 *         "updated_definition": "{\"min_amount\": 100, \"threshold\": 1, \"asset\": {\"id\": \"USDC\"}}",
                  *         "idempotency_key": "idem_2N4YkKpKu7M3mKpGYmF8kcJ8oZT"
                  *       }
                  *     }
@@ -17710,6 +18736,7 @@ export interface operations {
                      * @example {
                      *       "id": "pol_2N4YkKpKu7M3mKpGYmF8kcJ8oZT",
                      *       "client_id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi",
+                     *       "signer_group_id": "grp_2N4YkKpKu7M3mKpGYmF8kcJ8oZT",
                      *       "version": 1,
                      *       "name": "High Value Transaction Policy",
                      *       "description": "Requires approval for transactions above $10,000",
@@ -17720,8 +18747,11 @@ export interface operations {
                      *           "rule_type": "amount_threshold",
                      *           "action": "deny",
                      *           "definition": {
-                     *             "min_amount": 0,
-                     *             "threshold": 1000000
+                     *             "min_amount": 10000000000,
+                     *             "threshold": 2,
+                     *             "asset": {
+                     *               "id": "USDC"
+                     *             }
                      *           },
                      *           "created_at": 1640995200
                      *         }
@@ -18299,6 +19329,7 @@ export interface operations {
                      * @example {
                      *       "id": "pol_2N4YkKpKu7M3mKpGYmF8kcJ8oZT",
                      *       "client_id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi",
+                     *       "signer_group_id": "grp_2N4YkKpKu7M3mKpGYmF8kcJ8oZT",
                      *       "version": 1,
                      *       "name": "High Value Transaction Policy",
                      *       "description": "Requires approval for transactions above $10,000",
@@ -18309,8 +19340,11 @@ export interface operations {
                      *           "rule_type": "amount_threshold",
                      *           "action": "deny",
                      *           "definition": {
-                     *             "min_amount": 0,
-                     *             "threshold": 1000000
+                     *             "min_amount": 10000000000,
+                     *             "threshold": 2,
+                     *             "asset": {
+                     *               "id": "USDC"
+                     *             }
                      *           },
                      *           "created_at": 1640995200
                      *         }
@@ -18747,6 +19781,7 @@ export interface operations {
                      * @example {
                      *       "id": "pol_2N4YkKpKu7M3mKpGYmF8kcJ8oZT",
                      *       "client_id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi",
+                     *       "signer_group_id": "grp_2N4YkKpKu7M3mKpGYmF8kcJ8oZT",
                      *       "version": 1,
                      *       "name": "High Value Transaction Policy",
                      *       "description": "Requires approval for transactions above $10,000",
@@ -18757,8 +19792,11 @@ export interface operations {
                      *           "rule_type": "amount_threshold",
                      *           "action": "deny",
                      *           "definition": {
-                     *             "min_amount": 0,
-                     *             "threshold": 1000000
+                     *             "min_amount": 10000000000,
+                     *             "threshold": 2,
+                     *             "asset": {
+                     *               "id": "USDC"
+                     *             }
                      *           },
                      *           "created_at": 1640995200
                      *         }
@@ -19185,6 +20223,23 @@ export interface operations {
             };
         };
         readonly responses: {
+            /** @description Signer already registered to you. The submitted public key already belongs to one of your existing signers, so no new signer was created. The response carries that signer's persisted `id`, `public_key` and `key_type` (use the returned `key_type` to sign — it is authoritative and may differ from the one submitted); `name` echoes the request. Registration is idempotent: re-running setup returns a usable id instead of an error. A public key held by a different client returns `409` and no details about that signer. */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi",
+                     *       "name": "Marc",
+                     *       "public_key": "string",
+                     *       "key_type": "ES256"
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["Signer"];
+                };
+            };
             /** @description Signer created successfully */
             readonly 201: {
                 headers: {
@@ -19260,7 +20315,7 @@ export interface operations {
                     readonly "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
-            /** @description Conflict - duplicate request detected */
+            /** @description Conflict - the public key is already registered to a live signer belonging to a different client, or a duplicate request was detected. A public key belongs to exactly one client, so a key registered by someone else cannot be registered again; register a distinct key instead. The response deliberately carries no detail about the existing signer. */
             readonly 409: {
                 headers: {
                     readonly [name: string]: unknown;
@@ -23914,6 +24969,84 @@ export interface operations {
             };
         };
     };
+    readonly getLegalDocument: {
+        readonly parameters: {
+            readonly query?: {
+                /**
+                 * @description A specific published revision. Omit for the revision in force now.
+                 * @example 2026-07-23
+                 */
+                readonly version?: string;
+            };
+            readonly header?: never;
+            readonly path: {
+                /**
+                 * @description Document identifier, e.g. `dakota_tos`.
+                 * @example dakota_tos
+                 */
+                readonly document_key: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The requested revision. */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "key": "dakota_tos",
+                     *       "version": "2026-08-04",
+                     *       "revision": 5,
+                     *       "title": "Dakota Terms of Service",
+                     *       "content": "# Dakota Terms of Service\n\nLast updated 2026-08-04...",
+                     *       "content_type": "text/markdown",
+                     *       "content_url": "https://dakota.xyz/terms",
+                     *       "effective_date": "2026-08-04"
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["LegalDocument"];
+                };
+            };
+            /** @description No such document, or no revision is currently in force. */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#not-found",
+                     *       "title": "Legal Document Not Found",
+                     *       "status": 404,
+                     *       "detail": "No published revision of dakota_tos was found."
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal error */
+            readonly 500: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#internal-error",
+                     *       "title": "Internal error",
+                     *       "status": 500,
+                     *       "detail": "An unexpected error occurred."
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     readonly getPaymentAgent: {
         readonly parameters: {
             readonly query?: never;
@@ -24466,6 +25599,147 @@ export interface operations {
             };
         };
     };
+    readonly getRDMarketingFeeStatement: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                /** @description First day of the month (UTC). */
+                readonly month: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The month's statement */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "month": "2026-08-01",
+                     *       "y_bps_monthly": 15,
+                     *       "days_in_month": 31,
+                     *       "days_stamped": 2,
+                     *       "daily": [
+                     *         {
+                     *           "date": "2026-08-01",
+                     *           "balance_minor": "1250000"
+                     *         },
+                     *         {
+                     *           "date": "2026-08-02",
+                     *           "balance_minor": "0"
+                     *         },
+                     *         {
+                     *           "date": "2026-08-03"
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["RDMarketingFeeStatement"];
+                };
+            };
+            /** @description Invalid request */
+            readonly 400: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            readonly 401: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description No statement for this client and month */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal server error */
+            readonly 500: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    readonly listLegalDocuments: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The in-force revision of each document, without its text. */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "key": "dakota_tos",
+                     *           "version": "2026-08-04",
+                     *           "revision": 5,
+                     *           "title": "Dakota Terms of Service",
+                     *           "content_type": "text/markdown",
+                     *           "effective_date": "2026-08-04"
+                     *         },
+                     *         {
+                     *           "key": "dakota_privacy",
+                     *           "version": "2026-07-23",
+                     *           "revision": 3,
+                     *           "title": "Dakota Privacy Policy",
+                     *           "content_type": "text/markdown",
+                     *           "effective_date": "2026-07-23"
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    readonly "application/json": {
+                        readonly data: readonly components["schemas"]["LegalDocument"][];
+                    };
+                };
+            };
+            /** @description Internal error */
+            readonly 500: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#internal-error",
+                     *       "title": "Internal error",
+                     *       "status": 500,
+                     *       "detail": "An unexpected error occurred."
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     readonly getSelfServeCreditsBalance: {
         readonly parameters: {
             readonly query?: never;
@@ -24538,10 +25812,19 @@ export interface operations {
             readonly query?: {
                 /** @description Return entries created before this timestamp. */
                 readonly cursor?: string;
+                /**
+                 * @description Tiebreaker for `cursor`. Entries written in the same transaction share
+                 *     an identical `created_at`, so ordering by timestamp alone is not total
+                 *     and a page boundary that splits them can drop a row. When supplied
+                 *     alongside `cursor`, entries are returned strictly before
+                 *     `(cursor, cursor_id)` in `(created_at, id)` order. Pass the `id` of the
+                 *     last entry on the previous page. Ignored unless `cursor` is also present.
+                 */
+                readonly cursor_id?: string;
                 /** @description Maximum number of entries to return. */
                 readonly limit?: number;
                 /** @description Optional ledger entry type filter. */
-                readonly type?: "purchase" | "deduction" | "refund";
+                readonly type?: "purchase" | "bonus" | "deduction" | "refund" | "adjustment";
             };
             readonly header?: never;
             readonly path?: never;
@@ -24596,7 +25879,7 @@ export interface operations {
                      *       "type": "https://docs.dakota.xyz/api-reference/errors#invalid-request",
                      *       "title": "Invalid Request",
                      *       "status": 400,
-                     *       "detail": "type must be one of purchase, deduction, refund"
+                     *       "detail": "type must be one of purchase, bonus, deduction, refund, adjustment"
                      *     }
                      */
                     readonly "application/problem+json": components["schemas"]["ProblemDetails"];
@@ -24751,7 +26034,8 @@ export interface operations {
                      *       "kybFeeCents": 2500,
                      *       "effectiveFrom": "2024-01-01T00:00:00Z",
                      *       "createdAt": "2024-01-01T00:00:00Z",
-                     *       "updatedAt": "2024-01-01T00:00:00Z"
+                     *       "updatedAt": "2024-01-01T00:00:00Z",
+                     *       "transferFeeOverrides": []
                      *     }
                      */
                     readonly "application/json": components["schemas"]["ClientPricingConfig"];
@@ -24797,6 +26081,207 @@ export interface operations {
                     readonly [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    readonly listRDMarketingFeeStatements: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The client's statement months, newest first */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "months": [
+                     *         "2026-08-01",
+                     *         "2026-07-01",
+                     *         "2026-06-01"
+                     *       ]
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["RDMarketingFeeStatementList"];
+                };
+            };
+            /** @description Unauthorized */
+            readonly 401: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description This client has no marketing-fee contract */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal server error */
+            readonly 500: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    readonly getClientAgenticPolicy: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The client's registered agentic policy, normalized. */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "policy": {
+                     *         "payee_model": "flat",
+                     *         "mandate_strategy": "external_only",
+                     *         "payout_route": "bank_only",
+                     *         "labels": {
+                     *           "limit": "spending limit",
+                     *           "limit_unit": "USD",
+                     *           "payee": "recipient"
+                     *         }
+                     *       },
+                     *       "created_at": 1761600000,
+                     *       "updated_at": 1761686400
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["RegisteredAgenticClientPolicy"];
+                };
+            };
+            /** @description Bad Request */
+            readonly 400: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            readonly 401: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description This client has no registered policy. */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    readonly updateClientAgenticPolicy: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header: {
+                /** @description Unique key to ensure request idempotency. If the same key is used within a certain time window, the original response will be returned instead of executing the request again. */
+                readonly "x-idempotency-key": components["parameters"]["IdempotencyKeyHeader"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                /**
+                 * @example {
+                 *       "payee_model": "flat",
+                 *       "mandate_strategy": "external_only",
+                 *       "payout_route": "bank_only",
+                 *       "labels": {
+                 *         "limit": "spending limit",
+                 *         "limit_unit": "USD",
+                 *         "payee": "recipient"
+                 *       }
+                 *     }
+                 */
+                readonly "application/json": components["schemas"]["AgenticClientPolicy"];
+            };
+        };
+        readonly responses: {
+            /** @description The registered policy, normalized as it will be applied. */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "policy": {
+                     *         "payee_model": "flat",
+                     *         "mandate_strategy": "external_only",
+                     *         "payout_route": "bank_only",
+                     *         "labels": {
+                     *           "limit": "spending limit",
+                     *           "limit_unit": "USD",
+                     *           "payee": "recipient"
+                     *         }
+                     *       },
+                     *       "created_at": 1761600000,
+                     *       "updated_at": 1761686400
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["RegisteredAgenticClientPolicy"];
+                };
+            };
+            /** @description The policy is not one this server can enforce — an unknown key, an unsupported value, or a label for an unimplemented concept. */
+            readonly 400: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            readonly 401: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not Found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
             };
         };
     };
@@ -25582,151 +27067,6 @@ export interface operations {
                      *       "detail": "agentic payments are not enabled"
                      *     }
                      */
-                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    readonly getClientAgenticPolicy: {
-        readonly parameters: {
-            readonly query?: never;
-            readonly header?: never;
-            readonly path?: never;
-            readonly cookie?: never;
-        };
-        readonly requestBody?: never;
-        readonly responses: {
-            /** @description The client's registered agentic policy, normalized. */
-            readonly 200: {
-                headers: {
-                    readonly [name: string]: unknown;
-                };
-                content: {
-                    /**
-                     * @example {
-                     *       "policy": {
-                     *         "payee_model": "flat",
-                     *         "mandate_strategy": "external_only",
-                     *         "payout_route": "bank_only",
-                     *         "labels": {
-                     *           "limit": "spending limit",
-                     *           "limit_unit": "USD",
-                     *           "payee": "recipient"
-                     *         }
-                     *       },
-                     *       "created_at": 1761600000,
-                     *       "updated_at": 1761686400
-                     *     }
-                     */
-                    readonly "application/json": components["schemas"]["RegisteredAgenticClientPolicy"];
-                };
-            };
-            /** @description Bad Request */
-            readonly 400: {
-                headers: {
-                    readonly [name: string]: unknown;
-                };
-                content: {
-                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Unauthorized */
-            readonly 401: {
-                headers: {
-                    readonly [name: string]: unknown;
-                };
-                content: {
-                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description This client has no registered policy. */
-            readonly 404: {
-                headers: {
-                    readonly [name: string]: unknown;
-                };
-                content: {
-                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-        };
-    };
-    readonly updateClientAgenticPolicy: {
-        readonly parameters: {
-            readonly query?: never;
-            readonly header: {
-                /** @description Unique key to ensure request idempotency. If the same key is used within a certain time window, the original response will be returned instead of executing the request again. */
-                readonly "x-idempotency-key": components["parameters"]["IdempotencyKeyHeader"];
-            };
-            readonly path?: never;
-            readonly cookie?: never;
-        };
-        readonly requestBody: {
-            readonly content: {
-                /**
-                 * @example {
-                 *       "payee_model": "flat",
-                 *       "mandate_strategy": "external_only",
-                 *       "payout_route": "bank_only",
-                 *       "labels": {
-                 *         "limit": "spending limit",
-                 *         "limit_unit": "USD",
-                 *         "payee": "recipient"
-                 *       }
-                 *     }
-                 */
-                readonly "application/json": components["schemas"]["AgenticClientPolicy"];
-            };
-        };
-        readonly responses: {
-            /** @description The registered policy, normalized as it will be applied. */
-            readonly 200: {
-                headers: {
-                    readonly [name: string]: unknown;
-                };
-                content: {
-                    /**
-                     * @example {
-                     *       "policy": {
-                     *         "payee_model": "flat",
-                     *         "mandate_strategy": "external_only",
-                     *         "payout_route": "bank_only",
-                     *         "labels": {
-                     *           "limit": "spending limit",
-                     *           "limit_unit": "USD",
-                     *           "payee": "recipient"
-                     *         }
-                     *       },
-                     *       "created_at": 1761600000,
-                     *       "updated_at": 1761686400
-                     *     }
-                     */
-                    readonly "application/json": components["schemas"]["RegisteredAgenticClientPolicy"];
-                };
-            };
-            /** @description The policy is not one this server can enforce — an unknown key, an unsupported value, or a label for an unimplemented concept. */
-            readonly 400: {
-                headers: {
-                    readonly [name: string]: unknown;
-                };
-                content: {
-                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Unauthorized */
-            readonly 401: {
-                headers: {
-                    readonly [name: string]: unknown;
-                };
-                content: {
-                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
-                };
-            };
-            /** @description Not Found */
-            readonly 404: {
-                headers: {
-                    readonly [name: string]: unknown;
-                };
-                content: {
                     readonly "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };

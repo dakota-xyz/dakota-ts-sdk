@@ -148,6 +148,8 @@ tags:
   - name: Info
     description: |-
       Read platform capability metadata, such as supported rails, networks, and assets.
+      These operations are served under `/capabilities/*` - `GET /capabilities/countries`
+      and `GET /capabilities/networks`. The tag name does not appear in the request paths.
 
       **Prerequisites:** Valid authentication headers.
       **Related:** Accounts, Transactions
@@ -157,6 +159,16 @@ tags:
 
       **Prerequisites:** Sandbox environment and test customer data.
       **Related:** Customers, Accounts, Transactions, Onboarding
+  - name: Legal
+    description: |-
+      The legal documents customers accept — terms of service, privacy policy,
+      e-sign notice, and partner agreements.
+
+      Dakota publishes these here, and this is the authoritative source: the
+      hosted onboarding flow, the dakota.xyz website, and your own integration
+      all read the same revisions. Present the current revision to your customer
+      before capturing their acceptance so the record reflects the text they
+      actually saw.
 paths:
   /customers:
     post:
@@ -301,6 +313,21 @@ paths:
           required: false
           schema:
             type: string
+        - name: status
+          in: query
+          description: |
+            Filter customers by one or more unified customer statuses.
+            Comma-separated list (e.g. `frozen,info_requested`). Values mirror
+            the `CustomerStatus` enum (`frozen`, `declined`, `withdrawn`,
+            `approved`, `info_requested`, `submitted`, `pending`).
+
+            This is the single client-facing status that the dashboard shows,
+            filters, and counts by. It collapses the frozen state, the
+            application decision, and the application lifecycle into one value
+            (see the `status` field on `Customer` for the precedence).
+          required: false
+          schema:
+            type: string
         - name: sub_client_id
           in: query
           description: Filter customers by sub-client association. Returns only customers associated with the specified sub-client.
@@ -327,6 +354,7 @@ paths:
               - kyb_status
               - kyc_status
               - name
+              - status
         - name: sort_dir
           in: query
           description: Sort direction. Defaults to `asc`.
@@ -367,6 +395,14 @@ paths:
                       $ref: '#/components/schemas/Customer'
                   meta:
                     $ref: '#/components/schemas/Meta'
+                  status_counts:
+                    allOf:
+                      - $ref: '#/components/schemas/CustomerStatusCounts'
+                    description: |
+                      How many customers hold each unified status, across the
+                      same filters (search, date, sub-client) but ignoring the
+                      `status` selection itself, so the dashboard can render a
+                      count per status chip while a status filter is active.
               example:
                 data:
                   - id: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
@@ -830,7 +866,13 @@ paths:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
         '409':
-          description: Customer has no approved application to re-engage
+          description: |
+            Customer has no approved application to re-engage.
+
+            A customer whose application is still pending does not need
+            re-engagement: reuse the `application_url` already returned by
+            `GET /customers/{customer_id}`. That original link stays valid for
+            90 days from creation.
           content:
             application/problem+json:
               schema:
@@ -1540,18 +1582,38 @@ paths:
                 instance: https://api.platform.dakota.xyz/transactions
                 request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
         '403':
-          description: Forbidden
+          description: |
+            Forbidden. Returned when the caller is not authorized for the
+            operation, or when the transfer would send over a rail covered by
+            an agreement the customer has not accepted (`terms_not_accepted`).
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
-              example:
-                type: https://docs.dakota.xyz/api-reference/errors#forbidden
-                title: Forbidden
-                status: 403
-                detail: Forbidden
-                instance: https://api.platform.dakota.xyz/transactions
-                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+              examples:
+                forbidden:
+                  summary: Caller is not authorized for this operation
+                  value:
+                    type: https://docs.dakota.xyz/api-reference/errors#forbidden
+                    title: Forbidden
+                    status: 403
+                    detail: Forbidden
+                    instance: https://api.platform.dakota.xyz/transactions
+                    request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+                terms_not_accepted:
+                  summary: An updated agreement covering this rail is unaccepted
+                  value:
+                    type: https://docs.dakota.xyz/api-reference/errors#terms-not-accepted
+                    title: Terms Not Accepted
+                    status: 403
+                    detail: An updated agreement must be accepted before this customer can use this capability.
+                    instance: https://api.platform.dakota.xyz/transactions
+                    request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+                    resolution_url: https://apply.dakota.com/applications/2WGC9cKv9P4K8eGzqY6qJ3Xz7Qm/accept-terms?token=kJ8xN3zQ9mL2pR5vY7wC1aF4dG6hK0sT8uW3nB5eM9
+                    errors:
+                      - field: dakota_tos
+                        message: Dakota Terms of Service (2026-08-04)
+                        code: terms_acceptance
         '404':
           description: Resource not found
           content:
@@ -1578,6 +1640,19 @@ paths:
                 detail: Unprocessable entity
                 instance: https://api.platform.dakota.xyz/transactions
                 request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+        '503':
+          description: Service unavailable
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#eligibility-unavailable
+                title: Service unavailable
+                status: 503
+                detail: Eligibility could not be evaluated. Retry shortly.
+                instance: https://api.platform.dakota.xyz/transactions
+                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
         default:
           description: Unexpected error
           content:
@@ -1598,7 +1673,22 @@ paths:
       tags:
         - Transactions
       summary: List transactions
-      description: List transactions across supported transaction resource families.
+      description: |-
+        List transactions across the supported transaction resource families: `one_off`, `auto_account`, and `wallet`. Each returned row carries a `resource_type` discriminator, and a single response contains rows from exactly one family.
+
+        **The response family is selected as follows.** Set `transaction_type` to choose the family explicitly. The `wallet` family is only reachable this way: `transaction_type=wallet`. The `wallet_id` and `direction` filters require `transaction_type=wallet`, and supplying either without it is rejected with `400`, not routed to the wallet family. The `auto_account` family requires `customer_id`: `transaction_type=auto_account` without a `customer_id` is rejected with `400`.
+
+        If you omit `transaction_type`, the family is inferred from the other query parameters, between `one_off` and `auto_account` only:
+
+        - `destination_id`, `status`, `source_network_id`, `source_asset`, or `destination_asset` present → `one_off`.
+        - `customer_id` present (and none of the above) → `auto_account`.
+        - none of the above (no filters) → `one_off`.
+
+        **Because `customer_id` on its own selects the `auto_account` family,** `GET /transactions?customer_id=X` returns that customer's auto-account transactions, not their one-off transactions, even though an unfiltered `GET /transactions` returns one-off transactions. `meta.total_count` reflects only the selected family, so it is not a count across all of a customer's transactions. To list a customer's one-off transactions, send `transaction_type=one_off&customer_id=X`; to list their auto-account transactions explicitly, send `transaction_type=auto_account&customer_id=X`.
+
+        The selected family is reported back on the response as `meta.transaction_type`, so an empty page still tells you which family was listed.
+
+        Filters documented below as applying to "one-off transactions" only take effect within the `one_off` family; combine them with `transaction_type=one_off` to be explicit.
       operationId: listTransactions
       parameters:
         - $ref: '#/components/parameters/StartingAfterParam'
@@ -1606,13 +1696,13 @@ paths:
         - $ref: '#/components/parameters/LimitParam'
         - name: transaction_type
           in: query
-          description: Filter by transaction resource family.
+          description: Select the transaction resource family (`one_off`, `auto_account`, or `wallet`) to return. When omitted, the family is inferred from the other parameters (see the endpoint description).
           required: false
           schema:
             $ref: '#/components/schemas/TransactionResourceType'
         - name: customer_id
           in: query
-          description: Filter transactions by customer ID.
+          description: 'Filter transactions by customer ID, within the selected resource family. Note: when `transaction_type` is omitted, supplying `customer_id` alone selects the `auto_account` family, so the result is that customer''s auto-account transactions. To filter one-off transactions by customer, also send `transaction_type=one_off`.'
           required: false
           schema:
             $ref: '#/components/schemas/KSUID'
@@ -1798,6 +1888,7 @@ paths:
                   total_count: 100
                   has_more_after: true
                   has_more_before: false
+                  transaction_type: one_off
         '400':
           description: Invalid request
           content:
@@ -2576,7 +2667,7 @@ paths:
     get:
       tags:
         - Recipients
-      summary: List all recipients
+      summary: List a customer's recipients
       description: Get a list of all recipients for the given customer ID
       operationId: listRecipients
       parameters:
@@ -2675,7 +2766,7 @@ paths:
                 request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
       externalDocs:
         description: Read full guide in docs
-        url: https://docs.dakota.xyz/api-reference/recipients/list-all-recipients
+        url: https://docs.dakota.xyz/api-reference/recipients/list-a-customers-recipients
   /recipients/{recipient_id}/destinations:
     parameters:
       - name: recipient_id
@@ -2887,25 +2978,57 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/AccountCreateRequest'
-            example:
-              account_type: onramp
-              capabilities:
-                - ach
-                - fedwire
-              rail: ach
-              crypto_destination_id: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
-              fiat_destination_id: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
-              destination_network_id: ethereum-mainnet
-              source_network_id: ethereum-mainnet
-              source_asset: USDC
-              destination_asset: USDC
-              return_address:
-                network_id: ethereum-mainnet
-                crypto_address: '0x165cd37b4c644c2921454429e7f9358d18a45e14'
-              return_crypto_address:
-                network_id: ethereum-mainnet
-                crypto_address: '0x165cd37b4c644c2921454429e7f9358d18a45e14'
-              developer_fee_bps: 50
+            examples:
+              onramp:
+                summary: Onramp — receive fiat, deliver crypto
+                description: |-
+                  `capabilities` lists the inbound rails the deposit details
+                  accept and is required here. `rail` is omitted, so the account
+                  serves every rail those capabilities cover.
+                value:
+                  account_type: onramp
+                  capabilities:
+                    - us_bank_account
+                  crypto_destination_id: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
+                  destination_network_id: ethereum-mainnet
+                  source_asset: USD
+                  destination_asset: USDC
+                  developer_fee_bps: 50
+              offramp:
+                summary: Offramp — receive crypto, deliver fiat
+                description: |-
+                  `rail` is the outbound rail the payout leaves on and is
+                  required here; `capabilities` has no effect. This is the only
+                  account type that accepts `payment_reference`.
+                value:
+                  account_type: offramp
+                  rail: ach
+                  fiat_destination_id: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
+                  source_network_id: ethereum-mainnet
+                  source_asset: USDC
+                  destination_asset: USD
+                  payment_reference: Invoice 12345
+                  return_address:
+                    network_id: ethereum-mainnet
+                    crypto_address: '0x165cd37b4c644c2921454429e7f9358d18a45e14'
+                  developer_fee_bps: 50
+              swap:
+                summary: Swap — receive crypto, deliver crypto
+                description: |-
+                  Both legs are onchain, so neither `capabilities` nor `rail`
+                  applies; the source and destination network IDs carry the
+                  routing.
+                value:
+                  account_type: swap
+                  crypto_destination_id: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
+                  destination_network_id: ethereum-mainnet
+                  source_network_id: base-mainnet
+                  source_asset: USDC
+                  destination_asset: USDC
+                  return_crypto_address:
+                    network_id: base-mainnet
+                    crypto_address: '0x165cd37b4c644c2921454429e7f9358d18a45e14'
+                  developer_fee_bps: 50
       responses:
         '201':
           description: Account created successfully.
@@ -2990,9 +3113,11 @@ paths:
         '403':
           description: |
             Forbidden. Returned when the caller is not authorized for the
-            operation, or when the requested onramp/swap account would deal in
+            operation, when the requested onramp/swap account would deal in
             RD but RD is not available in the customer's US state
-            (`state_restricted_rd`).
+            (`state_restricted_rd`), or when the account would use a rail
+            covered by an agreement the customer has not accepted
+            (`terms_not_accepted`).
           content:
             application/problem+json:
               schema:
@@ -3016,6 +3141,20 @@ paths:
                     detail: RD is not available in your state.
                     instance: https://api.platform.dakota.xyz/accounts
                     request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+                terms_not_accepted:
+                  summary: An updated agreement covering this capability is unaccepted
+                  value:
+                    type: https://docs.dakota.xyz/api-reference/errors#terms-not-accepted
+                    title: Terms Not Accepted
+                    status: 403
+                    detail: An updated agreement must be accepted before this customer can use this capability.
+                    instance: https://api.platform.dakota.xyz/accounts
+                    request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+                    resolution_url: https://apply.dakota.com/applications/2WGC9cKv9P4K8eGzqY6qJ3Xz7Qm/accept-terms?token=kJ8xN3zQ9mL2pR5vY7wC1aF4dG6hK0sT8uW3nB5eM9
+                    errors:
+                      - field: dakota_tos
+                        message: Dakota Terms of Service (2026-08-04)
+                        code: terms_acceptance
         '404':
           description: Not found
           content:
@@ -3373,18 +3512,40 @@ paths:
                 instance: https://api.platform.dakota.xyz/accounts/example-id
                 request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
         '403':
-          description: Forbidden
+          description: |
+            Forbidden. Returned when the caller is not authorized for the
+            operation, or when the update would give the account a rail covered
+            by an agreement the customer has not accepted (`terms_not_accepted`)
+            — for example pointing it at a destination that adds an
+            international payout route.
           content:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
-              example:
-                type: https://docs.dakota.xyz/api-reference/errors#forbidden
-                title: Forbidden
-                status: 403
-                detail: Forbidden
-                instance: https://api.platform.dakota.xyz/accounts/example-id
-                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+              examples:
+                forbidden:
+                  summary: Caller is not authorized for this operation
+                  value:
+                    type: https://docs.dakota.xyz/api-reference/errors#forbidden
+                    title: Forbidden
+                    status: 403
+                    detail: Forbidden
+                    instance: https://api.platform.dakota.xyz/accounts/example-id
+                    request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+                terms_not_accepted:
+                  summary: The update would add a rail covered by an unaccepted agreement
+                  value:
+                    type: https://docs.dakota.xyz/api-reference/errors#terms-not-accepted
+                    title: Terms Not Accepted
+                    status: 403
+                    detail: An updated agreement must be accepted before this customer can use this capability.
+                    instance: https://api.platform.dakota.xyz/accounts/example-id
+                    request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+                    resolution_url: https://apply.dakota.com/applications/2WGC9cKv9P4K8eGzqY6qJ3Xz7Qm/accept-terms?token=kJ8xN3zQ9mL2pR5vY7wC1aF4dG6hK0sT8uW3nB5eM9
+                    errors:
+                      - field: dakota_tos
+                        message: Dakota Terms of Service (2026-08-04)
+                        code: terms_acceptance
         '404':
           description: Not found
           content:
@@ -5682,6 +5843,7 @@ paths:
                           description: Articles of Incorporation or equivalent formation document
                       ready: false
                   attestations:
+                    ready: false
                     completed:
                       - type: information_accuracy
                         attested_at: '2024-01-17T15:30:00Z'
@@ -5779,6 +5941,69 @@ paths:
       externalDocs:
         description: Read full guide in docs
         url: https://docs.dakota.xyz/api-reference/onboarding/get-an-onboarding-application
+  /applications/{application_id}/legal-acceptance:
+    get:
+      tags:
+        - Onboarding
+      summary: What this application still needs to accept, and who may accept it
+      description: |
+        Returns exactly what the accept-agreements page renders: the agreements
+        this application still owes, and the people permitted to accept them.
+
+        This exists so that page does not need `GET /applications/{application_id}?include=all`.
+        That response carries the full KYB record — the business entity, and every
+        associated individual's date of birth, nationality and email address —
+        none of which this page displays. The link that reaches this endpoint is
+        emailed and travels in a URL query string, so the credential it carries
+        is scoped to this endpoint and the attestation submission, and cannot
+        read the application.
+
+        **Authentication:** Accepts Application Token (X-Application-Token header),
+        including the narrow legal-acceptance token issued by a terms refusal.
+      operationId: getLegalAcceptanceContext
+      parameters:
+        - name: application_id
+          in: path
+          required: true
+          description: The unique identifier for the application
+          schema:
+            $ref: '#/components/schemas/KSUID'
+      security:
+        - ApplicationTokenAuth: []
+      responses:
+        '200':
+          description: Outstanding agreements and permitted attestors
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LegalAcceptanceContext'
+              example:
+                application_type: business
+                outstanding_documents:
+                  - key: dakota_tos
+                    title: Dakota Terms of Service
+                    version: 2026-09
+                    revision: 4
+                accepted_agreements:
+                  - attestation_type: terms_of_service
+                    version: 2026-02
+                  - attestation_type: e_sign
+                    version: 2025-11
+                attestors:
+                  - id: 3H96fIU3lr1KQwe5cXmgD5x6kHy
+                    name: Ada Lovelace
+        '403':
+          description: Invalid or expired token, or a token not scoped to this action
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Application not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /applications/{application_id}/documents/{document_id}:
     get:
       tags:
@@ -6967,6 +7192,7 @@ paths:
                           description: Articles of Incorporation or equivalent formation document
                       ready: false
                   attestations:
+                    ready: false
                     completed:
                       - type: information_accuracy
                         attested_at: '2024-01-17T15:30:00Z'
@@ -7876,8 +8102,10 @@ paths:
                 - rule_type: amount_threshold
                   action: deny
                   definition:
-                    min_amount: 0
-                    threshold: 1000000
+                    min_amount: 10000000000
+                    threshold: 2
+                    asset:
+                      id: USDC
       responses:
         '201':
           description: Policy created successfully
@@ -7888,6 +8116,7 @@ paths:
               example:
                 id: pol_2N4YkKpKu7M3mKpGYmF8kcJ8oZT
                 client_id: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
+                signer_group_id: grp_2N4YkKpKu7M3mKpGYmF8kcJ8oZT
                 version: 1
                 name: High Value Transaction Policy
                 description: Requires approval for transactions above $10,000
@@ -7897,8 +8126,10 @@ paths:
                     rule_type: amount_threshold
                     action: deny
                     definition:
-                      min_amount: 0
-                      threshold: 1000000
+                      min_amount: 10000000000
+                      threshold: 2
+                      asset:
+                        id: USDC
                     created_at: 1640995200
                 created_at: 1640995200
                 updated_at: 1640995200
@@ -7998,6 +8229,7 @@ paths:
                 data:
                   - id: pol_2N4YkKpKu7M3mKpGYmF8kcJ8oZT
                     client_id: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
+                    signer_group_id: grp_2N4YkKpKu7M3mKpGYmF8kcJ8oZT
                     version: 1
                     name: High Value Transaction Policy
                     description: Requires approval for transactions above $10,000
@@ -8007,8 +8239,10 @@ paths:
                         rule_type: amount_threshold
                         action: deny
                         definition:
-                          min_amount: 0
-                          threshold: 1000000
+                          min_amount: 10000000000
+                          threshold: 2
+                          asset:
+                            id: USDC
                         created_at: 1640995200
                     created_at: 1640995200
                     updated_at: 1640995200
@@ -8119,7 +8353,7 @@ paths:
                 type: update_policy_rule
                 policy_id: pol_2N4YkKpKu7M3mKpGYmF8kcJ8oZT
                 rule_id: rule_2N4YkKpKu7M3mKpGYmF8kcJ8oZT
-                updated_definition: '{"amount": "15000", "currency": "USD"}'
+                updated_definition: '{"min_amount": 100, "threshold": 1, "asset": {"id": "USDC"}}'
                 idempotency_key: idem_2N4YkKpKu7M3mKpGYmF8kcJ8oZT
       responses:
         '200':
@@ -8131,6 +8365,7 @@ paths:
               example:
                 id: pol_2N4YkKpKu7M3mKpGYmF8kcJ8oZT
                 client_id: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
+                signer_group_id: grp_2N4YkKpKu7M3mKpGYmF8kcJ8oZT
                 version: 1
                 name: High Value Transaction Policy
                 description: Requires approval for transactions above $10,000
@@ -8140,8 +8375,10 @@ paths:
                     rule_type: amount_threshold
                     action: deny
                     definition:
-                      min_amount: 0
-                      threshold: 1000000
+                      min_amount: 10000000000
+                      threshold: 2
+                      asset:
+                        id: USDC
                     created_at: 1640995200
                 created_at: 1640995200
                 updated_at: 1640995200
@@ -8660,6 +8897,7 @@ paths:
               example:
                 id: pol_2N4YkKpKu7M3mKpGYmF8kcJ8oZT
                 client_id: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
+                signer_group_id: grp_2N4YkKpKu7M3mKpGYmF8kcJ8oZT
                 version: 1
                 name: High Value Transaction Policy
                 description: Requires approval for transactions above $10,000
@@ -8669,8 +8907,10 @@ paths:
                     rule_type: amount_threshold
                     action: deny
                     definition:
-                      min_amount: 0
-                      threshold: 1000000
+                      min_amount: 10000000000
+                      threshold: 2
+                      asset:
+                        id: USDC
                     created_at: 1640995200
                 created_at: 1640995200
                 updated_at: 1640995200
@@ -8986,6 +9226,7 @@ paths:
               example:
                 id: pol_2N4YkKpKu7M3mKpGYmF8kcJ8oZT
                 client_id: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
+                signer_group_id: grp_2N4YkKpKu7M3mKpGYmF8kcJ8oZT
                 version: 1
                 name: High Value Transaction Policy
                 description: Requires approval for transactions above $10,000
@@ -8995,8 +9236,10 @@ paths:
                     rule_type: amount_threshold
                     action: deny
                     definition:
-                      min_amount: 0
-                      threshold: 1000000
+                      min_amount: 10000000000
+                      threshold: 2
+                      asset:
+                        id: USDC
                     created_at: 1640995200
                 created_at: 1640995200
                 updated_at: 1640995200
@@ -9299,6 +9542,17 @@ paths:
               public_key: string
               key_type: ES256
       responses:
+        '200':
+          description: 'Signer already registered to you. The submitted public key already belongs to one of your existing signers, so no new signer was created. The response carries that signer''s persisted `id`, `public_key` and `key_type` (use the returned `key_type` to sign — it is authoritative and may differ from the one submitted); `name` echoes the request. Registration is idempotent: re-running setup returns a usable id instead of an error. A public key held by a different client returns `409` and no details about that signer.'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Signer'
+              example:
+                id: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
+                name: Marc
+                public_key: string
+                key_type: ES256
         '201':
           description: Signer created successfully
           content:
@@ -9351,7 +9605,7 @@ paths:
                 instance: https://api.platform.dakota.xyz/signers
                 request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
         '409':
-          description: Conflict - duplicate request detected
+          description: Conflict - the public key is already registered to a live signer belonging to a different client, or a duplicate request was detected. A public key belongs to exactly one client, so a key registered by someone else cannot be registered again; register a distinct key instead. The response deliberately carries no detail about the existing signer.
           content:
             application/problem+json:
               schema:
@@ -10058,7 +10312,7 @@ paths:
       tags:
         - Signer Groups
       summary: Delete a signer by public key
-      description: Soft-deletes all signers with the given public key. Returns `404` when no signer exists for the given public key and `409` when the signer is still a member of an active signer group.
+      description: Soft-deletes your signer with the given public key. Only the signer's owner can delete it, so a public key belonging to another organization is reported as `404` exactly like one that does not exist. Returns `404` when you have no signer for the given public key, `409` when that signer is still a member of an active signer group, and `403` when the key is a platform-managed settlement signer, which is retired only through platform-internal offboarding.
       operationId: deleteSigner
       parameters:
         - name: public_key
@@ -11808,7 +12062,19 @@ paths:
                           object:
                             customer_id: 1NFHrqBHb3cTfLVkFSGmHZqdDPw
                             name: Acme Corp
-                            customer_type: business
+                            type: business
+                      - id: 1NFHrqBHb3cTfLVkFSGmHZqdDPx
+                        type: customer.created
+                        created: 1735689605
+                        api_version: 1.0.0
+                        data:
+                          object:
+                            customer_id: 1NFHrqBHb3cTfLVkFSGmHZqdDPz
+                            name: Jane Doe
+                            type: individual
+                            import_reference:
+                              source: persona
+                              reference: cnst_YourSubmittedShareToken
                       - id: 1NFHrqBHb3cTfLVkFSGmHZqdDPo
                         type: customer.updated
                         created: 1735689606
@@ -11817,7 +12083,7 @@ paths:
                           object:
                             customer_id: 1NFHrqBHb3cTfLVkFSGmHZqdDPw
                             name: Acme Holdings
-                            customer_type: business
+                            type: business
                           previous_attributes:
                             name: Acme Corp
                       - id: 1NFHrqBHb3cTfLVkFSGmHZqdDPp
@@ -12070,18 +12336,27 @@ paths:
                         api_version: 1.0.0
                         data:
                           object:
-                            transaction_id: 1NFHrqBHb3cTfLVkFSGmHZqdDQJ
+                            id: 1NFHrqBHb3cTfLVkFSGmHZqdDQJ
                             wallet_id: 1NFHrqBHb3cTfLVkFSGmHZqdDQD
-                            status: pending
+                            status: Waiting For Signature
                       - id: 1NFHrqBHb3cTfLVkFSGmHZqdDQJ
                         type: wallet.transaction.updated
                         created: 1735689637
                         api_version: 1.0.0
                         data:
                           object:
-                            transaction_id: 1NFHrqBHb3cTfLVkFSGmHZqdDQJ
+                            id: 1NFHrqBHb3cTfLVkFSGmHZqdDQJ
                             wallet_id: 1NFHrqBHb3cTfLVkFSGmHZqdDQD
-                            status: submitted
+                            status: Broadcasted
+                      - id: 1NFHrqBHb3cTfLVkFSGmHZqdDQY
+                        type: wallet.transaction.updated
+                        created: 1735689637
+                        api_version: 1.0.0
+                        data:
+                          object:
+                            id: 1NFHrqBHb3cTfLVkFSGmHZqdDQJ
+                            wallet_id: 1NFHrqBHb3cTfLVkFSGmHZqdDQD
+                            status: Success
                       - id: 1NFHrqBHb3cTfLVkFSGmHZqdDQK
                         type: wallet.deposit
                         created: 1735689638
@@ -13423,6 +13698,77 @@ paths:
                 title: Not Found
                 status: 404
                 detail: agentic payments are not enabled
+  /legal/documents/{document_key}:
+    get:
+      tags:
+        - Legal
+      summary: Get a legal document
+      description: |-
+        Returns the revision of one document that is currently in force, or a
+        specific revision when `version` is supplied.
+
+        Pass the `version` you displayed back as `legal_document_version` when
+        submitting an attestation, so the acceptance record names the exact text
+        the customer saw rather than whichever revision happened to be current
+        when the request arrived.
+      operationId: getLegalDocument
+      security: []
+      parameters:
+        - name: document_key
+          in: path
+          required: true
+          description: Document identifier, e.g. `dakota_tos`.
+          schema:
+            type: string
+          example: dakota_tos
+        - name: version
+          in: query
+          required: false
+          description: A specific published revision. Omit for the revision in force now.
+          schema:
+            type: string
+          example: '2026-07-23'
+      responses:
+        '200':
+          description: The requested revision.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LegalDocument'
+              example:
+                key: dakota_tos
+                version: '2026-08-04'
+                revision: 5
+                title: Dakota Terms of Service
+                content: |-
+                  # Dakota Terms of Service
+
+                  Last updated 2026-08-04...
+                content_type: text/markdown
+                content_url: https://dakota.xyz/terms
+                effective_date: '2026-08-04'
+        '404':
+          description: No such document, or no revision is currently in force.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#not-found
+                title: Legal Document Not Found
+                status: 404
+                detail: No published revision of dakota_tos was found.
+        '500':
+          description: Internal error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#internal-error
+                title: Internal error
+                status: 500
+                detail: An unexpected error occurred.
   /payment-agents/{payment_agent_id}:
     x-alpha: true
     get:
@@ -13864,6 +14210,139 @@ paths:
                 title: Not Found
                 status: 404
                 detail: customer not found
+  /rd-marketing-fee/statements/{month}:
+    get:
+      tags:
+        - RD Marketing Fee
+      summary: One month of this client's marketing-fee statement
+      description: |-
+        One row per calendar day: the date, the RD balance, and that day's fee.
+
+        The rows are the stored daily principals, read rather than recomputed,
+        so what the client reads and what Dakota priced cannot drift.
+
+        A balance is absent when the day has not been derived yet, and "0" when
+        the client genuinely held no RD. Fees are absent for every day of a
+        month whose rate has not been derived. Neither unknown is reported as a
+        zero.
+
+        The client comes from the session. A month the client was not entitled
+        to gets 404, as does a client who has never had a rate.
+      operationId: getRDMarketingFeeStatement
+      parameters:
+        - name: month
+          in: path
+          required: true
+          description: First day of the month (UTC).
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: The month's statement
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RDMarketingFeeStatement'
+              example:
+                month: '2026-08-01'
+                y_bps_monthly: 15
+                days_in_month: 31
+                days_stamped: 2
+                daily:
+                  - date: '2026-08-01'
+                    balance_minor: '1250000'
+                  - date: '2026-08-02'
+                    balance_minor: '0'
+                  - date: '2026-08-03'
+        '400':
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: No statement for this client and month
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /legal/documents:
+    get:
+      tags:
+        - Legal
+      summary: List current legal documents
+      description: |-
+        Returns the revision of every legal document that is currently in force.
+
+        An index, not a bundle: each entry identifies a document and the
+        revision in force, WITHOUT the document text. `content` is omitted
+        here — fetch `GET /legal/documents/{document_key}` for the one document
+        you are going to display. Inlining every document would make this
+        response carry the entire corpus on every call.
+
+        Unauthenticated: these are public documents, and integrators need them
+        before a customer relationship exists.
+
+        No cache headers are set, and this list is not safe to cache
+        indefinitely: it names whichever revision is currently IN FORCE, and
+        that changes when a new one is published. A specific `(key, version)`
+        from `GET /legal/documents/{key}` is a different matter — revisions are
+        immutable, so once fetched its text can be cached for as long as you
+        like.
+      operationId: listLegalDocuments
+      security: []
+      responses:
+        '200':
+          description: The in-force revision of each document, without its text.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - data
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LegalDocument'
+              example:
+                data:
+                  - key: dakota_tos
+                    version: '2026-08-04'
+                    revision: 5
+                    title: Dakota Terms of Service
+                    content_type: text/markdown
+                    effective_date: '2026-08-04'
+                  - key: dakota_privacy
+                    version: '2026-07-23'
+                    revision: 3
+                    title: Dakota Privacy Policy
+                    content_type: text/markdown
+                    effective_date: '2026-07-23'
+        '500':
+          description: Internal error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#internal-error
+                title: Internal error
+                status: 500
+                detail: An unexpected error occurred.
   /self-serve/credits/balance:
     get:
       tags:
@@ -13920,6 +14399,19 @@ paths:
           schema:
             type: string
             format: date-time
+        - name: cursor_id
+          in: query
+          required: false
+          description: |
+            Tiebreaker for `cursor`. Entries written in the same transaction share
+            an identical `created_at`, so ordering by timestamp alone is not total
+            and a page boundary that splits them can drop a row. When supplied
+            alongside `cursor`, entries are returned strictly before
+            `(cursor, cursor_id)` in `(created_at, id)` order. Pass the `id` of the
+            last entry on the previous page. Ignored unless `cursor` is also present.
+          schema:
+            type: string
+            example: 34o8dS2h9c7n1V8qLpY2Zx6TwUa
         - name: limit
           in: query
           required: false
@@ -13938,8 +14430,10 @@ paths:
             type: string
             enum:
               - purchase
+              - bonus
               - deduction
               - refund
+              - adjustment
       responses:
         '200':
           description: Paginated credit ledger entries
@@ -13976,7 +14470,7 @@ paths:
                 type: https://docs.dakota.xyz/api-reference/errors#invalid-request
                 title: Invalid Request
                 status: 400
-                detail: type must be one of purchase, deduction, refund
+                detail: type must be one of purchase, bonus, deduction, refund, adjustment
         '401':
           description: Unauthorized
           content:
@@ -14076,6 +14570,7 @@ paths:
                 effectiveFrom: '2024-01-01T00:00:00Z'
                 createdAt: '2024-01-01T00:00:00Z'
                 updatedAt: '2024-01-01T00:00:00Z'
+                transferFeeOverrides: []
         '401':
           description: Unauthorized
           content:
@@ -14100,6 +14595,173 @@ paths:
                 detail: Credit management is only available for self-serve customers.
         default:
           description: Unexpected error
+  /rd-marketing-fee/statements:
+    get:
+      tags:
+        - RD Marketing Fee
+      summary: The months this client has a marketing-fee statement for
+      description: |-
+        The months a reserve-management rate was in force for the calling
+        client, newest first, from the start of their contract to the running
+        month.
+
+        The client comes from the session and is never named in the request.
+
+        The running month IS included. It cannot be priced yet — the bank's
+        interest posts in the month after it is earned — but the balance is
+        real and accruing, and a client checking mid-month must be able to see
+        it. Its fee figures are absent rather than zero.
+
+        A client who has never had a rate gets 404. Having a rate is what being
+        in the programme means; there is no separate entitlement record.
+      operationId: listRDMarketingFeeStatements
+      responses:
+        '200':
+          description: The client's statement months, newest first
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RDMarketingFeeStatementList'
+              example:
+                months:
+                  - '2026-08-01'
+                  - '2026-07-01'
+                  - '2026-06-01'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: This client has no marketing-fee contract
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /agentic-policy:
+    x-alpha: true
+    put:
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      tags:
+        - Agentic Payments
+      summary: Register the client's agentic policy (ALPHA)
+      description: |
+        > **Alpha** — early access.
+
+        Registers (or fully replaces) this client's `client_policy` — the ONLY way to set one. A client declares its vocabulary once, and every drafting turn and every accept then resolve it from here.
+
+        Registration is deliberately the only path. The policy was once also accepted in the `POST /payment-agents/{payment_agent_id}/proposals` and `POST /instructions` bodies, and that made a two-call conversation able to disagree with itself: a proposal drafted under one policy and accepted without it is judged by different rules, so a legal draft was refused at the customer's approval click. A policy is a property of the CLIENT, not of a request, and it now lives in exactly one place.
+
+        A full replace, not a merge: send the whole policy every time. Changing one takes effect on the next turn — there is no cache — so this is also how you TEST a policy. Register, run a conversation, register something else. Validation happens HERE: an unknown key, an unknown value, or a label for a concept the server does not implement is a 400 at registration, not a surprise on a customer's first conversation.
+
+        FULL REPLACE, not a merge: the registration IS the client's declared vocabulary, so an omitted field means the client no longer wants it. An empty body (`{}`) therefore clears the registration back to platform defaults.
+      operationId: updateClientAgenticPolicy
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgenticClientPolicy'
+            example:
+              payee_model: flat
+              mandate_strategy: external_only
+              payout_route: bank_only
+              labels:
+                limit: spending limit
+                limit_unit: USD
+                payee: recipient
+      responses:
+        '200':
+          description: The registered policy, normalized as it will be applied.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisteredAgenticClientPolicy'
+              example:
+                policy:
+                  payee_model: flat
+                  mandate_strategy: external_only
+                  payout_route: bank_only
+                  labels:
+                    limit: spending limit
+                    limit_unit: USD
+                    payee: recipient
+                created_at: 1761600000
+                updated_at: 1761686400
+        '400':
+          description: |
+            The policy is not one this server can enforce — an unknown key, an unsupported value, or a label for an unimplemented concept.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Not Found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+    get:
+      tags:
+        - Agentic Payments
+      summary: Get the client's registered agentic policy (ALPHA)
+      description: |
+        > **Alpha** — early access.
+
+        Returns the `client_policy` registered for the CALLING client — the vocabulary and payout constraints every drafting turn and every accept uses. Scoped to the caller by construction: the client is resolved from the API key, so there is no id to pass and no other client's policy to address.
+
+        No registration is a 404 — which is not an error condition but the default: with no registration and no body policy the agent drafts on platform defaults, exactly as it did before registration existed.
+      operationId: getClientAgenticPolicy
+      responses:
+        '200':
+          description: The client's registered agentic policy, normalized.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RegisteredAgenticClientPolicy'
+              example:
+                policy:
+                  payee_model: flat
+                  mandate_strategy: external_only
+                  payout_route: bank_only
+                  labels:
+                    limit: spending limit
+                    limit_unit: USD
+                    payee: recipient
+                created_at: 1761600000
+                updated_at: 1761686400
+        '400':
+          description: Bad Request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: This client has no registered policy.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /fee-payout-destination:
     put:
       tags:
@@ -14712,119 +15374,6 @@ paths:
                 title: Not Found
                 status: 404
                 detail: agentic payments are not enabled
-  /agentic-policy:
-    x-alpha: true
-    get:
-      tags:
-        - Agentic Payments
-      summary: Get the client's registered agentic policy (ALPHA)
-      description: |
-        Returns the `client_policy` registered for the CALLING client — the vocabulary and payout constraints every drafting turn and every accept uses. Scoped to the caller by construction: the client is resolved from the API key, so there is no id to pass and no other client's policy to address.
-
-        No registration is a 404 — which is not an error condition but the default: with no registration and no body policy the agent drafts on platform defaults, exactly as it did before registration existed.
-      operationId: getClientAgenticPolicy
-      responses:
-        '200':
-          description: The client's registered agentic policy, normalized.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RegisteredAgenticClientPolicy'
-              example:
-                policy:
-                  payee_model: flat
-                  mandate_strategy: external_only
-                  payout_route: bank_only
-                  labels:
-                    limit: spending limit
-                    limit_unit: USD
-                    payee: recipient
-                created_at: 1761600000
-                updated_at: 1761686400
-        '400':
-          description: Bad Request
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
-          description: Unauthorized
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '404':
-          description: This client has no registered policy.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-    put:
-      parameters:
-        - $ref: '#/components/parameters/IdempotencyKeyHeader'
-      tags:
-        - Agentic Payments
-      summary: Register the client's agentic policy (ALPHA)
-      description: |
-        Registers (or fully replaces) this client's `client_policy` — the ONLY way to set one. A client declares its vocabulary once, and every drafting turn and every accept then resolve it from here.
-
-        Registration is deliberately the only path. The policy was once also accepted in the `POST /payment-agents/{payment_agent_id}/proposals` and `POST /instructions` bodies, and that made a two-call conversation able to disagree with itself: a proposal drafted under one policy and accepted without it is judged by different rules, so a legal draft was refused at the customer's approval click. A policy is a property of the CLIENT, not of a request, and it now lives in exactly one place.
-
-        A full replace, not a merge: send the whole policy every time. Changing one takes effect on the next turn — there is no cache — so this is also how you TEST a policy. Register, run a conversation, register something else. Validation happens HERE: an unknown key, an unknown value, or a label for a concept the server does not implement is a 400 at registration, not a surprise on a customer's first conversation.
-
-        FULL REPLACE, not a merge: the registration IS the client's declared vocabulary, so an omitted field means the client no longer wants it. An empty body (`{}`) therefore clears the registration back to platform defaults.
-      operationId: updateClientAgenticPolicy
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/AgenticClientPolicy'
-            example:
-              payee_model: flat
-              mandate_strategy: external_only
-              payout_route: bank_only
-              labels:
-                limit: spending limit
-                limit_unit: USD
-                payee: recipient
-      responses:
-        '200':
-          description: The registered policy, normalized as it will be applied.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/RegisteredAgenticClientPolicy'
-              example:
-                policy:
-                  payee_model: flat
-                  mandate_strategy: external_only
-                  payout_route: bank_only
-                  labels:
-                    limit: spending limit
-                    limit_unit: USD
-                    payee: recipient
-                created_at: 1761600000
-                updated_at: 1761686400
-        '400':
-          description: |
-            The policy is not one this server can enforce — an unknown key, an unsupported value, or a label for an unimplemented concept.
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '401':
-          description: Unauthorized
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
-        '404':
-          description: Not Found
-          content:
-            application/problem+json:
-              schema:
-                $ref: '#/components/schemas/ProblemDetails'
 components:
   parameters:
     IdempotencyKeyHeader:
@@ -14961,8 +15510,96 @@ components:
       description: |
         Application-specific token for public URL access. Generated when a customer is created.
         Provides access to a single application without requiring an API key.
-        Token is valid for 30 days and rate-limited to 250 requests per hour.
+        Token is valid for 90 days and rate-limited to 250 requests per hour.
   schemas:
+    RDMarketingFeeStatementList:
+      type: object
+      required:
+        - months
+      properties:
+        months:
+          type: array
+          description: |-
+            Newest first. EMPTY means the client's contract is real but no
+            month has started yet (it starts next month or later) — the page
+            says "starting soon" rather than denying the contract. A client
+            who has never had a contract gets 404 instead, and the portal
+            hides the section entirely. The two are different answers.
+          items:
+            type: string
+            format: date
+            description: First day of a month the client was entitled to.
+    RDMarketingFeeStatement:
+      type: object
+      required:
+        - month
+        - y_bps_monthly
+        - days_in_month
+        - days_stamped
+        - daily
+      properties:
+        month:
+          type: string
+          format: date
+        y_bps_monthly:
+          type: number
+          format: double
+          description: The rate in force for THIS month, in monthly basis points. A later rate change does not rewrite it.
+        owed_minor:
+          type: string
+          description: |-
+            What the month owes this client, RD minor units. ABSENT until the
+            month is priced — never zero, which would state that nothing is
+            owed.
+        avg_daily_balance_minor:
+          type: string
+          description: The mean of the month's stored daily principals. Absent while the month is incomplete.
+        days_in_month:
+          type: integer
+          description: Calendar days in the month — the divisor, never the number of rows stored.
+        days_stamped:
+          type: integer
+          description: |-
+            Days whose principal is stored. Lower than days_in_month while the
+            month is still being derived or still running, which is how a
+            partial month is shown as partial rather than as a complete small
+            one.
+        daily:
+          type: array
+          items:
+            $ref: '#/components/schemas/RDMarketingFeeDailyRow'
+    RDMarketingFeeDailyRow:
+      type: object
+      required:
+        - date
+      properties:
+        date:
+          type: string
+          format: date
+        balance_minor:
+          type: string
+          description: |-
+            The client's stored daily principal for that day, minor units, as a
+            decimal string. This is read, never recomputed: it is the same
+            figure the month was priced on, so what is shown and what was paid
+            cannot drift.
+
+            Every calendar day of the month gets a row. ABSENT means the day is
+            not stamped yet — a repairable gap, resolved by the derivation on
+            its own. A present "0" means the client genuinely held no RD that
+            day. The two are different facts and must not render alike.
+        fee_minor:
+          type: string
+          description: |-
+            That day's share of the month's fee, minor units, as a decimal
+            string. These decompose the snapshot's owed proportionally by
+            balance and sum to exactly that total.
+
+            ABSENT for every day of a month that has not been priced. The fee
+            is a property of the month, not of the day, so it is unknown for
+            all days at once until the month's Dakota rate is derived. A zero
+            here would state that nothing is owed, which is a different claim
+            from "not yet known".
     AgenticActionDownstream:
       type: object
       properties:
@@ -15422,6 +16059,18 @@ components:
           description: The funding wallet for these payments — one the agent recognizes. Optional only when the agent recognizes exactly one wallet (used by default); otherwise required, since a signer can recognize several and the choice cannot be deferred to fire time. Its chain family must match the payment network.
         amount:
           type: string
+          description: |
+            Decimal string. What this MEANS depends on `amount_includes_fee` below: by default it is what the PAYEE RECEIVES, and the server grosses it up so the fee comes out on top.
+        amount_includes_fee:
+          type: boolean
+          description: |
+            Whose side of the conversion fee `amount` is on.
+
+            Absent or `false` (the DEFAULT): `amount` is what the payee RECEIVES. The server adds the fee on top, so slightly more leaves the funding wallet. This is what "pay Bruno 10 USDC" means to a person, and it matches the same payment made through a client's own form.
+
+            `true`: `amount` is what LEAVES the wallet, and the payee receives less the fee. Use it only when the customer says so — "send 10 in total", "including the fee".
+
+            The gross-up is done SERVER-SIDE from the fee on the request; the agent never computes it, so it can neither get the arithmetic wrong nor be talked out of the fee. With no fee configured the two are identical.
         asset:
           type: string
         network_id:
@@ -15567,8 +16216,6 @@ components:
         - payment_agent_id
         - proposals
       properties:
-        client_policy:
-          $ref: '#/components/schemas/AgenticClientPolicy'
         payment_agent_id:
           type: string
         proposals:
@@ -15602,14 +16249,14 @@ components:
           description: The conversation so far, oldest first.
           items:
             $ref: '#/components/schemas/AgenticChatMessage'
+        developer_fee:
+          $ref: '#/components/schemas/DeveloperFee'
         timezone:
           type: string
           maxLength: 64
           description: |
             The customer's IANA timezone (e.g. "America/Los_Angeles"). When present, the agent resolves every relative date ("tomorrow", "Friday") and clock time ("10 am") in THIS timezone; a date without a time is drafted for the first working hours of the local day (10:00) and the draft summary states the resolved local time; a time without a date means its next local occurrence. Absent or unrecognized ⇒ times resolve as UTC and the agent says so when a specific clock time matters. Send it on EVERY turn — the server is stateless. Note: the zone's UTC offset is captured at drafting time, so a DST transition before a far-future fire date shifts the fire time by the DST delta.
           example: America/Los_Angeles
-        client_policy:
-          $ref: '#/components/schemas/AgenticClientPolicy'
     AgenticClientPolicy:
       type: object
       description: |
@@ -16057,8 +16704,10 @@ components:
           description: AUDIT — the money-path transaction created when this payment fired. Absent until the payment executes.
         amount:
           type: string
+          description: What LEAVES the funding wallet, denominated in `asset` on `network_id`. For a DIRECT payment that is also what the payee receives. For a CONVERTED payment (the payee settles on a different asset or chain) it is the DEPOSIT into the conversion account, grossed up so the payee nets the requested figure — so it is LARGER than the payout and in a DIFFERENT asset. Never render it against `output_asset`.
         asset:
           type: string
+          description: The asset `amount` is denominated in — the asset that LEAVES the wallet. For a converted payment this is the deposit asset, not the one the payee receives (see `output_asset`).
         failure_reason:
           type: string
           description: Why the payment failed (e.g. the mandate gate's denied dimensions); absent unless status is failed.
@@ -16082,7 +16731,7 @@ components:
           description: For a `bank` destination, the payout rail (e.g. ach, fedwire, swift). Absent for crypto.
         output_asset:
           type: string
-          description: The asset the recipient ULTIMATELY receives. For an offramp this is the fiat currency (e.g. USD) the deposit converts to; for a direct crypto payment it equals `asset`. Stablecoin conversion is 1:1, so the output AMOUNT equals `amount`.
+          description: 'The asset the recipient ULTIMATELY receives. For an offramp this is the fiat currency (e.g. USD) the deposit converts to; for a direct crypto payment it equals `asset`. DO NOT PAIR THIS WITH `amount`: for a converted payment `amount` is the DEPOSIT — what leaves the wallet, in the deposit''s own asset — and it is grossed up so the payee nets the requested figure, so a real payment reads amount 0.211112 and pays out 0.19. The rate is 1:1; the fee is not. This response carries no output amount, so a converted payment''s payout figure is not available here.'
         output_network:
           type: string
           description: For a crypto destination, the network the recipient ULTIMATELY receives on — for a cross-family swap this differs from `network_id` (the DEPOSIT network the wallet pays), e.g. output_network solana-devnet while network_id is base-sepolia. Equals `network_id` for a direct crypto payment; absent for a bank offramp (fiat has no network).
@@ -16351,6 +17000,53 @@ components:
           type: integer
           format: int64
           example: 9000000
+        health:
+          type: string
+          enum:
+            - healthy
+            - low
+            - critical
+            - empty
+          description: |
+            Server-owned balance health. Computed live from the same snapshot as
+            `percent_remaining`, so the two can never disagree. Clients MUST
+            render this rather than deriving bands themselves; treat an
+            unrecognised value as `healthy`.
+          example: healthy
+        balance_baseline_cents:
+          type: integer
+          format: int64
+          description: |
+            Denominator for `percent_remaining`: the balance at the client's most
+            recent deliberate top-up, ratcheted upward by any incidental credit
+            since. `0` means *no baseline* and must never be used as a divisor.
+          example: 100000
+        percent_remaining:
+          type: integer
+          description: |
+            `balance_cents` as a whole percentage of `balance_baseline_cents`,
+            floored. Omitted when `balance_baseline_cents` is 0.
+          example: 45
+        low_at_transfer_capacity_cents:
+          type: integer
+          format: int64
+          description: |
+            Transfer volume at which health becomes `low` — the capacity of the
+            largest balance that still classifies `low`. Omitted when
+            `balance_baseline_cents` is 0.
+          example: 8000000
+        min_next_transfer_fee_cents:
+          type: integer
+          format: int64
+          description: |
+            Cheapest total fee any configured rail can charge. Below this, rail
+            transfers are held.
+          example: 51
+        transfer_fee_bps:
+          type: number
+          format: float
+          description: The client's transfer fee rate, so callers stop hardcoding 0.25%.
+          example: 25
     SelfServeCreditsLedgerEntry:
       type: object
       required:
@@ -16369,8 +17065,16 @@ components:
           type: string
           enum:
             - purchase
+            - bonus
             - deduction
             - refund
+            - adjustment
+          description: |
+            `bonus` is a promotional grant written alongside a bulk-tier
+            `purchase` row in the same transaction; its `amount_cents` is the
+            bonus only and it carries no Stripe session id. `adjustment` has been
+            emitted since the adjustment entry type shipped and was missing from
+            this enum.
         category:
           type: string
           enum:
@@ -16379,6 +17083,7 @@ components:
             - transaction_refund
             - compliance_refund
             - purchase
+            - bonus
             - adjustment
             - unknown
           description: |
@@ -16429,11 +17134,39 @@ components:
         price_cents:
           type: integer
           format: int64
-          example: 10000
+          description: Amount charged via Stripe Checkout, in USD cents.
+          example: 3600000
+        credit_cents:
+          type: integer
+          format: int64
+          description: |
+            Total credit balance granted for this tier, in USD cents of transfer
+            fee. Equal to `price_cents` for standard tiers; larger for bulk
+            tiers, where the difference is `bonus_cents`.
+          example: 6000000
+        bonus_cents:
+          type: integer
+          format: int64
+          description: |
+            Promotional credit granted on top of `price_cents`, i.e.
+            `credit_cents - price_cents`. `0` for standard tiers.
+          example: 2400000
+        effective_fee_bps:
+          type: number
+          format: float
+          description: |
+            Blended rate this tier delivers, rounded to two decimals:
+            `transfer_fee_bps * price_cents / credit_cents`. Credits are still
+            consumed at the client's `transfer_fee_bps`; the discount is
+            delivered entirely as `bonus_cents` at purchase time.
+          example: 15
         transfer_capacity_cents:
           type: integer
           format: int64
-          example: 2000000
+          description: |
+            Transfer volume `credit_cents` buys at the client's `transfer_fee_bps`,
+            floored. Banking and compliance fees are charged on top and reduce it.
+          example: 2400000000
     SelfServeCreditTiersResponse:
       type: object
       required:
@@ -16522,6 +17255,7 @@ components:
         - effectiveFrom
         - createdAt
         - updatedAt
+        - transferFeeOverrides
       properties:
         monthlyMinimumCents:
           type: integer
@@ -16587,6 +17321,40 @@ components:
           format: date-time
           description: When this pricing configuration was last updated
           example: '2024-01-01T00:00:00Z'
+        transferFeeOverrides:
+          type: array
+          description: |
+            Per-asset-pair transfer fee exceptions. Always present; empty
+            when the client has none, in which case transferFeeBps applies
+            to every pair.
+          items:
+            $ref: '#/components/schemas/TransferFeeOverride'
+    TransferFeeOverride:
+      type: object
+      description: |
+        Overrides transferFeeBps for exactly one (sourceAsset,
+        destinationAsset) pair. Assets are network-agnostic symbols: USDC on
+        any chain is the same key.
+      required:
+        - sourceAsset
+        - destinationAsset
+        - feeBps
+      properties:
+        sourceAsset:
+          type: string
+          description: Asset symbol the transfer moves from, network-agnostic.
+          example: USDT
+        destinationAsset:
+          type: string
+          description: Asset symbol the transfer moves to, network-agnostic.
+          example: RD
+        feeBps:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 10000
+          description: Transfer fee in basis points for this pair. Whole numbers only.
+          example: 5
     CreateClientUserRequest:
       type: object
       description: Request body for creating a new client user
@@ -16663,6 +17431,65 @@ components:
           type: boolean
           description: Indicates whether there are more items that precede this set.
           example: false
+    RFIRequestedItems:
+      type: object
+      description: Reviewer-selected resubmission scope for an RFI.
+      properties:
+        business_description:
+          type: boolean
+          description: Whether the applicant may edit the business description on the resubmit page.
+        documents:
+          type: array
+          items:
+            type: object
+            required:
+              - category
+              - ref
+            properties:
+              category:
+                type: string
+                enum:
+                  - business
+                  - individual
+                  - edd
+              individual_id:
+                type: string
+                description: Entity id for individual docs; empty for business/edd.
+              ref:
+                type: string
+                description: document_id|document_type for an on-file doc, or purpose for a missing doc.
+        questions:
+          type: array
+          description: |
+            Free-text compliance questions the reviewer is asking. Rendered on
+            the resubmit page as required answer fields, tracked separately from
+            the standard application questions.
+          items:
+            type: object
+            required:
+              - prompt
+            properties:
+              key:
+                type: string
+                description: Stable identifier for this question; generated if omitted. Used to store the applicant's answer.
+              prompt:
+                type: string
+                description: The free-text question the reviewer is asking the applicant.
+              require_document:
+                type: boolean
+                description: Whether the applicant must also attach a document when answering this question.
+    TransactionListMeta:
+      description: Meta information about a transaction list response. Extends the shared pagination meta with the transaction resource family the request resolved to, so an empty page is self-explaining.
+      allOf:
+        - $ref: '#/components/schemas/Meta'
+        - type: object
+          required:
+            - transaction_type
+          properties:
+            transaction_type:
+              allOf:
+                - $ref: '#/components/schemas/TransactionResourceType'
+              description: The transaction resource family this response lists. Either the `transaction_type` that was requested, or the family inferred from the other query parameters. `total_count` counts only this family.
     PersonaImportJobSummary:
       type: object
       properties:
@@ -16706,6 +17533,69 @@ components:
         token_expires_at:
           type: integer
           format: int64
+    LegalDocument:
+      type: object
+      title: Legal Document
+      description: |-
+        One published revision of a legal document.
+
+        A revision is IMMUTABLE: `version` identifies an exact text, and that
+        text never changes once published. Correcting a document produces a new
+        revision rather than editing an existing one, so an acceptance recorded
+        against a version always refers to the same words.
+      required:
+        - key
+        - version
+        - revision
+        - content_type
+      properties:
+        key:
+          type: string
+          description: Stable identifier for the document across all its revisions.
+          example: dakota_tos
+        version:
+          type: string
+          description: |-
+            The published revision identifier, taken from the document itself.
+            Treat it as opaque — do not parse or compare it for ordering.
+          example: '2026-07-23'
+        revision:
+          type: integer
+          description: |-
+            Monotonic ordinal within `key`. Unlike `version`, this is ordered:
+            a higher number is a later revision.
+          example: 4
+        title:
+          type: string
+          example: Dakota Terms of Service
+        content:
+          type: string
+          description: |-
+            The document text, in `content_type` format. Render this to your
+            customer before capturing acceptance.
+
+            Present when a single document is fetched by key. OMITTED from the
+            `GET /legal/documents` index, which carries identity and revision
+            only — fetch the document you intend to display.
+          example: This Platform Services Agreement (the "Agreement")…
+        content_type:
+          type: string
+          description: Media type of `content`.
+          default: text/markdown
+          example: text/markdown
+        content_url:
+          type: string
+          description: Where the document is published for humans to read.
+          example: https://dakota.xyz/terms
+        effective_date:
+          type: string
+          description: |-
+            The date printed inside the document — what the customer reads as
+            "Last Updated". Show this alongside the text.
+
+            Absent for imported historical revisions whose stated date could not
+            be established.
+          example: '2026-07-23'
     ProblemDetails:
       type: object
       required:
@@ -16756,6 +17646,30 @@ components:
           description: Field-level validation errors (present for validation failures).
           items:
             $ref: '#/components/schemas/ValidationError'
+        resolution_url:
+          type: string
+          format: uri
+          description: |
+            A link the customer can follow to CLEAR this error, present only on
+            problems with a concrete self-service remedy.
+
+            Today this is returned by
+            `#terms-not-accepted`, where it points at the hosted flow in which
+            the outstanding agreement can be signed. The link is token-gated and
+            usable as-is — send the customer to it directly rather than parsing
+            it out of `detail`.
+          example: https://onboarding.dakota.xyz/applications/2abc123?token=tok_7f3a8b2c
+        user_message:
+          type: string
+          description: |
+            A plain-language rendition of `detail` written for the end
+            customer, present when one exists for this error. `detail` names
+            request fields and actions so a machine caller (such as a payment
+            agent drafting proposals) can self-correct; `user_message` says the
+            same thing without API vocabulary. Clients that relay errors into a
+            human surface (chat, email, UI) should show `user_message` when
+            present and fall back to `detail`.
+          example: ACH payments pay out USD, so a USDC payout isn't possible on this rail. Change the payout currency to USD and try again.
     ValidationError:
       type: object
       required:
@@ -17113,7 +18027,7 @@ components:
         application_expires_at:
           type: integer
           format: int64
-          description: Unix timestamp (nanoseconds) when the application token expires (30 days from creation)
+          description: Unix timestamp (nanoseconds) when the application token expires (90 days from creation)
           example: 1734567890000000000
     CustomerReEngagementResponse:
       type: object
@@ -17226,6 +18140,50 @@ components:
           enum:
             - required
             - requested
+    CustomerStatus:
+      type: string
+      description: |
+        The single client-facing customer status. One value collapses the
+        frozen state, the application decision, and the application lifecycle,
+        so the dashboard shows, filters, and counts by one status. See the
+        `status` field on `Customer` for the derivation precedence.
+      enum:
+        - frozen
+        - declined
+        - withdrawn
+        - approved
+        - info_requested
+        - submitted
+        - pending
+      example: info_requested
+    CustomerStatusCounts:
+      type: object
+      description: |
+        Count of customers per unified `CustomerStatus`, for the dashboard's
+        status header. Every field is optional; a status absent from the object
+        has a count of zero.
+      properties:
+        frozen:
+          type: integer
+          example: 2
+        declined:
+          type: integer
+          example: 4
+        withdrawn:
+          type: integer
+          example: 1
+        approved:
+          type: integer
+          example: 128
+        info_requested:
+          type: integer
+          example: 7
+        submitted:
+          type: integer
+          example: 12
+        pending:
+          type: integer
+          example: 9
     Customer:
       type: object
       description: Response containing the current status of a KYB verification process including provider-specific statuses.
@@ -17338,10 +18296,56 @@ components:
             - auto_declined
             - withdrawn
           example: approved
+        decision_reason:
+          type: string
+          description: |
+            Why the application was decided. Populated for withdrawn/declined
+            applications — for example, the fixed reason recorded when an
+            applicant withdraws from an RFI resubmission email. Omitted when there
+            is no decision or no reason was recorded.
+          example: User withdrew the application from the request-for-information (RFI) email
+        status:
+          allOf:
+            - $ref: '#/components/schemas/CustomerStatus'
+          description: |
+            The single client-facing status for this customer, derived
+            server-side. It collapses three signals into one badge so a client
+            never has to reconcile `kyb_status`, `kyc_status`, and
+            `application_status` by hand.
+
+            **Precedence (first match wins):**
+            1. `frozen` — the customer has an open freeze; surfaced over a stale
+               approval so an actionable freeze is never masked.
+            2. the most-recent application's decision — `approved`, `declined`
+               (declined or auto_declined), or `withdrawn`.
+            3. the most-recent application's lifecycle — `info_requested` when a
+               request for information is open (the customer owes a response);
+               the internal in-review states collapse to `submitted`; `pending`
+               otherwise.
+            4. `pending` when the customer has no application yet.
+
+            Once a customer is `approved` / `declined` / `withdrawn`, that is the
+            final answer and `kyb_status` / `kyc_status` do not change it. Use
+            those fields only for the underlying breakdown.
         application_url:
           type: string
-          description: URL for accessing the onboarding application
+          description: |
+            URL for accessing the onboarding application. Always present when the
+            customer has an onboarding application, including during an open RFI
+            loop. In an RFI loop the additive `resubmit_url` is returned as well,
+            and the dashboard links to that resubmission page rather than this
+            plain application view.
           example: https://onboarding.example.com/applications/abc123?token=xyz789
+        resubmit_url:
+          type: string
+          description: |
+            The resubmission link for a customer in an open RFI loop — the exact
+            `/applications/{id}/resubmit?token=…` URL the applicant receives in
+            the RFI email, built from the customer's existing onboarding token
+            (no new token is minted on read). Present only when `status` is
+            `info_requested`, and returned alongside `application_url` rather than
+            in place of it.
+          example: https://onboarding.example.com/applications/abc123/resubmit?token=xyz789
         created_at:
           type: integer
           description: Timestamp of when the link was created
@@ -17593,7 +18597,12 @@ components:
     Capabilities:
       type: array
       title: Capabilities
-      description: List of payment capabilities supported by a rail. Currently, as input, you can only request one in this list. This constraint will be loosened in the future.
+      description: |-
+        List of payment capabilities supported by a rail. Multiple values may
+        be supplied; the list is not limited to one entry. Which values are
+        valid depends on the resource: on-ramp accounts accept any rail and
+        expand `us_bank_account` to `ach` and `fedwire`; IBAN destinations
+        accept `swift` and `sepa` only.
       items:
         $ref: '#/components/schemas/PaymentCapability'
       minItems: 1
@@ -17612,7 +18621,45 @@ components:
     AccountCreateRequest:
       type: object
       title: Account Create Request
-      description: Unified account create request for onramp/offramp/swap.
+      description: |-
+        Unified account create request for onramp/offramp/swap.
+
+        One schema serves all three account types, so its properties are the
+        UNION of the three shapes: `account_type` decides which of them are
+        read. `account_type` is therefore the only field this schema can mark
+        required — everything else is required *per type*, and that contract is
+        this table:
+
+        | Field | `onramp` | `offramp` | `swap` |
+        | --- | --- | --- | --- |
+        | `capabilities` | **required** | ignored | ignored |
+        | `rail` | optional | **required** | ignored |
+        | `crypto_destination_id` | **required** | ignored | **required** |
+        | `fiat_destination_id` | ignored | **required** | ignored |
+        | `destination_network_id` | **required** | ignored | **required** |
+        | `source_network_id` | ignored | **required** | **required** |
+        | `source_asset` | **required** | **required** | **required** |
+        | `destination_asset` | **required** | **required** | **required** |
+        | `payment_reference` | rejected | optional | rejected |
+        | `return_address` | ignored | optional | ignored |
+        | `return_crypto_address` | ignored | ignored | optional |
+
+        "Ignored" means the field is accepted and has no effect — sending it
+        does not create the routing it names, so do not rely on it. The one
+        exception is `payment_reference`, which is REJECTED rather than ignored
+        on the types that cannot deliver it (see that field).
+
+        `rail` on an `onramp` is optional because the account's inbound rails
+        come from `capabilities`. `swift` and `sepa` must appear in
+        `capabilities` and narrow the account to that rail. `ach`, `fedwire`
+        and `fednow` must also appear in `capabilities`, but all resolve to
+        `us_bank_account` — the same result as omitting `rail` when the
+        capabilities include a US rail. `us_bank_account` itself is accepted
+        as `rail` regardless of the capabilities list.
+
+        A required field that you omit returns `400` (`invalid-request` or
+        `invalid-identifier`, depending on the field), with a `detail` that
+        identifies the problem.
       required:
         - account_type
       properties:
@@ -17878,6 +18925,11 @@ components:
           type: string
           description: Phone number of the bank.
           example: '+12345678900'
+        payment_reference:
+          type: string
+          nullable: true
+          description: Deposit attribution reference. When present, include it in the reference/memo field of any payment sent to this account, so the arriving funds can be matched to it. It is required whenever the deposit instructions above point at an account shared with other customers, where the account number alone does not identify the depositor. Null when the provider does not require one — the funds are then attributed by the account details alone. This is inbound and provider-issued, unlike the account-level `payment_reference` on an account create request, which is a memo carried on the payments this account sends OUT.
+          example: PRIFWEW6DDH
     DestinationRequestUnion:
       title: Destination Request Union
       description: Union type for different destination requests with destination_type discriminator
@@ -18382,14 +19434,18 @@ components:
           wallet: '#/components/schemas/WalletTransaction'
           auto_account: '#/components/schemas/Transaction'
     PaginatedCustomerTransactionResponse:
-      allOf:
-        - $ref: '#/components/schemas/PaginatedListResponse'
-        - type: object
-          properties:
-            data:
-              type: array
-              items:
-                $ref: '#/components/schemas/Transaction'
+      type: object
+      description: Wrapper for a paginated list of auto-account transactions.
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/Transaction'
+        meta:
+          $ref: '#/components/schemas/TransactionListMeta'
     PaginatedTransactionResourceResponse:
       oneOf:
         - $ref: '#/components/schemas/PaginatedOneOffTransactionResponse'
@@ -18804,6 +19860,11 @@ components:
           type: integer
           description: Unix timestamp deadline for return processing.
           example: 1234567890
+        net_recovered_amount:
+          type: string
+          nullable: true
+          description: Decimal amount actually recovered when a returned transaction settled short, denominated in the transaction's own currency (the same basis as its face amount), so face amount minus this value is exactly what the bank withheld. Present only when a return came back short — absent when the full amount was recovered, or when the rail reports no net figure at all (ACH never does). Absent means the face amount is authoritative; it never means zero.
+          example: '24955'
         reversal_reason:
           type: string
           description: Lead Bank ACH reversal reason when the originator reverses the transaction (e.g., duplicate, receiver_incorrect).
@@ -19129,6 +20190,11 @@ components:
           type: integer
           description: Unix timestamp deadline for return processing.
           example: 1234567890
+        net_recovered_amount:
+          type: string
+          nullable: true
+          description: Decimal amount actually recovered when a returned transaction settled short, denominated in the transaction's own currency (the same basis as its face amount), so face amount minus this value is exactly what the bank withheld. Present only when a return came back short — absent when the full amount was recovered, or when the rail reports no net figure at all (ACH never does). Absent means the face amount is authoritative; it never means zero.
+          example: '24955'
         reversal_reason:
           type: string
           description: Lead Bank ACH reversal reason when the originator reverses the transaction (e.g., duplicate, receiver_incorrect).
@@ -19156,23 +20222,31 @@ components:
         - pending_reversal
       example: pending
     PaginatedOneOffTransactionResponse:
-      allOf:
-        - $ref: '#/components/schemas/PaginatedListResponse'
-        - type: object
-          properties:
-            data:
-              type: array
-              items:
-                $ref: '#/components/schemas/OneOffTransaction'
+      type: object
+      description: Wrapper for a paginated list of one-off transactions.
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/OneOffTransaction'
+        meta:
+          $ref: '#/components/schemas/TransactionListMeta'
     PaginatedWalletTransactionResponse:
-      allOf:
-        - $ref: '#/components/schemas/PaginatedListResponse'
-        - type: object
-          properties:
-            data:
-              type: array
-              items:
-                $ref: '#/components/schemas/WalletTransaction'
+      type: object
+      description: Wrapper for a paginated list of wallet transactions.
+      required:
+        - data
+        - meta
+      properties:
+        data:
+          type: array
+          items:
+            $ref: '#/components/schemas/WalletTransaction'
+        meta:
+          $ref: '#/components/schemas/TransactionListMeta'
     Wallet:
       type: object
       description: Non-custodial wallet managed by Dakota Platform with a single address usable across networks within the same family.
@@ -19441,7 +20515,11 @@ components:
           description: Name of the signer group
         member_keys:
           type: array
-          description: Public keys of the members that make up the signer group
+          description: |
+            Public keys of the members that make up the signer group. At most
+            64 keys: each key is parsed and checked against the platform's
+            managed signing identities before the group is created, so an
+            unbounded list would let one request drive unbounded work.
           minItems: 1
           items:
             type: string
@@ -19528,10 +20606,21 @@ components:
           example: deny
         definition:
           type: object
-          description: Rule-specific configuration as JSON
+          description: |
+            Rule-specific configuration. The keys present depend on `rule_type`.
+            - `amount_threshold`: `min_amount` (integer), `threshold` (integer),
+              and `asset` (object) carrying `id`, the asset symbol, stored
+              upper case; `name` appears only when the rule was created with
+              one. `min_amount` is in the asset's smallest unit, and
+              `threshold` is the number of authorized endorsements required.
+            - `approval_threshold`: `threshold` (integer) and, when one was set,
+              `description` (string).
+            - `address_list`: `addresses` (array of strings).
           example:
-            min_amount: 0
-            threshold: 1000000
+            min_amount: 10000000000
+            threshold: 2
+            asset:
+              id: USDC
         created_at:
           type: integer
           description: Unix timestamp when the rule was created
@@ -19584,10 +20673,36 @@ components:
           example: deny
         definition:
           type: object
-          description: Rule-specific configuration as JSON
+          description: |
+            Rule-specific configuration. When a policy is created or a rule is
+            added, the accepted keys depend on `rule_type`. A key that is not
+            listed below is rejected with `400`, and the response names it.
+            - `amount_threshold`: `min_amount` (integer, 0 or greater,
+              required), `threshold` (integer, 1 or greater, required), and
+              `asset` (object, required) with `id` - the asset symbol, one of
+              `USDC`, `USDT`, or `RD`, stored upper case; optionally
+              `name`, a display label that plays no part in matching. Any other
+              key inside `asset` is rejected. There is no way to omit the
+              asset: a missing asset, or an `asset.id` that is empty or `any`,
+              is rejected with `400`. The rule governs transactions in that
+              asset on every network, unless the stored asset names one.
+              `min_amount` is an amount of that asset in its smallest unit -
+              USDC has 6 decimals, so 10000000000 is 10,000 USDC - and
+              `threshold` is the number of authorized endorsements required
+              once a transaction reaches `min_amount`.
+            - `approval_threshold`: `threshold` (integer, 1 or greater,
+              required), `description` (string, optional).
+            - `address_list`: `addresses` (array of one or more strings,
+              required).
+            Every integer must be whole. The server rejects a fractional value
+            instead of truncating it.
+            Updating an existing rule is validated more strictly - see
+            `updated_definition`.
           example:
-            min_amount: 0
-            threshold: 1000000
+            min_amount: 10000000000
+            threshold: 2
+            asset:
+              id: USDC
     EndorsedRequest:
       type: object
       required:
@@ -19618,6 +20733,7 @@ components:
             - $ref: '#/components/schemas/RemovePolicyRuleIntent'
             - $ref: '#/components/schemas/UpdatePolicyRuleIntent'
             - $ref: '#/components/schemas/DeletePolicyIntent'
+            - $ref: '#/components/schemas/EnableCardSettlementIntent'
           description: The intent being endorsed
     SendTransactionIntent:
       type: object
@@ -19832,7 +20948,31 @@ components:
           example: deny
         definition:
           type: object
-          description: Rule-specific configuration. Structure depends on rule_type
+          description: |
+            Rule-specific configuration. When a policy is created or a rule is
+            added, the accepted keys depend on `rule_type`. A key that is not
+            listed below is rejected with `400`, and the response names it.
+            - `amount_threshold`: `min_amount` (integer, 0 or greater,
+              required), `threshold` (integer, 1 or greater, required), and
+              `asset` (object, required) with `id` - the asset symbol, one of
+              `USDC`, `USDT`, or `RD`, stored upper case; optionally
+              `name`, a display label that plays no part in matching. Any other
+              key inside `asset` is rejected. There is no way to omit the
+              asset: a missing asset, or an `asset.id` that is empty or `any`,
+              is rejected with `400`. The rule governs transactions in that
+              asset on every network, unless the stored asset names one.
+              `min_amount` is an amount of that asset in its smallest unit -
+              USDC has 6 decimals, so 10000000000 is 10,000 USDC - and
+              `threshold` is the number of authorized endorsements required
+              once a transaction reaches `min_amount`.
+            - `approval_threshold`: `threshold` (integer, 1 or greater,
+              required), `description` (string, optional).
+            - `address_list`: `addresses` (array of one or more strings,
+              required).
+            Every integer must be whole. The server rejects a fractional value
+            instead of truncating it.
+            Updating an existing rule is validated more strictly - see
+            `updated_definition`.
           example:
             threshold: 2
             description: Require 2 approvals
@@ -19889,12 +21029,46 @@ components:
           example: rule_2N4YkKpKu7M3mKpGYmF8kcJ8oZT
         updated_definition:
           type: string
-          description: The updated rule definition as JSON string
-          example: '{"amount": "15000", "currency": "USD"}'
+          description: The updated rule definition as a JSON string. It replaces the existing definition, so it must be complete and must match the schema of the rule's type; any key outside that schema is rejected. An `amount_threshold` definition requires `asset.id`, a `threshold` greater than zero and a `min_amount` of zero or more. The remaining asset fields are optional — whatever the stored rule already records for the same asset is kept.
+          example: '{"min_amount": 100, "threshold": 1, "asset": {"id": "USDC"}}'
         idempotency_key:
           type: string
           description: A unique key to ensure idempotency of the request
           example: idem_2N4YkKpKu7M3mKpGYmF8kcJ8oZT
+    EnableCardSettlementIntent:
+      type: object
+      description: |
+        Intent to enable card settlement on a wallet. It grants the client's
+        settlement signer the ability to pull funds from the wallet to exactly
+        `settlement_destination` — and nothing else. The intent is semantic
+        and client-constructible; it never names internal policy or group ids.
+      required:
+        - type
+        - wallet_id
+        - settlement_destination
+        - idempotency_key
+      properties:
+        type:
+          type: string
+          enum:
+            - enable_card_settlement
+          example: enable_card_settlement
+        wallet_id:
+          type: string
+          description: The wallet to enable card settlement on
+        settlement_destination:
+          type: string
+          description: |
+            The only address the settlement signer may pull funds to. Must
+            match the platform-configured settlement destination returned by
+            the card-enablement discovery endpoint.
+        idempotency_key:
+          type: string
+          description: |
+            A unique key to ensure idempotency of the request. Must be a UUID:
+            this key is part of the endorsed intent and the policy engine
+            requires that form, so anything else is rejected with a 400.
+          example: 7d3f6c2e-9a41-4f3b-bd1c-2e5a8f0c4b19
     DeletePolicyIntent:
       type: object
       required:
@@ -20262,6 +21436,7 @@ components:
         - savings_statement
         - ein_confirmation_letter
         - authorization_document
+        - other
       example: articles_of_incorporation
     ApplicationDocumentUploadRequest:
       type: object
@@ -20308,7 +21483,6 @@ components:
       required:
         - document_type
         - file_type
-        - country
       properties:
         document_type:
           $ref: '#/components/schemas/ApplicationDocumentType'
@@ -20316,7 +21490,10 @@ components:
           $ref: '#/components/schemas/FileType'
         country:
           type: string
-          description: ISO 3166-1 alpha-2 country code for the document
+          description: |
+            ISO 3166-1 alpha-2 country code for the document. Optional: some
+            supporting documents (e.g. the generic `other` type) have no issuing
+            country.
           minLength: 2
           maxLength: 2
           example: US
@@ -21393,7 +22570,17 @@ components:
       required:
         - completed
         - missing
+        - ready
       properties:
+        ready:
+          type: boolean
+          description: |-
+            Whether every required attestation has been collected, in a valid
+            order, by an applicant whose name still matches the application.
+
+            Unaffected by `missing_documents`, which reports documents never
+            accepted at all.
+          example: true
         completed:
           type: array
           description: Attestations that have been completed with details
@@ -21407,6 +22594,52 @@ components:
           example:
             - terms_of_service
             - privacy_policy
+        missing_documents:
+          type: array
+          description: |
+            Legal documents the customer has never accepted. Fetch the text to
+            display with `GET /legal/documents/{document_key}`.
+
+            Accepting any revision clears a document from this list — having
+            signed an older revision than the one in force does not put it
+            back. Informational only: this does not affect `ready`, and note
+            that a customer absent from this list may still be refused a
+            capability that requires a later revision.
+          items:
+            $ref: '#/components/schemas/OutstandingLegalDocument'
+    OutstandingLegalDocument:
+      type: object
+      description: |
+        A legal document the customer has never accepted.
+
+        The revision named is the one currently in force. Fetch its text with
+        `GET /legal/documents/{document_key}` — it is deliberately not inlined
+        here, because these documents run to tens of kilobytes each and this
+        field rides on every application read.
+      required:
+        - key
+        - version
+        - revision
+        - title
+      properties:
+        key:
+          type: string
+          description: Stable identifier of the document
+          example: dakota_tos
+        version:
+          type: string
+          description: Version of the revision that needs accepting
+          example: '2026-08-04'
+        revision:
+          type: integer
+          description: Monotonic ordinal of the revision within this document
+          example: 5
+        title:
+          type: string
+          description: Human-readable title
+          example: Dakota Terms of Service
+        attestation_type:
+          $ref: '#/components/schemas/AttestationType'
     CompletedAttestation:
       type: object
       description: Details of a completed attestation
@@ -21426,6 +22659,16 @@ components:
           type: string
           description: Name of person who made the attestation
           example: John Doe
+        version:
+          type: string
+          description: |
+            Version of the legal document that was accepted. Absent for
+            attestations recorded before documents were versioned.
+          example: '2026-07-23'
+        title:
+          type: string
+          description: Title of the legal document that was accepted
+          example: Dakota Terms of Service
     ApplicationValidation:
       type: object
       description: Complete validation state for an application (computed at retrieval time)
@@ -21479,6 +22722,16 @@ components:
               type: string
               description: Name of person who made the attestation
               example: John Doe
+            version:
+              type: string
+              description: |
+                Version of the legal document that was accepted. Absent for
+                attestations recorded before documents were versioned.
+              example: '2026-07-23'
+            title:
+              type: string
+              description: Title of the legal document that was accepted
+              example: Dakota Terms of Service
         terms_of_service:
           type: object
           description: Terms of service attestation (if completed)
@@ -21495,6 +22748,16 @@ components:
               type: string
               description: Name of person who made the attestation
               example: John Doe
+            version:
+              type: string
+              description: |
+                Version of the legal document that was accepted. Absent for
+                attestations recorded before documents were versioned.
+              example: '2026-07-23'
+            title:
+              type: string
+              description: Title of the legal document that was accepted
+              example: Dakota Terms of Service
         privacy_policy:
           type: object
           description: Privacy policy attestation (if completed)
@@ -21511,6 +22774,16 @@ components:
               type: string
               description: Name of person who made the attestation
               example: John Doe
+            version:
+              type: string
+              description: |
+                Version of the legal document that was accepted. Absent for
+                attestations recorded before documents were versioned.
+              example: '2026-07-23'
+            title:
+              type: string
+              description: Title of the legal document that was accepted
+              example: Dakota Terms of Service
         funds_transfer_agreement:
           type: object
           description: Funds transfer agreement attestation (if completed)
@@ -21527,6 +22800,16 @@ components:
               type: string
               description: Name of person who made the attestation
               example: John Doe
+            version:
+              type: string
+              description: |
+                Version of the legal document that was accepted. Absent for
+                attestations recorded before documents were versioned.
+              example: '2026-07-23'
+            title:
+              type: string
+              description: Title of the legal document that was accepted
+              example: Dakota Terms of Service
         lead_bank_privacy_policy:
           type: object
           description: Lead Bank privacy policy attestation (if completed)
@@ -21543,6 +22826,26 @@ components:
               type: string
               description: Name of person who made the attestation
               example: John Doe
+            version:
+              type: string
+              description: |
+                Version of the legal document that was accepted. Absent for
+                attestations recorded before documents were versioned.
+              example: '2026-07-23'
+            title:
+              type: string
+              description: Title of the legal document that was accepted
+              example: Dakota Terms of Service
+        missing_documents:
+          type: array
+          description: |
+            Legal documents the customer has never accepted. Fetch the text to
+            display with `GET /legal/documents/{document_key}`. Accepting any
+            revision clears a document from this list. Informational: this does
+            NOT affect `validation.ready` or whether an application can be
+            submitted.
+          items:
+            $ref: '#/components/schemas/OutstandingLegalDocument'
         e_sign:
           type: object
           description: E-sign attestation (if completed)
@@ -21559,6 +22862,16 @@ components:
               type: string
               description: Name of person who made the attestation
               example: John Doe
+            version:
+              type: string
+              description: |
+                Version of the legal document that was accepted. Absent for
+                attestations recorded before documents were versioned.
+              example: '2026-07-23'
+            title:
+              type: string
+              description: Title of the legal document that was accepted
+              example: Dakota Terms of Service
     Application:
       type: object
       description: Application response with separated entity data and validation state
@@ -21600,6 +22913,11 @@ components:
           nullable: true
           description: When the application was submitted (null if not yet submitted)
           example: '2024-01-17T16:00:00Z'
+        rfi_requested_items:
+          $ref: '#/components/schemas/RFIRequestedItems'
+        rfi_resubmitted:
+          type: boolean
+          description: Whether the applicant has already submitted in response to the latest scoped RFI (drives the resubmit page's "already submitted" state).
         application_decision:
           type: string
           enum:
@@ -21994,6 +23312,93 @@ components:
         - lead_bank_privacy_policy
         - e_sign
       example: information_accuracy
+    LegalAcceptanceContext:
+      type: object
+      description: |
+        The minimum an acceptance page needs: what is still owed, and who may
+        sign it. Deliberately NOT the application — see the endpoint description.
+      required:
+        - application_type
+        - outstanding_documents
+        - attestors
+      properties:
+        application_type:
+          type: string
+          enum:
+            - business
+            - individual
+          description: |
+            Decides whether a signer is chosen or stated. A business may have
+            several control persons; an individual application has exactly one
+            permissible attestor, so asking them to pick themselves from a list
+            of one is a step with no purpose.
+        outstanding_documents:
+          type: array
+          description: |
+            Agreements this application has not accepted at the revision now in
+            force. Identity only — no document text. The bodies are served by
+            `GET /legal/documents/{document_key}`, which is cacheable and shared
+            with the published pages, and are ~120KB of markdown that would
+            otherwise ride this response.
+          items:
+            $ref: '#/components/schemas/OutstandingLegalDocument'
+        attestors:
+          type: array
+          description: |
+            People permitted to record an acceptance for this application. For a
+            business this is its control persons; the API enforces the same rule
+            on submission, so offering anyone else would only produce a 400.
+          items:
+            $ref: '#/components/schemas/LegalAcceptanceAttestor'
+        accepted_agreements:
+          type: array
+          description: |
+            What is already on file, per attestation type. The page compares each
+            against the revision now in force to decide whether an agreement is
+            genuinely outstanding — having signed an OLDER revision is not the
+            same as never having signed, and the two need different copy.
+
+            Separate from `outstanding_documents`, which reports only documents
+            never accepted at all. A customer on a superseded revision appears
+            here and not there.
+          items:
+            $ref: '#/components/schemas/AcceptedAgreement'
+    AcceptedAgreement:
+      type: object
+      required:
+        - attestation_type
+      properties:
+        attestation_type:
+          type: string
+          description: The attestation type this acceptance was recorded under.
+          example: terms_of_service
+        version:
+          type: string
+          description: |
+            The revision accepted. Empty for an acceptance predating the registry,
+            whose revision is derived from its timestamp rather than stored.
+          example: '2026-07-23'
+    LegalAcceptanceAttestor:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          allOf:
+            - $ref: '#/components/schemas/KSUID'
+          description: |
+            The applicant id to submit as `applicant_id`. This is the
+            application-individual link, not the individual — the same value the
+            attestation endpoint validates against.
+        name:
+          type: string
+          description: |
+            Display name. NOTHING else about the person is returned: this page
+            shows a name in a picker, and date of birth, nationality and email
+            are exactly the fields the scoped credential exists to keep out of an
+            emailed link.
+          example: Ada Lovelace
     AttestationSubmitRequest:
       type: object
       description: |
@@ -22041,6 +23446,24 @@ components:
             Optional. The version of the partner disclosure being accepted
             (e.g. `2026-06`). Required when `disclosure_id` is present.
           example: 2026-06
+        legal_document_version:
+          type: string
+          description: |
+            Optional. The version of the Dakota-published document the customer
+            was actually shown, as returned by
+            `GET /legal/documents/{document_key}`.
+
+            Pass it whenever you render the text yourself. Without it the
+            acceptance is pinned to whichever revision is in force when the
+            request arrives — which is not necessarily the one on the
+            customer's screen, if a new revision went live between render and
+            submit. Rejected with 400 if that version is not currently in force,
+            so a stale page fails loudly instead of recording consent to text
+            nobody read.
+
+            Ignored when `disclosure_id` is present; use `disclosure_version`
+            for partner disclosures.
+          example: '2026-07-23'
     InsufficientCreditsError:
       type: object
       description: Error response when a self-serve client lacks the credits required to perform an action.
