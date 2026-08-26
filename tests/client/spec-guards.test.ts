@@ -116,11 +116,10 @@ describe('openapi spec guards', () => {
    * deleted with it. The deterministic report `GET /customers/{id}/insights`
    * stays.
    *
-   * The platform's `openapi.public.yaml` STILL describes the chat operation —
-   * the removal lives on a platform branch that main has not taken — so a
-   * wholesale re-sync reintroduces it, and `npm run generate` would then hand
-   * the SDK back a type for a method that no longer exists. This guard is the
-   * thing that catches that.
+   * The platform's `openapi.public.yaml` still describes the chat operation, so
+   * a wholesale re-sync reintroduces it and `npm run generate` would hand the
+   * SDK back a type for a method that no longer exists. This guard catches
+   * that, and stays useful until the published spec drops the operation too.
    */
   for (const spec of ['openapi.yaml', 'openapi.agentic.yaml']) {
     it(`${spec} does not carry the removed insight chat surface`, () => {

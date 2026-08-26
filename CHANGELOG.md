@@ -192,12 +192,9 @@ without a major-version bump. Platform kept the conversational core deliberately
 and expects to bring it back in a reshaped form after the beta; when it does, it
 will arrive as a new addition here rather than as a restoration of this method.
 
-**Note for the next sync:** platform's removal of the endpoint lives on
-`omer/eng-3153-remove-insight-chat` and platform main has NOT taken it — its
-`routes.go` still registers the route, and `openapi.public.yaml` still describes
-the operation. A wholesale re-sync therefore brings the operation back and
-regenerates a type for a method this SDK no longer has. Two guards in
-`tests/client/spec-guards.test.ts` fail if that happens.
+Until the platform's published spec drops the operation, a wholesale re-sync
+reintroduces it and regenerates a type for a method this SDK no longer has.
+Two guards in `tests/client/spec-guards.test.ts` hold the removal in place.
 
 The 180s `AGENTIC_MODEL_TIMEOUT_MS` default now applies to proposal drafting
 alone.
