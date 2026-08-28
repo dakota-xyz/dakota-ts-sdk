@@ -1,7 +1,7 @@
 /**
  * Scheduled Payments resource (ALPHA).
  *
- * Agentic payments is an alpha surface (x-alpha, flag-gated on the platform)
+ * Agentic payments is a beta surface (x-beta, flag-gated on the platform)
  * and may change without a major-version bump.
  */
 

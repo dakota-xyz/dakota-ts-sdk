@@ -14,7 +14,7 @@
  * signed as base64( ASN.1( ECDSA-P256( SHA-256(payload) ))), with the public
  * key as base64 PKIX (SPKI).
  *
- * Agentic payments is an alpha surface (x-alpha, flag-gated on the platform)
+ * Agentic payments is a beta surface (x-beta, flag-gated on the platform)
  * and may change without a major-version bump.
  */
 

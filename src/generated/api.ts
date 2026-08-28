@@ -619,7 +619,8 @@ export type paths = {
         /**
          * Update associated individual
          * @description Updates an associated individual's information for a business application (UBO, control person, or applicant).
-         *     Can only be called when the application status is 'pending'.
+         *     Applicants may call this in 'pending', 'request_for_information' or 'compliance_review';
+         *     Dakota admins may additionally call it in 'admin_revision'.
          */
         readonly put: operations["updateAssociatedIndividual"];
         readonly post?: never;
@@ -1000,8 +1001,9 @@ export type paths = {
         /**
          * Add associated individual to business application
          * @description Adds a new associated individual (UBO, control person, or applicant) to a business application.
-         *     Can only be called when the application status is 'pending'. Each individual must have a unique
-         *     first and last name combination within the application.
+         *     Applicants may call this in 'pending', 'request_for_information' or 'compliance_review';
+         *     Dakota admins may additionally call it in 'admin_revision'. Each individual must have a
+         *     unique first and last name combination within the application.
          */
         readonly post: operations["addAssociatedIndividual"];
         readonly delete?: never;
@@ -1912,8 +1914,8 @@ export type paths = {
         readonly get?: never;
         readonly put?: never;
         /**
-         * Create a hosted payment agent (ALPHA)
-         * @description > **Alpha** — early access.
+         * Create a hosted payment agent (BETA)
+         * @description > **Beta** — early access.
          *
          *     Creates a payment agent with a real signer row for its derived key (an agent is an ordinary signer). Wallet access is granted separately through the endorsed signer-group / policy attach flow.
          */
@@ -1934,8 +1936,8 @@ export type paths = {
         readonly get?: never;
         readonly put?: never;
         /**
-         * Accept instructions — actuate proposals (ALPHA)
-         * @description > **Alpha** — early access.
+         * Accept instructions — actuate proposals (BETA)
+         * @description > **Beta** — early access.
          *
          *     Each accepted proposal becomes one persisted instruction whose action series is actuated deterministically. Every proposal must instruct a payment. Returns only the instruction ids.
          */
@@ -1954,8 +1956,8 @@ export type paths = {
             readonly cookie?: never;
         };
         /**
-         * List the calling client's scheduled payments (ALPHA)
-         * @description > **Alpha** — early access.
+         * List the calling client's scheduled payments (BETA)
+         * @description > **Beta** — early access.
          *
          *     Returns the calling client's scheduled payments (the ScheduledPayment primitive — all statuses, not just future ones), newest due first. Each shows its funding wallet (the customer's choice at acceptance); once executed, a row also carries the covering mandate and money-path transaction as audit. Narrow the collection with the optional customer_id, signer_id, wallet_id, mandate_id, and status filters; omit them all for the full client collection. The mandate_id filter naturally matches executed rows only (a row carries no mandate until it fires).
          *
@@ -1964,8 +1966,8 @@ export type paths = {
         readonly get: operations["listScheduledPayments"];
         readonly put?: never;
         /**
-         * Schedule a payment directly (ALPHA)
-         * @description > **Alpha** — early access.
+         * Schedule a payment directly (BETA)
+         * @description > **Beta** — early access.
          *
          *     Creates one or more scheduled payments for a signer WITHOUT the proposal flow — schedule directly under an existing active mandate (coverage is matched at fire time, so no new signature is needed here). The payments bind the given signer and funding wallet. The signer must be permitted to spend on that wallet, the wallet must belong to the calling client, and the destination must be a crypto destination of the wallet's customer. The schedule is explicit `dates` (one payment per timestamp) OR `count` × `interval_seconds` from `start_at` (0 ⇒ now); dates are unix SECONDS and are rejected if in the past or implausibly far ahead. Whether a mandate covers each payment is decided at fire time by the money-path gate — a scheduled payment with no covering active mandate fails at fire, it is not rejected here.
          */
@@ -1984,16 +1986,16 @@ export type paths = {
             readonly cookie?: never;
         };
         /**
-         * List the calling client's mandates (ALPHA)
-         * @description > **Alpha** — early access.
+         * List the calling client's mandates (BETA)
+         * @description > **Beta** — early access.
          *
          *     Returns the calling client's mandates, newest first, with the EFFECTIVE status - a pending or active mandate past its valid_until reads "expired" (derived on read; the stored status and audit columns are unchanged). Narrow the collection with the optional customer_id, signer_id, and status filters; omit them all for the full client collection.
          */
         readonly get: operations["listMandates"];
         readonly put?: never;
         /**
-         * Create a mandate directly (ALPHA)
-         * @description > **Alpha** — early access.
+         * Create a mandate directly (BETA)
+         * @description > **Beta** — early access.
          *
          *     Drafts a PENDING mandate from a direct user interaction - no instruction back-link. Exactly one binding form names the signer the mandate binds: payment_agent_id (the hosted convenience - binds that agent's signer and anchors the mandate to the agent's customer), or signer_id together with customer_id (any of the client's signers, BYO keys included; the customer anchors the recipient-target scope and the §8 approver set). The rule is the one the customer will approve (POST /mandates/{mandate_id}/approve, a recognized signer other than the bound one, §8). Recipient targets may be recipient ids or payee names - names resolve to the mandate's customer's existing recipients before anything is stored. Schedule payments under it by mandate_id; they arm the moment it activates.
          */
@@ -2038,8 +2040,8 @@ export type paths = {
             readonly cookie?: never;
         };
         /**
-         * Get a hosted payment agent (ALPHA)
-         * @description > **Alpha** — early access.
+         * Get a hosted payment agent (BETA)
+         * @description > **Beta** — early access.
          *
          *     Returns the agent together with the wallets it can currently spend from. The wallet_ids are DERIVED at query time from the agent signer's live signer-group membership (recognition over the policy-engine truth mirror), so they reflect the agent's access right now — not just at creation time. Use this to read an agent back and reconcile which wallets it is authorized on. The derived state folds the same recognition in (a non-revoked agent recognized on no wallet is pending).
          */
@@ -2060,8 +2062,8 @@ export type paths = {
             readonly cookie?: never;
         };
         /**
-         * Live progress of an in-flight drafting turn (ALPHA)
-         * @description > **Alpha** — early access.
+         * Live progress of an in-flight drafting turn (BETA)
+         * @description > **Beta** — early access.
          *
          *     A multi-payee drafting turn legitimately runs minutes (it is several sequential model calls). While your POST /payment-agents/{payment_agent_id}/proposals is in flight, poll this endpoint (every few seconds) to show the customer what the agent is doing right now — "Looking up 8 payees · checking balances", "Drafting the proposals", "Revising the draft". Advisory display only: `active: false` means no turn is currently publishing progress for this agent (idle, just finished, or served by another instance) — fall back to a generic spinner. Never gate any behavior on this endpoint.
          */
@@ -2082,8 +2084,8 @@ export type paths = {
             readonly cookie?: never;
         };
         /**
-         * List a mandate's versions (ALPHA)
-         * @description > **Alpha** — early access.
+         * List a mandate's versions (BETA)
+         * @description > **Beta** — early access.
          *
          *     The mandate's append-only version history, oldest first — every rule that was ever in force under it and the §8 signer that put each one there. Versions are immutable: a rule listed here never changes.
          *
@@ -2106,8 +2108,8 @@ export type paths = {
             readonly cookie?: never;
         };
         /**
-         * Get a mandate's remaining budget (ALPHA)
-         * @description > **Alpha** — early access.
+         * Get a mandate's remaining budget (BETA)
+         * @description > **Beta** — early access.
          *
          *     How much of this standing limit is LEFT right now — what has already been spent under it, what is already earmarked by scheduled payments that have not fired yet, and therefore what remains.
          *
@@ -2138,8 +2140,8 @@ export type paths = {
             readonly cookie?: never;
         };
         /**
-         * Get an instruction (ALPHA)
-         * @description > **Alpha** — early access.
+         * Get an instruction (BETA)
+         * @description > **Beta** — early access.
          *
          *     Returns the accepted proposal - its action series and the per-action downstream artifacts actuation produced.
          */
@@ -2160,8 +2162,8 @@ export type paths = {
             readonly cookie?: never;
         };
         /**
-         * Get a mandate (ALPHA)
-         * @description > **Alpha** — early access.
+         * Get a mandate (BETA)
+         * @description > **Beta** — early access.
          *
          *     Returns the mandate - the signer it binds, its rule exactly as the customer approves it, validity, and status.
          */
@@ -2182,8 +2184,8 @@ export type paths = {
             readonly cookie?: never;
         };
         /**
-         * Get the customer's account insight report (ALPHA)
-         * @description > **Alpha** — early access.
+         * Get the customer's account insight report (BETA)
+         * @description > **Beta** — early access.
          *
          *     A deterministic, read-only report over the customer's agentic activity: a snapshot of typed facts (funding-wallet balances, upcoming totals, open payments, active mandates), observations (`insights`), and advisory recommendations (`suggestions`). Observations and suggestions share one item schema — `{kind, severity, message, detail, evidence}` — and every item carries `evidence`: typed references to the platform objects it was computed from. `kind` is an OPEN set; clients must ignore kinds they do not recognize. Every number is computed server-side; nothing here moves money or changes state.
          */
@@ -2385,8 +2387,8 @@ export type paths = {
             readonly cookie?: never;
         };
         /**
-         * Get the client's registered agentic policy (ALPHA)
-         * @description > **Alpha** — early access.
+         * Get the client's registered agentic policy (BETA)
+         * @description > **Beta** — early access.
          *
          *     Returns the `client_policy` registered for the CALLING client — the vocabulary and payout constraints every drafting turn and every accept uses. Scoped to the caller by construction: the client is resolved from the API key, so there is no id to pass and no other client's policy to address.
          *
@@ -2394,8 +2396,8 @@ export type paths = {
          */
         readonly get: operations["getClientAgenticPolicy"];
         /**
-         * Register the client's agentic policy (ALPHA)
-         * @description > **Alpha** — early access.
+         * Register the client's agentic policy (BETA)
+         * @description > **Beta** — early access.
          *
          *     Registers (or fully replaces) this client's `client_policy` — the ONLY way to set one. A client declares its vocabulary once, and every drafting turn and every accept then resolve it from here.
          *
@@ -2455,8 +2457,8 @@ export type paths = {
         readonly get?: never;
         readonly put?: never;
         /**
-         * Amend a mandate — append a new version (ALPHA)
-         * @description > **Alpha** — early access.
+         * Amend a mandate — append a new version (BETA)
+         * @description > **Beta** — early access.
          *
          *     Appends a NEW immutable version to an ACTIVE mandate, carrying a changed rule into force with ONE signature and WITHOUT resetting the spend already made in the current window.
          *
@@ -2489,8 +2491,8 @@ export type paths = {
         readonly get?: never;
         readonly put?: never;
         /**
-         * Cancel a mandate (ALPHA)
-         * @description > **Alpha** — early access.
+         * Cancel a mandate (BETA)
+         * @description > **Beta** — early access.
          *
          *     Revokes a pending or active mandate — every version of it at once; there is no way to cancel one version and leave another in force. The canceller must be a recognized signer OTHER than the bound one, with a valid signature over the mandate payload — the bound signer can never mutate its own mandate (§8 applies to every mutation, including authority-reducing ones).
          */
@@ -2511,8 +2513,8 @@ export type paths = {
         readonly get?: never;
         readonly put?: never;
         /**
-         * Approve a mandate (ALPHA)
-         * @description > **Alpha** — early access.
+         * Approve a mandate (BETA)
+         * @description > **Beta** — early access.
          *
          *     A recognized signer OTHER than the bound one signs the mandate payload to activate it; arms its scheduled payments.
          */
@@ -2533,8 +2535,8 @@ export type paths = {
         readonly get?: never;
         readonly put?: never;
         /**
-         * Revoke a hosted agent (ALPHA)
-         * @description > **Alpha** — early access.
+         * Revoke a hosted agent (BETA)
+         * @description > **Beta** — early access.
          *
          *     Revokes an agent: it can no longer be used, and its signing key is destroyed in the isolated signer service (best-effort — the revoked state is authoritative). Idempotent.
          */
@@ -2555,8 +2557,8 @@ export type paths = {
         readonly get?: never;
         readonly put?: never;
         /**
-         * Draft payment proposals from a conversation (ALPHA)
-         * @description > **Alpha** — early access.
+         * Draft payment proposals from a conversation (BETA)
+         * @description > **Beta** — early access.
          *
          *     Pure cognition, no side effects: turn a customer's natural-language request into reviewable PROPOSALS — the same action-series shape POST /instructions accepts. Stateless: send the conversation so far in `messages` (and/or a `prompt` appended as the latest user turn) on each call, and the response carries either a clarifying/confirming reply, or — only at high confidence — validated proposals (sometimes both). The agent may consult the customer's existing payees and this agent's payment history; it never guesses amounts, assets, networks, or addresses, and proposals still only take effect via the instructions + mandate-signature flow. Requires the freeform LLM layer to be configured server-side.
          */
@@ -2577,8 +2579,8 @@ export type paths = {
         readonly get?: never;
         readonly put?: never;
         /**
-         * Cancel one scheduled payment (ALPHA)
-         * @description > **Alpha** — early access.
+         * Cancel one scheduled payment (BETA)
+         * @description > **Beta** — early access.
          *
          *     Finalizes a single still-scheduled payment as cancelled. No signature is required - schedule rows are bookkeeping, not authorization (they are created by a plain API-key call); the signed grant is the MANDATE, which this does not touch. New payments can be instructed under the same mandate at any time. Executed, failed, and already-cancelled rows are not cancellable; a cancel racing the cron at the exact fire moment loses cleanly (the status guard never overwrites an executed payment).
          */
@@ -2738,6 +2740,8 @@ export type components = {
         readonly AgenticProposal: {
             readonly summary?: string;
             readonly actions: readonly components["schemas"]["AgenticAction"][];
+            /** @description The payment agent this proposal was drafted under. Present on proposals returned by the drafting endpoint (it echoes the endpoint's agent); ignored on input - the accept endpoint takes the agent in its own payment_agent_id field. */
+            readonly payment_agent_id?: string;
         };
         /** @description Tagged union - exactly one payload field matching `type` is set. */
         readonly AgenticAction: {
@@ -3005,7 +3009,7 @@ export type components = {
             readonly timezone?: string;
         };
         /**
-         * @description ALPHA — how THIS client's product speaks, and what the agent may propose for it. It reshapes what the drafting model SEES (tool results, tool descriptions, prompt sections) and constrains what it may PROPOSE, so the agent narrates in the client's own nouns instead of platform ones.
+         * @description BETA — how THIS client's product speaks, and what the agent may propose for it. It reshapes what the drafting model SEES (tool results, tool descriptions, prompt sections) and constrains what it may PROPOSE, so the agent narrates in the client's own nouns instead of platform ones.
          *
          *     SCOPE: this is a per-CLIENT policy — it belongs to the `client_id` behind the API key, never to a key (api keys are N:1 to clients, so a per-key policy would fragment for a client running one service key per deployment). REGISTER IT at `PUT /agentic-policy`, which resolves the client from the API key: there is no id to pass and no other client's policy to address.
          *
@@ -3067,7 +3071,7 @@ export type components = {
             readonly [key: string]: unknown;
         };
         /**
-         * @description A client's registered `client_policy` (ALPHA) with its registration timestamps.
+         * @description A client's registered `client_policy` (BETA) with its registration timestamps.
          *
          *     `policy` is the NORMALIZED form — what the server will actually apply, not an echo of what was sent. Values that mean "the default" are normalized away (`payee_model: nested` becomes absent, because an explicit nested and an absent policy have to be the same value rather than two values that merely behave alike today).
          */
@@ -3156,7 +3160,7 @@ export type components = {
             /** @description The agent's conversational reply — a clarifying question or confirmation. Present without proposals when the agent needs more from the user; may accompany proposals as a short note. */
             readonly reply?: string;
             /**
-             * @description ALPHA — machine-actionable reasons the agent could not complete the request, for the CLIENT APPLICATION rather than the customer. `reply` explains it in prose, which software cannot branch on: "extend the limit to cover Priya", "I need her bank details" and "that rail is not supported" all arrive as some text. A blocker names the reason as a stable code so the client can act on it — opening its own limit editor with the payee filled in, say — and only then decide what the customer sees.
+             * @description BETA — machine-actionable reasons the agent could not complete the request, for the CLIENT APPLICATION rather than the customer. `reply` explains it in prose, which software cannot branch on: "extend the limit to cover Priya", "I need her bank details" and "that rail is not supported" all arrive as some text. A blocker names the reason as a stable code so the client can act on it — opening its own limit editor with the payee filled in, say — and only then decide what the customer sees.
              *     MAY ACCOMPANY PROPOSALS, and routinely does. The common case is a payee who does not exist yet: the turn proposes creating them AND reports that the limit will not reach them, because the client has to do both, in that order — accept the proposal so the payee has an id, then amend the limit to include it. Treat proposals and blockers as independent, never as alternatives.
              *     Absent when nothing blocked the turn. ALWAYS switch on `code` and ignore codes you do not know, as new ones are added over time. Every blocker returned has been re-checked against the server's own data, so a code never reflects only the model's opinion.
              */
@@ -3708,8 +3712,8 @@ export type components = {
              */
             readonly sepaFeeCents: number;
             /**
-             * @description Per-Swift-transfer banking fee in USD cents.
-             * @example 4000
+             * @description Per-Swift-transfer banking fee in USD cents, debited from the prepaid credit balance on outbound transfers only; deposits carry no banking fee. Self-serve default is 2500 ($25.00).
+             * @example 2500
              */
             readonly swiftFeeCents: number;
             /**
@@ -4673,7 +4677,7 @@ export type components = {
         readonly Family: "evm" | "solana";
         /**
          * Payment Capability
-         * @description Type of payment rail capability supported. For onramp accounts, `us_bank_account` indicates the account accepts ACH, Wire (Fedwire), and FedNow deposits interchangeably. `fednow` is the FedNow instant US-domestic USD rail for payouts and deposits — $500k per-transaction cap on payouts; a payout destination whose bank cannot receive FedNow is rejected at account creation with problem type `https://docs.dakota.xyz/api-reference/errors#fednow-destination-unreachable` — route that destination over `ach` instead.
+         * @description Type of payment rail capability supported. For onramp accounts, `us_bank_account` indicates the account accepts ACH, Wire (Fedwire), and FedNow deposits interchangeably. `fednow` is the FedNow instant US-domestic USD rail for payouts and deposits — $500k per-transaction cap on payouts; a payout destination whose bank cannot receive FedNow is rejected at account creation with problem type `https://docs.dakota.xyz/api-reference/errors#fednow-destination-unreachable` — route that destination over `ach` instead. `swift` is the international USD wire rail: gated on the customer's `international_wire` capability, USD only, payouts target `fiat_iban` destinations, and deposit instructions carry the BIC and the beneficiary address. Intermediary banks may deduct fees en route, so the amount received can be lower than the amount sent. `sepa` is not currently offered.
          * @example ach
          * @enum {string}
          */
@@ -4845,17 +4849,18 @@ export type components = {
              *     accounts. Setting it on an `onramp` or `swap` account is REJECTED
              *     with a 400: those sweep to a crypto address, where no reference is
              *     delivered, so accepting it would store a value the payee can never
-             *     see. SWIFT is validated but NOT delivered: a SWIFT transfer carries
-             *     no payment reference at all, and a one-off is no different — both
-             *     reach the same send path, which has nowhere to put one. Do not plan
-             *     on a reference reaching a SWIFT payee by any route today. ACH and
-             *     wire (`fedwire`, `us_bank_account`) do deliver it.
+             *     see. On SWIFT the reference is carried as the wire's remittance
+             *     information; whether the payee sees it depends on the receiving
+             *     bank and any intermediaries, so do not rely on it for payee-side
+             *     reconciliation. ACH and wire (`fedwire`, `us_bank_account`)
+             *     deliver it as the addenda / wire message.
              *
              *     Validated against the account's `rail` with the same per-rail rules
              *     as a one-off's `payment_reference` — ACH at most 18 characters and
              *     letters/numbers/spaces only, wire (`fedwire`, `us_bank_account`) at
-             *     most 140 characters, SEPA 6-140, SWIFT 5-140. A `swift` account
-             *     validates the value but, per above, never delivers it.
+             *     most 140 characters, SEPA 6-140, SWIFT 5-140 across at most 4
+             *     lines of 35 characters (letters, numbers, spaces, commas, and
+             *     periods only).
              *
              *     Omit for the default, which is unchanged: no reference is attached.
              *     An empty string means the same thing and is accepted — a client that
@@ -4958,7 +4963,7 @@ export type components = {
              */
             readonly account_type?: "checking" | "savings";
             /**
-             * @description BIC/SWIFT code for the international bank account.
+             * @description BIC/SWIFT code for the international bank account. On deposit instructions it is populated only for SWIFT-capable accounts; give the sender both this BIC and the routing number.
              * @example DEUTDEFFXXX
              */
             readonly bic?: string;
@@ -4972,7 +4977,7 @@ export type components = {
              * @example John Doe
              */
             readonly account_holder_name: string;
-            /** @description Address of the account holder. */
+            /** @description Address of the account holder. On SWIFT deposit instructions this is the beneficiary's postal address — international wires require it, and the sender's bank will ask for it. The sender must copy it exactly as shown. Accounts provisioned before this field shipped may omit it. */
             readonly account_holder_address?: components["schemas"]["Address"];
             /**
              * @description Phone number of the account holder.
@@ -5713,7 +5718,7 @@ export type components = {
              */
             readonly provider_status: string;
             /**
-             * @description NACHA/Fedwire return code (e.g., R01) when the transaction was returned by the receiving bank.
+             * @description Return code (e.g., R01) when the transaction was returned by the receiving bank. NACHA/Fedwire codes for US bank rails; international (SWIFT) wire returns carry no NACHA code and may return a reduced amount after intermediary fees.
              * @example R01
              */
             readonly return_code?: string;
@@ -5773,7 +5778,7 @@ export type components = {
             readonly output: components["schemas"]["AmountDetails"];
             /** @description Exchange rate used for the transaction */
             readonly exchange_rate: string;
-            /** @description External fee amount details */
+            /** @description Fees charged by parties outside Dakota, such as banking partners. Currently reported as zero for bank transfers. For international (SWIFT) wires, intermediary and beneficiary banks can deduct fees en route; Dakota does not control or learn those deductions, and they do not appear here — the amount received can be lower than the amount sent. */
             readonly external_fee?: components["schemas"]["AmountDetails"];
             /** @description Dakota fee amount details */
             readonly dakota_fee?: components["schemas"]["AmountDetails"];
@@ -5873,7 +5878,7 @@ export type components = {
             /** @description Optional preferred payment rail for bank transfers (offramp). Ignored when the destination is a crypto address. If not specified, the system will automatically select the most appropriate rail based on the destination's supported methods. */
             readonly destination_payment_rail?: components["schemas"]["PaymentCapability"];
             /**
-             * @description Optional payment reference message for bank transfers. Length limits: ACH (1-18 chars), Wire (1-140 chars), SEPA (6-140 chars), SWIFT (1-140 chars, max 4 lines of 35 chars each)
+             * @description Optional payment reference message for bank transfers, carried on the payment as the ACH addenda, the wire message, or the SWIFT remittance information. On SWIFT, whether the payee sees it depends on the receiving bank and any intermediaries. Length limits: ACH 1-18 characters (letters/numbers/spaces), wire 1-140, SEPA 6-140, SWIFT 5-140 across at most 4 lines of 35 characters (letters, numbers, spaces, commas, and periods only).
              * @example Invoice payment for services
              */
             readonly payment_reference?: string;
@@ -5939,7 +5944,7 @@ export type components = {
             readonly completed_at?: number;
             /** @description The payment rail that was selected for this transaction */
             readonly destination_payment_rail?: components["schemas"]["PaymentCapability"];
-            /** @description Payment reference message for bank transfers (e.g. wire message, SWIFT or SEPA reference) */
+            /** @description Payment reference message for bank transfers (e.g. wire message, SWIFT remittance information, or SEPA reference) */
             readonly payment_reference?: string | null;
             /**
              * @description Name of the destination bank
@@ -5972,7 +5977,7 @@ export type components = {
              */
             readonly destination_bic?: string;
             /**
-             * @description NACHA/Fedwire return code (e.g., R01) when the transaction was returned by the receiving bank.
+             * @description Return code (e.g., R01) when the transaction was returned by the receiving bank. NACHA/Fedwire codes for US bank rails; international (SWIFT) wire returns carry no NACHA code and may return a reduced amount after intermediary fees.
              * @example R01
              */
             readonly return_code?: string;
@@ -26029,7 +26034,7 @@ export interface operations {
                      *       "achFeeCents": 100,
                      *       "wireFeeCents": 2500,
                      *       "sepaFeeCents": 150,
-                     *       "swiftFeeCents": 4000,
+                     *       "swiftFeeCents": 2500,
                      *       "kycFeeCents": 500,
                      *       "kybFeeCents": 2500,
                      *       "effectiveFrom": "2024-01-01T00:00:00Z",

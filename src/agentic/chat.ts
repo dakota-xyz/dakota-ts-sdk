@@ -4,7 +4,7 @@
  * `AgentConversation` hides that bookkeeping so a caller just sends user
  * messages and reads the agent's clarifying questions / final proposals.
  *
- * Agentic payments is an alpha surface (x-alpha, flag-gated on the platform)
+ * Agentic payments is a beta surface (x-beta, flag-gated on the platform)
  * and may change without a major-version bump.
  */
 
