@@ -169,9 +169,9 @@ console.log(`Send ${tx.send_amount} USDC to: ${tx.crypto_address}`);
 console.log(`Status: ${tx.status}`);
 ```
 
-## Agentic Payments (Alpha)
+## Agentic Payments (Beta)
 
-> ⚠️ **Alpha.** The hosted payment-agent surface is `x-alpha` and flag-gated on the platform (endpoints return `404` unless enabled for your key). The SDK helpers below may change — or be removed — without a major-version bump. Not recommended for production.
+> ⚠️ **Beta.** The hosted payment-agent surface is `x-beta` and flag-gated on the platform (endpoints return `404` unless enabled for your key). The SDK helpers below may change — or be removed — without a major-version bump. Not recommended for production.
 
 A **payment agent** is a named, customer-scoped signer Dakota can drive: you provision it, endorse it onto a wallet, then it drafts and — once a **mandate** is signed — fires payments, bounded by that customer-approved mandate.
 
@@ -846,9 +846,9 @@ await client.feePayoutDestination.set({
 });
 ```
 
-### Payment Agents (Alpha)
+### Payment Agents (Beta)
 
-Hosted signing agents that draft payments (`x-alpha`, flag-gated).
+Hosted signing agents that draft payments (`x-beta`, flag-gated).
 
 | Method | Description |
 |--------|-------------|
@@ -858,7 +858,7 @@ Hosted signing agents that draft payments (`x-alpha`, flag-gated).
 | `paymentAgents.createProposals(id, data)` | One-shot proposals turn (see `newAgentConversation`) |
 | `paymentAgents.getProposalsProgress(id)` | Live progress of an in-flight drafting turn (advisory) |
 
-### Agentic Policy (Alpha)
+### Agentic Policy (Beta)
 
 How your product speaks, and what the agent may propose for it. Register it
 once and every drafting turn narrates in your nouns instead of the platform's.
@@ -906,7 +906,7 @@ the platform stopped reading `client_policy` from request bodies, and
 one sent there is ignored — the agent quietly goes back to saying "destination"
 and "mandate" with nothing reporting the fallback.
 
-### Mandates (Alpha)
+### Mandates (Beta)
 
 The §8 authorizations that arm scheduled payments.
 
@@ -921,7 +921,7 @@ The §8 authorizations that arm scheduled payments.
 | `mandates.listVersions(id)` | Append-only version history, oldest first |
 | `mandates.getBudget(id)` | Remaining budget: spent, earmarked, left (advisory) |
 
-### Instructions (Alpha)
+### Instructions (Beta)
 
 Accept and inspect actuated proposals.
 
@@ -930,7 +930,7 @@ Accept and inspect actuated proposals.
 | `instructions.create(data)` | Accept proposals — actuate into persisted instructions |
 | `instructions.get(id)` | Get an instruction + its downstream artifacts |
 
-### Scheduled Payments (Alpha)
+### Scheduled Payments (Beta)
 
 Schedule rows created from instructions (or directly).
 
@@ -941,7 +941,7 @@ Schedule rows created from instructions (or directly).
 | `scheduledPayments.get(id)` | Get scheduled payment by ID |
 | `scheduledPayments.cancel(id)` | Cancel an open scheduled payment |
 
-### Insights (Alpha)
+### Insights (Beta)
 
 Read-only advisory reporting over a customer's agentic activity.
 

@@ -2,6 +2,70 @@
 
 All notable changes to the Dakota TypeScript SDK are documented in this file.
 
+## [Unreleased]
+
+### Changed — the agentic surface is BETA, not alpha (ENG-3168)
+
+Platform promoted the whole agentic surface from alpha to beta. The wire
+contract did not move — same paths, parameters, schemas, status codes and
+response shapes — so no caller has anything to change.
+
+What did move is the maturity marker, and in this SDK it is not only prose:
+the overlay pipeline SELECTS the agentic paths by it.
+
+- `scripts/extract-agentic.mjs` now matches `x-beta: true` (was `x-alpha`).
+- `tests/client/spec-guards.test.ts` partitions on `x-beta` to match.
+- `openapi.agentic.yaml` is regenerated: 18 paths, 43 schemas, unchanged in
+  content from the alpha-marked overlay it replaces.
+- `src/generated/api.ts` carries `(BETA)` summaries and a
+  `> **Beta** — early access.` banner.
+- README, AGENTS.md, CLAUDE.md and the `src/**` doc comments say beta.
+
+**If you maintain this SDK, note the failure mode.** A promotion renames the
+extension rather than changing a value, so the extractor's selector and the
+guard's selector have to move in the same commit. Leave the extractor pointing
+at a marker the spec no longer uses and it writes an EMPTY overlay — and the
+guard that would have caught it is selecting on the same stale marker, so it
+partitions nothing into the pre-release bucket, finds nothing missing, and
+passes. Both are now documented in `CLAUDE.md`.
+
+Beta is not a stability promise: the surface stays flag-gated on the platform,
+and may still change or be removed without a major bump.
+
+### Added — `AgenticProposal.payment_agent_id`
+
+Optional. Names the payment agent a proposal was drafted under; present on
+proposals returned by the drafting endpoint, where it echoes the agent you
+called. Ignored on input — the accept endpoint takes the agent in its own
+`payment_agent_id` field.
+
+### Changed — spec sync with platform main
+
+`openapi.yaml` is a copy of platform `openapi.public.yaml` at the promotion
+commit, replacing one 82 lines behind, and is byte-identical to the spec go-sdk
+carries. The deviation 3.0.0 recorded is gone: platform now publishes the
+correct `/agentic-policy` path, so the SDK no longer carries a hand-corrected
+one — `tests/client/spec-guards.test.ts` keeps asserting the right shape.
+
+Beyond `payment_agent_id` the delta is documentation, and the SWIFT
+corrections matter if you touch that rail:
+
+- **A payment reference DOES reach a SWIFT payee**, carried as the wire's
+  remittance information. The replaced text said SWIFT "carries no payment
+  reference at all". Delivery still depends on the receiving bank and any
+  intermediaries, so do not reconcile against it — but "not reconcilable" and
+  "not delivered" are different claims, and the published one was wrong.
+- **SWIFT reference format is tighter than documented**: 5-140 characters over
+  at most 4 lines of 35, letters/numbers/spaces/commas/periods only.
+- **The self-serve SWIFT banking fee is 2500 ($25.00), not 4000**, debited from
+  the prepaid credit balance on outbound transfers only.
+- **International (SWIFT) wire returns carry no NACHA code** and may return a
+  reduced amount: intermediary and beneficiary banks deduct en route, Dakota
+  does not learn those deductions, and they never appear in external fees.
+- Onboarding submission is no longer `pending`-only — applicants may also
+  submit in `request_for_information` and `compliance_review`, admins in
+  `admin_revision`.
+
 ## [3.0.0] - 2026-08-26
 
 Major because this breaks the STABLE surface, not only the alpha one: the

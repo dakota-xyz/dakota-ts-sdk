@@ -4,7 +4,7 @@
  * stays short. The raw operations remain reachable via the resource classes
  * on `DakotaClient`.
  *
- * Agentic payments is an alpha surface (x-alpha, flag-gated on the platform)
+ * Agentic payments is a beta surface (x-beta, flag-gated on the platform)
  * and may change without a major-version bump.
  */
 

@@ -2,10 +2,10 @@
 /**
  * Merge SDK-owned overlays onto the base OpenAPI spec.
  *
- * The platform sync strips alpha-tagged endpoints from `openapi.yaml`
- * (agentic payments today). The SDK still needs those bits so it can
- * generate types for the ALPHA surface it opts into. Overlays keep the
- * alpha surface owned by the SDK: on `npm run generate`, the base spec
+ * A platform sync can strip pre-release endpoints from `openapi.yaml`
+ * (agentic payments today, marked `x-beta`). The SDK still needs those
+ * bits so it can generate types for the BETA surface it opts into.
+ * Overlays keep that surface owned by the SDK: on `npm run generate`, the base spec
  * (whatever a fresh sync produced) is deep-merged with each overlay, then
  * `openapi-typescript` runs on the merged output.
  *

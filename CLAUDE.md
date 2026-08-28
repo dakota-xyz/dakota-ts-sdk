@@ -89,7 +89,7 @@ server otherwise INFERS it from the other filters — `customer_id` alone infers
 - `client.customers` also carries the onboarding-adjacent surface: `getCapabilities`, `reEngage`,
   `bulkImportFromSumsubTokens` (synchronous) and `importPersonaTokens` /
   `listPersonaImportJobs` / `getPersonaImportJob` (asynchronous job)
-- `client.mandates` (ALPHA) carries `amend` / `listVersions` / `getBudget` alongside
+- `client.mandates` (BETA) carries `amend` / `listVersions` / `getBudget` alongside
   approve/cancel — see `mandateAmendSignPayload` for the amend signing bytes
 - `client.legal` - The published terms customers accept (`list`, `get`).
   UNAUTHENTICATED, so it is callable before a customer relationship exists.
@@ -173,16 +173,22 @@ the spec.
 
 ### Why the overlay exists
 
-The overlay pins the alpha surface the SDK opts into (`x-alpha: true` —
+The overlay pins the beta surface the SDK opts into (`x-beta: true` —
 today the agentic-payments surface `/payment-agents`, `/instructions`,
 `/mandates`, `/scheduled-payments`, plus the customer Insights
-endpoints). Historically the platform sync STRIPPED alpha paths from
-`openapi.yaml`; since ENG-2756 the platform's published public spec keeps
-them (annotated with `x-alpha` + an alpha banner), so the overlay now
-mainly guards against a sync regression and gives the SDK an explicit,
-reviewable manifest of its alpha surface. The merge is idempotent — when
-the base already carries the alpha content, the overlay redefines the
+endpoints). Historically the platform sync STRIPPED the pre-release paths
+from `openapi.yaml`; since ENG-2756 the platform's published public spec
+keeps them (annotated with the maturity marker + a banner), so the overlay
+now mainly guards against a sync regression and gives the SDK an explicit,
+reviewable manifest of its beta surface. The merge is idempotent — when
+the base already carries the beta content, the overlay redefines the
 same content harmlessly.
+
+The marker is spelled into the extension NAME, so each promotion renames it
+(ENG-3168 moved `x-alpha` -> `x-beta`). If it changes again, both
+`scripts/extract-agentic.mjs` and `tests/client/spec-guards.test.ts` select
+on it and must move together — a stale selector yields an EMPTY overlay, and
+the guard that would catch that is the one you just made stale.
 
 - `npm run openapi:check` — CI guard; fails if the base `openapi.yaml`
   is missing paths/schemas the overlay expects. (Useful defense in depth

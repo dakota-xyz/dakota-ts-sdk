@@ -683,9 +683,9 @@ for await (const scenario of client.sandbox.listScenarios()) {
 }
 ```
 
-### Agentic Payments (Alpha)
+### Agentic Payments (Beta)
 
-> `x-alpha`, flag-gated: endpoints 404 unless enabled for your key. May change without a major-version bump.
+> `x-beta`, flag-gated: endpoints 404 unless enabled for your key. May change without a major-version bump.
 
 ```typescript
 // Provision a hosted agent and endorse it onto a wallet.

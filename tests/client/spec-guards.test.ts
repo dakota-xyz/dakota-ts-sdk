@@ -60,19 +60,19 @@ function refClosure(roots: unknown, schemas: Record<string, unknown>): Set<strin
 }
 
 function partitionPaths(spec: Spec): {
-  alpha: Record<string, unknown>;
+  beta: Record<string, unknown>;
   rest: Record<string, unknown>;
 } {
-  const alpha: Record<string, unknown> = {};
+  const beta: Record<string, unknown> = {};
   const rest: Record<string, unknown> = {};
   for (const [route, def] of Object.entries(spec.paths)) {
-    const isAlpha =
+    const isBeta =
       def !== null &&
       typeof def === 'object' &&
-      (def as Record<string, unknown>)['x-alpha'] === true;
-    (isAlpha ? alpha : rest)[route] = def;
+      (def as Record<string, unknown>)['x-beta'] === true;
+    (isBeta ? beta : rest)[route] = def;
   }
-  return { alpha, rest };
+  return { beta, rest };
 }
 
 describe('openapi spec guards', () => {
@@ -133,40 +133,40 @@ describe('openapi spec guards', () => {
   }
 
   /**
-   * The overlay only earns its keep if it is COMPLETE: it exists so the alpha
-   * surface survives a sync that strips alpha paths from the base, and an
+   * The overlay only earns its keep if it is COMPLETE: it exists so the beta
+   * surface survives a sync that strips beta paths from the base, and an
    * overlay missing one schema those paths reference would generate dangling
    * `$ref`s on exactly the sync it is meant to survive.
    *
    * The allowlist in `scripts/extract-agentic.mjs` is maintained by hand, and
-   * it had already drifted ten schemas behind the alpha paths (AgenticBlocker,
+   * it had already drifted ten schemas behind the beta paths (AgenticBlocker,
    * MandateVersion, DeveloperFee, …) before this guard existed.
    *
-   * Only schemas the alpha paths OWN are required. Ones also reachable from a
-   * non-alpha path (Address, ProblemDetails, Meta, …) stay in the base on any
+   * Only schemas the beta paths OWN are required. Ones also reachable from a
+   * non-beta path (Address, ProblemDetails, Meta, …) stay in the base on any
    * sync, so duplicating them into the overlay would only add a second copy to
    * keep in step.
    */
-  it('the agentic overlay carries every schema its alpha paths own', () => {
+  it('the agentic overlay carries every schema its beta paths own', () => {
     const base = loadSpec('openapi.yaml');
     const overlay = loadSpec('openapi.agentic.yaml');
     const schemas = base.components?.schemas ?? {};
-    const { alpha, rest } = partitionPaths(base);
+    const { beta, rest } = partitionPaths(base);
 
     const sharedWithStable = refClosure(rest, schemas);
-    const alphaOnly = [...refClosure(alpha, schemas)].filter((name) => !sharedWithStable.has(name));
+    const betaOnly = [...refClosure(beta, schemas)].filter((name) => !sharedWithStable.has(name));
     const carried = new Set(Object.keys(overlay.components?.schemas ?? {}));
-    const missing = alphaOnly.filter((name) => !carried.has(name)).sort();
+    const missing = betaOnly.filter((name) => !carried.has(name)).sort();
 
     expect(missing).toEqual([]);
   });
 
-  it('the agentic overlay carries every x-alpha path', () => {
+  it('the agentic overlay carries every x-beta path', () => {
     const base = loadSpec('openapi.yaml');
     const overlay = loadSpec('openapi.agentic.yaml');
-    const { alpha } = partitionPaths(base);
+    const { beta } = partitionPaths(base);
 
-    const missing = Object.keys(alpha)
+    const missing = Object.keys(beta)
       .filter((route) => overlay.paths[route] === undefined)
       .sort();
 
