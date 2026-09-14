@@ -302,6 +302,40 @@ describe('Transport', () => {
       expect(result).toBeUndefined();
     });
 
+    it('handles a 200 with no body the same as a 204', async () => {
+      // The platform answers POST /customers/{id}/applications/{id}/withdraw
+      // with a bare 200 and no body. Parsing that as JSON would reject a call
+      // whose side effect already happened.
+      mockFetch = createMockFetch([{ status: 200 }]);
+      const config = resolveConfig({
+        apiKey: 'test_api_key',
+        fetch: mockFetch as unknown as typeof fetch,
+      });
+      transport = new Transport(config);
+
+      const result = await transport.request({
+        method: 'POST',
+        path: '/customers/123/applications/456/withdraw',
+        body: {},
+      });
+
+      expect(result).toBeUndefined();
+    });
+
+    it('still rejects a malformed 200 body', async () => {
+      mockFetch = vi.fn(
+        async () =>
+          new Response('not json', { status: 200, headers: { 'content-type': 'application/json' } })
+      ) as unknown as ReturnType<typeof createMockFetch>;
+      const config = resolveConfig({
+        apiKey: 'test_api_key',
+        fetch: mockFetch as unknown as typeof fetch,
+      });
+      transport = new Transport(config);
+
+      await expect(transport.request({ method: 'GET', path: '/customers' })).rejects.toThrow();
+    });
+
     it('throws APIError for 4xx responses', async () => {
       mockFetch = createMockFetch([
         {

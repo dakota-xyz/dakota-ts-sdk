@@ -244,7 +244,17 @@ export class Transport {
           if (response.status === 204) {
             return undefined as T;
           }
-          return (await response.json()) as T;
+          // A 2xx is not always a document. The platform answers some
+          // operations with a bare 200 and NO body (POST
+          // /customers/{id}/applications/{id}/withdraw is the first public
+          // one), and `response.json()` on an empty body throws — which would
+          // reject a call whose side effect already happened. Read the text
+          // and let an empty one mean "no content", the same as a 204.
+          const text = await response.text();
+          if (text.length === 0) {
+            return undefined as T;
+          }
+          return JSON.parse(text) as T;
         }
 
         // Convert to API error
