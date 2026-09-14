@@ -46,7 +46,8 @@ import type {
  * await client.sandbox.simulateInbound({
  *   simulation_id: `sim_${Date.now()}`,
  *   type: 'ach_outbound_settled',
- *   movement_id: 'tx_456',
+ *   account_id: 'acc_456',
+ *   one_off_transaction_id: 'tx_456',
  *   amount: '500.00',
  *   currency: 'USD',
  * });
@@ -61,9 +62,13 @@ export class SandboxResource extends BaseResource {
    *
    * | Type | Required Fields |
    * |------|-----------------|
-   * | `ach_inbound`, `wire_inbound` | `account_id` |
-   * | `crypto_inbound` | `wallet_id` |
-   * | `*_outbound_*`, `*_reversal` | `movement_id` |
+   * | `ach_inbound`, `fedwire_inbound`, `swift_inbound`, `fednow_inbound` | `account_id` |
+   * | `crypto_inbound` | `wallet_address` |
+   * | `*_outbound_*`, `*_reversal` | `account_id` + `one_off_transaction_id` |
+   *
+   * `swift_inbound` and `fedwire_inbound` behave identically: the rail a
+   * deposit books on is derived from the RECEIVING account, so pick the
+   * account, not the type, to choose between a SWIFT and a Fedwire deposit.
    *
    * @param data - Simulation request data
    * @returns Simulation response with ID and state
@@ -92,11 +97,13 @@ export class SandboxResource extends BaseResource {
    *   destination_payment_rail: 'ach',
    * });
    *
-   * // Simulate the ACH settlement
+   * // Simulate the ACH settlement. `account_id` is the offramp account that
+   * // funded the transaction.
    * await client.sandbox.simulateInbound({
    *   simulation_id: `sim_${Date.now()}`,
    *   type: 'ach_outbound_settled',
-   *   movement_id: tx.id,
+   *   account_id: 'acc_456',
+   *   one_off_transaction_id: tx.id,
    *   amount: '100.00',
    *   currency: 'USD',
    * });
@@ -107,7 +114,7 @@ export class SandboxResource extends BaseResource {
    * const result = await client.sandbox.simulateInbound({
    *   simulation_id: `sim_${Date.now()}`,
    *   type: 'crypto_inbound',
-   *   wallet_id: 'wallet_789',
+   *   wallet_address: '0x165cd37b4c644c2921454429e7f9358d18a45e14',
    *   amount: '500.00',
    *   currency: 'USDC',
    * });

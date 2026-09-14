@@ -38,14 +38,36 @@ export enum WebhookEventType {
    * payload is {@link CustomerCapabilityStatusUpdatedData}.
    */
   CustomerCapabilityStatusUpdated = 'customer.capability_status.updated',
+  /**
+   * Emitted when a reviewer opens a request for information (RFI) against a
+   * customer's application. The payload is {@link CustomerRfiRequestedData}:
+   * what is still owed, but deliberately NOT the resubmission link.
+   */
+  CustomerRfiRequested = 'customer.rfi.requested',
+  /**
+   * Emitted when the requested information arrives and the application
+   * returns to review. The payload is {@link CustomerRfiRespondedData}.
+   */
+  CustomerRfiResponded = 'customer.rfi.responded',
+  /**
+   * Emitted when an onboarding application is withdrawn — by the applicant,
+   * or by the client on their behalf. Withdrawal is terminal. The payload is
+   * {@link CustomerApplicationWithdrawnData}.
+   */
+  CustomerApplicationWithdrawn = 'customer.application.withdrawn',
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // Fee Payout Destination events
+  // Payout Destination events
   // ─────────────────────────────────────────────────────────────────────────────
   /** Payload is {@link FeePayoutDestinationUpdatedData}. */
   FeePayoutDestinationUpdated = 'fee_payout_destination.updated',
   /** Payload is an empty object. */
   FeePayoutDestinationDeleted = 'fee_payout_destination.deleted',
+  /**
+   * Emitted when a client sets or replaces the wallet their RD marketing fee
+   * is sent to. The payload is {@link RdPayoutDestinationUpdatedData}.
+   */
+  RdPayoutDestinationUpdated = 'rd_payout_destination.updated',
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Auto Account events (off-ramp/on-ramp account lifecycle)
@@ -93,9 +115,19 @@ export enum WebhookEventType {
   ExceptionCleared = 'exception.cleared',
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // BVNK Onboarding events (provider-specific)
+  // BVNK Onboarding events (provider-specific) — no longer emitted
   // ─────────────────────────────────────────────────────────────────────────────
+  /**
+   * @deprecated The platform no longer defines or emits this event, and it is
+   * gone from the public `EventType` enum. Kept only so existing handler
+   * registrations keep compiling; it will be removed in the next major.
+   */
   BvnkOnboardingCreated = 'bvnk.onboarding.created',
+  /**
+   * @deprecated The platform no longer defines or emits this event, and it is
+   * gone from the public `EventType` enum. Kept only so existing handler
+   * registrations keep compiling; it will be removed in the next major.
+   */
   BvnkOnboardingUpdated = 'bvnk.onboarding.updated',
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -256,11 +288,129 @@ export interface CustomerCapabilityStatusUpdatedData {
 }
 
 /**
+ * Who a document in an RFI belongs to. `id` is set only for an individual;
+ * the business and EDD entities are unique per application, so the kind
+ * alone locates them.
+ */
+export interface RfiRequirementEntity {
+  /** 'business' | 'individual' | 'edd' */
+  kind: string;
+  /** The associated individual's id. Present only when `kind` is 'individual'. */
+  id?: string;
+}
+
+/**
+ * One thing a customer must supply to resolve a request for information.
+ *
+ * Switch on `type`:
+ * - `'document'` — exactly one of `document_type` (a specific kind of
+ *   document) or `purpose` (a compliance requirement several document types
+ *   could satisfy) is set. `status` says whether something is already on file
+ *   (`'on_file'` means replace it; `'missing'` means send it for the first
+ *   time).
+ * - `'field'` — `path` names the application field to correct.
+ * - `'question'` — `key` and `prompt` carry a reviewer's free-text question.
+ *   When `require_document` is true the answer MUST come with an upload; a
+ *   text-only answer leaves the RFI unresolved.
+ */
+export interface RfiRequirement {
+  /** 'document' | 'field' | 'question' */
+  type: string;
+  /** Document requirement: a specific document type (mutually exclusive with `purpose`). */
+  document_type?: string;
+  /** Document requirement: a compliance purpose (mutually exclusive with `document_type`). */
+  purpose?: string;
+  /** Document requirement: whose document it is. Omitted when the party is not known. */
+  entity?: RfiRequirementEntity;
+  /** Document requirement: 'missing' | 'on_file'. */
+  status?: string;
+  /** Field requirement: the application field path, e.g. 'business.business_description'. */
+  path?: string;
+  /** Question requirement: the question's stable key. */
+  key?: string;
+  /** Question requirement: the reviewer's prompt. */
+  prompt?: string;
+  /** Question requirement: the answer must be accompanied by an upload. */
+  require_document?: boolean;
+}
+
+/**
+ * Event payload for {@link WebhookEventType.CustomerRfiRequested}
+ * ('customer.rfi.requested').
+ *
+ * The client that onboarded the customer owns the relationship, so this event
+ * is how it learns the customer is blocked and what is still owed.
+ *
+ * The resubmission link is intentionally ABSENT: it embeds an access token,
+ * and a webhook body comes to rest in logs, traces and retry buffers where a
+ * credential must not. Read the link from the customer resource over your own
+ * authenticated channel.
+ *
+ * `message_id` is the correlation handle: dedupe redeliveries on it, pair a
+ * later `customer.rfi.responded` with the request it answers, and tell a
+ * re-notification from a genuinely new request. Omitted when the platform
+ * did not record one.
+ */
+export interface CustomerRfiRequestedData {
+  customer_id: string;
+  application_id: string;
+  /** The RFI thread message this request was sent as. */
+  message_id?: string;
+  /** Unix seconds. */
+  requested_at: number;
+  requirements: RfiRequirement[];
+}
+
+/**
+ * Event payload for {@link WebhookEventType.CustomerRfiResponded}
+ * ('customer.rfi.responded'): the requested information arrived and the
+ * application is back in review. Use it to stop chasing your customer.
+ *
+ * There is no `rfi.resolved` event: an RFI ends in a decision, which
+ * `customer.kyb_status.updated` already reports.
+ */
+export interface CustomerRfiRespondedData {
+  customer_id: string;
+  application_id: string;
+  /** Unix seconds. */
+  responded_at: number;
+}
+
+/**
+ * Event payload for {@link WebhookEventType.CustomerApplicationWithdrawn}
+ * ('customer.application.withdrawn'). Withdrawal is terminal: onboarding the
+ * customer again requires a new application.
+ */
+export interface CustomerApplicationWithdrawnData {
+  customer_id: string;
+  application_id: string;
+  /** Why it was withdrawn. Omitted when no reason was recorded. */
+  reason?: string;
+}
+
+/**
  * Fee Payout Destination Updated event data.
  */
 export interface FeePayoutDestinationUpdatedData {
   /** The destination kind — 'usdc_wallet' (developer-fee payouts are crypto-only) */
   type: string;
+}
+
+/**
+ * Event payload for {@link WebhookEventType.RdPayoutDestinationUpdated}
+ * ('rd_payout_destination.updated').
+ *
+ * A destination has no history of its own — a PUT replaces the row — so this
+ * event is the only record that it changed, which is why it carries the
+ * address, what it replaced, and who did it.
+ */
+export interface RdPayoutDestinationUpdatedData {
+  /** The EVM address on Base the fee is now sent to. */
+  wallet_address: string;
+  /** The address it replaced. Empty string on a first registration. */
+  previous_address: string;
+  /** The user who made the change. Empty string when not attributable. */
+  updated_by: string;
 }
 
 /**

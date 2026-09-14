@@ -86,6 +86,14 @@ for (const cap of capabilities) {
 // Re-engage an APPROVED customer whose onboarding token expired — mints a
 // fresh application_url for the hosted terms-acceptance flow.
 const { application_url } = await client.customers.reEngage(customerId);
+
+// Withdraw an UNDECIDED onboarding application — e.g. after an RFI the
+// customer chose not to answer. FINAL: status becomes 'withdrawn' and
+// onboarding again needs a new application. Already decided → 409.
+// Emits customer.application.withdrawn.
+await client.customers.withdrawApplication(customerId, applicationId, {
+  reason: 'Customer opted not to proceed', // optional, ≤500 chars, shown to reviewers
+});
 ```
 
 #### Importing existing customers
@@ -653,15 +661,35 @@ for (const day of statement.daily) {
 // The running month is included, with its fee figures absent rather than
 // zero — the bank's interest posts the month after it is earned.
 console.log(statement.owed_minor ?? 'not priced yet');
+
+// Both rates are on the statement: y_bps_annual is the CONTRACT rate the
+// Order Form quotes; y_bps_monthly is what THIS month was charged at
+// (annual × days_in_month / 365, 2 dp).
+console.log(statement.y_bps_annual, statement.y_bps_monthly);
+
+// Where the fee is paid. SEPARATE from client.feePayoutDestination — the two
+// programmes pay different assets. RD exists only on Base, so the chain is
+// not a parameter. 404 = nothing registered yet (ordinary, not an error);
+// 403 = not in the programme. Emits rd_payout_destination.updated.
+const dest = await client.rdMarketingFee.setPayoutDestination({
+  address: '0x1234567890123456789012345678901234567890',
+});
+const current = await client.rdMarketingFee.getPayoutDestination(); // chain 'eip155:8453'
 ```
 
 ### Sandbox (Testing)
 
 ```typescript
-// Simulate inbound deposit
+// Simulate an inbound deposit. Fiat rails: ach_inbound, fedwire_inbound,
+// swift_inbound, fednow_inbound (all take the receiving account_id);
+// crypto_inbound takes wallet_address. The rail a deposit books on comes from
+// the ACCOUNT, so swift_inbound and fedwire_inbound behave identically.
 const result = await client.sandbox.simulateInbound({
+  simulation_id: 'sim_' + Date.now(),
+  type: 'swift_inbound',
   account_id: accountId,
   amount: '1000.00',
+  currency: 'USD',
 });
 
 // Simulate KYB approval (requires application_id from customer creation)
@@ -841,6 +869,24 @@ await client.instructions.create({
 
 // Read-only account insights.
 const report = await client.insights.get(customerId);
+
+// The client-level companion: ONE report over the whole book. Items reuse the
+// customer report's shape plus `customer_id` (omitted on cross-customer
+// aggregates) and `responsibility` ('payment_ops' | 'compliance' — a grouping
+// label for routing, NOT ownership). Adds KPI `snapshot.metrics` with
+// previous-window values, daily `series` (open-set keys: 'failed_payments',
+// 'executed_volume.USDC', …), `facets` (values present BEFORE item filters),
+// and a per-customer roll-up in `customers`, sorted worst-first. Filters only
+// narrow; the shape never changes. Multi-value filters are comma-separated
+// strings. Scans ≤100 customers per request — check
+// snapshot.customers.scanned < total. 404 = agentic off, or unknown customer_id.
+const portfolio = await client.insights.getClientReport({
+  severity: 'critical,warn',
+  window_days: 30, // 1–90, default 14
+});
+for (const row of portfolio.customers) {
+  if (row.item_counts.critical > 0) console.log(row.customer_id, row.name);
+}
 ```
 
 Failures of scheduled payments surface as the `scheduled_payment.failed` webhook (`ScheduledPaymentFailedData`); successful fires emit the standard `wallet.transaction.created`.
@@ -848,7 +894,11 @@ Failures of scheduled payments surface as the `scheduled_payment.failed` webhook
 ## Webhook Handling
 
 ```typescript
-import { WebhookHandler, WebhookEventType } from '@dakota-xyz/ts-sdk/webhook';
+import {
+  WebhookHandler,
+  WebhookEventType,
+  type CustomerRfiRequestedData,
+} from '@dakota-xyz/ts-sdk/webhook';
 
 const handler = new WebhookHandler({
   publicKey: process.env.WEBHOOK_PUBLIC_KEY!,
@@ -863,6 +913,16 @@ handler.on(WebhookEventType.CustomerCreated, async (event) => {
 handler.on('transaction.*', async (event) => {
   console.log('Transaction event:', event.type, event.data.object);
 });
+
+// Onboarding RFI lifecycle. The requested payload lists what is still owed
+// (documents by type or purpose, fields, questions) but NEVER the resubmission
+// link — it embeds a credential. Read the link from the customer resource.
+handler.on(WebhookEventType.CustomerRfiRequested, async (event) => {
+  const { customer_id, message_id, requirements } = event.data.object as CustomerRfiRequestedData;
+  // message_id: dedupe redeliveries, pair with the later customer.rfi.responded.
+});
+handler.on(WebhookEventType.CustomerRfiResponded, async (event) => { /* stop chasing */ });
+handler.on(WebhookEventType.CustomerApplicationWithdrawn, async (event) => { /* terminal */ });
 
 handler.onDefault(async (event) => {
   console.log('Unhandled event:', event.type);
@@ -1058,10 +1118,15 @@ await client.sandbox.simulateInbound({
   simulation_id: `sim_${Date.now()}`,
 });
 
-// For one-off transactions: simulate settlement
+// For one-off transactions: simulate settlement / return / reversal.
+// Outbound and reversal types take the funding OFFRAMP account_id AND the
+// one_off_transaction_id. (`movement_id` is a deprecated alias.)
 await client.sandbox.simulateInbound({
-  type: 'ach_outbound_settled',
-  movement_id: transactionId,
+  type: 'ach_outbound_settled', // or fedwire_*, swift_* outbound / reversal
+  account_id: offrampAccountId,
+  one_off_transaction_id: transactionId,
+  amount: '100.00',
+  currency: 'USD',
   simulation_id: `sim_${Date.now()}`,
 });
 ```

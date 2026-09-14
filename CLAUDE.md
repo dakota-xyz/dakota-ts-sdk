@@ -72,7 +72,7 @@ client.{resource}.delete(id)           // Deletes item (not all resources)
 
 **Resources WITHOUT update():** policies, signerGroups, destinations, apiKeys, autoTransactions, signers
 **Resources WITHOUT delete():** transactions, autoTransactions
-**Read-only resources:** autoTransactions (list + get only), info (getCountries + getNetworks only), legal, rdMarketingFee
+**Read-only resources:** autoTransactions (list + get only), info (getCountries + getNetworks only), legal, insights. rdMarketingFee is read-only except for its payout destination
 
 `transactions.list()` is not a plain list: `GET /transactions` serves three
 resource families from one path, and the family decides the row shape. The SDK
@@ -96,8 +96,15 @@ server otherwise INFERS it from the other filters — `customer_id` alone infers
   Pair with `applications.getLegalAcceptance(id)`, which returns just what an
   accept-agreements page needs rather than the whole KYB record
 - `client.rdMarketingFee` - Reserve-management statements for the calling
-  client (`listMonths`, `getStatement`). No id to pass; the client comes from
-  the session
+  client (`listMonths`, `getStatement`), plus where the fee is paid
+  (`getPayoutDestination`, `setPayoutDestination` — Base only, SEPARATE from
+  `feePayoutDestination`). No id to pass; the client comes from the session
+- `client.insights` (BETA) - `get(customerId)` for one customer,
+  `getClientReport(params?)` for the whole book (KPIs, daily series,
+  per-customer roll-up; filters only narrow)
+- `client.customers.withdrawApplication(customerId, applicationId, data?)` -
+  final; the platform answers a bare 200 with NO body, which the transport
+  treats like a 204
 - `client.customers.listPage()` returns one page PLUS `status_counts`, which
   `list()` cannot reach because it iterates rows and drops the envelope
 

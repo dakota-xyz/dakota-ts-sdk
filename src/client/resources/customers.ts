@@ -23,6 +23,7 @@ import type {
   RequestOptions,
   SubClientSummary,
   UpdateCustomerSubClientRequest,
+  WithdrawApplicationRequest,
 } from '../types.js';
 
 /**
@@ -233,6 +234,46 @@ export class CustomersResource extends BaseResource {
     return this.transport.request<CustomerReEngagementResponse>({
       method: 'POST',
       path: `/customers/${customerId}/re-engagement`,
+      idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
+    });
+  }
+
+  /**
+   * Withdraw a customer's onboarding application.
+   *
+   * Closes the application when the customer will not or cannot continue —
+   * for example after a request for information they chose not to answer.
+   *
+   * Withdrawal is FINAL. The application and its entities are recorded as
+   * withdrawn, the customer's `status` becomes `withdrawn`, and onboarding
+   * that customer again requires a new application. An application that
+   * already has a decision returns a 409.
+   *
+   * Emits `customer.application.withdrawn`.
+   *
+   * @param customerId - Customer ID (KSUID)
+   * @param applicationId - The customer's onboarding application ID
+   * @param data - Optional `reason`, recorded for audit and shown to reviewers
+   * @param options - Request options (e.g., custom idempotency key)
+   *
+   * @example
+   * ```typescript
+   * await client.customers.withdrawApplication(customerId, applicationId, {
+   *   reason: 'Customer opted not to proceed',
+   * });
+   * ```
+   */
+  async withdrawApplication(
+    customerId: string,
+    applicationId: string,
+    data: WithdrawApplicationRequest = {},
+    options?: RequestOptions
+  ): Promise<void> {
+    await this.transport.request<void>({
+      method: 'POST',
+      path: `/customers/${customerId}/applications/${applicationId}/withdraw`,
+      body: data,
       idempotencyKey: options?.idempotencyKey,
       timeout: options?.timeout,
     });

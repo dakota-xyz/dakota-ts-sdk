@@ -3,7 +3,12 @@
  */
 
 import { BaseResource } from './base.js';
-import type { RDMarketingFeeStatement } from '../types.js';
+import type {
+  RDMarketingFeeStatement,
+  RDPayoutDestination,
+  RDPayoutDestinationRequest,
+  RequestOptions,
+} from '../types.js';
 
 /**
  * RD Marketing Fee API resource.
@@ -75,6 +80,70 @@ export class RDMarketingFeeResource extends BaseResource {
     return this.transport.request<RDMarketingFeeStatement>({
       method: 'GET',
       path: `/rd-marketing-fee/statements/${month}`,
+    });
+  }
+
+  /**
+   * The wallet this client's RD marketing fee is sent to.
+   *
+   * A **404** here is the ordinary state for a client who has not registered
+   * one yet — not an error. A **403** means the client is not in the
+   * programme at all.
+   *
+   * @returns The registered destination: always on Base (`eip155:8453`)
+   *
+   * @example
+   * ```typescript
+   * try {
+   *   const dest = await client.rdMarketingFee.getPayoutDestination();
+   *   console.log(dest.address);
+   * } catch (error) {
+   *   if (error instanceof APIError && error.statusCode === 404) {
+   *     // Nothing registered yet — prompt for one.
+   *   }
+   * }
+   * ```
+   */
+  async getPayoutDestination(): Promise<RDPayoutDestination> {
+    return this.transport.request<RDPayoutDestination>({
+      method: 'GET',
+      path: '/rd-marketing-fee/payout-destination',
+    });
+  }
+
+  /**
+   * Register, or replace, the wallet the RD marketing fee is sent to.
+   *
+   * RD exists only on Base, so the chain is not a parameter — only an EVM
+   * `address`. There is one destination per client, so this REPLACES any
+   * existing one. Emits `rd_payout_destination.updated`.
+   *
+   * This is a SEPARATE registration from the developer-fee payout
+   * destination (`client.feePayoutDestination`): the two programmes pay
+   * different assets and are set independently.
+   *
+   * @param data - The EVM address on Base to pay the fee to
+   * @param options - Request options (e.g., custom idempotency key)
+   * @returns The stored destination
+   *
+   * @example
+   * ```typescript
+   * const dest = await client.rdMarketingFee.setPayoutDestination({
+   *   address: '0x1234567890123456789012345678901234567890',
+   * });
+   * console.log(dest.chain); // 'eip155:8453'
+   * ```
+   */
+  async setPayoutDestination(
+    data: RDPayoutDestinationRequest,
+    options?: RequestOptions
+  ): Promise<RDPayoutDestination> {
+    return this.transport.request<RDPayoutDestination>({
+      method: 'PUT',
+      path: '/rd-marketing-fee/payout-destination',
+      body: data,
+      idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
     });
   }
 }

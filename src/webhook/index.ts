@@ -33,7 +33,13 @@ export {
   type CustomerDeletedData,
   type CapabilityRequirement,
   type CustomerCapabilityStatusUpdatedData,
+  type RfiRequirementEntity,
+  type RfiRequirement,
+  type CustomerRfiRequestedData,
+  type CustomerRfiRespondedData,
+  type CustomerApplicationWithdrawnData,
   type FeePayoutDestinationUpdatedData,
+  type RdPayoutDestinationUpdatedData,
   type ScheduledPaymentFailedData,
 } from './events.js';
 

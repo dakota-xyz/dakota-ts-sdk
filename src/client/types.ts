@@ -357,6 +357,17 @@ export type ApplicationStatus = components['schemas']['ApplicationStatus'];
 export type RFIRequestedItems = components['schemas']['RFIRequestedItems'];
 
 /**
+ * Request body for withdrawing a customer's onboarding application.
+ *
+ * `reason` is recorded for audit and shown to reviewers; it defaults to a
+ * generic reason when omitted. Send at least an empty object.
+ */
+export interface WithdrawApplicationRequest {
+  /** Why the application is being withdrawn (max 500 characters). */
+  reason?: string;
+}
+
+/**
  * Business application creation request.
  *
  * Used when submitting a business application for KYB verification.
@@ -668,6 +679,19 @@ export type RDMarketingFeeStatement = components['schemas']['RDMarketingFeeState
  */
 export type RDMarketingFeeDailyRow = components['schemas']['RDMarketingFeeDailyRow'];
 
+/**
+ * The wallet a client's RD marketing fee is sent to.
+ *
+ * RD exists only on Base, so `chain` is always `eip155:8453`. This is a
+ * SEPARATE registration from the developer-fee payout destination
+ * ({@link FeePayoutDestination}): the two programmes pay different assets and
+ * are set independently.
+ */
+export type RDPayoutDestination = components['schemas']['RDPayoutDestination'];
+
+/** Request body for `PUT /rd-marketing-fee/payout-destination` — an EVM address on Base. */
+export type RDPayoutDestinationRequest = components['schemas']['RDPayoutDestinationRequest'];
+
 // ============================================================================
 // Info Types
 // ============================================================================
@@ -689,33 +713,60 @@ export interface Network {
 /**
  * Payment simulation types for inbound payment events.
  *
- * - `ach_inbound` - ACH deposit into on-ramp account (requires `account_id`)
- * - `wire_inbound` - Wire deposit into on-ramp account (requires `account_id`)
- * - `crypto_inbound` - Crypto deposit into wallet (requires `wallet_id`)
- * - `ach_outbound_settled` - ACH payment completed successfully (requires `movement_id`)
- * - `ach_outbound_failed` - ACH payment failed (requires `movement_id`)
- * - `ach_outbound_returned` - ACH payment returned by receiving bank (requires `movement_id`)
- * - `ach_outbound_rejected` - ACH payment rejected (requires `movement_id`)
- * - `wire_outbound_settled` - Wire payment completed successfully (requires `movement_id`)
- * - `wire_outbound_failed` - Wire payment failed (requires `movement_id`)
- * - `wire_outbound_returned` - Wire payment returned (requires `movement_id`)
- * - `wire_outbound_rejected` - Wire payment rejected (requires `movement_id`)
- * - `ach_reversal` - ACH reversal (requires `movement_id`)
- * - `wire_reversal` - Wire reversal (requires `movement_id`)
+ * Inbound (a deposit into an onramp account, or a wallet):
+ * - `ach_inbound` - ACH deposit (requires `account_id`)
+ * - `fedwire_inbound` - Fedwire deposit (requires `account_id`)
+ * - `swift_inbound` - International (SWIFT) deposit (requires `account_id`)
+ * - `fednow_inbound` - FedNow deposit (requires `account_id`)
+ * - `crypto_inbound` - Crypto deposit into a wallet (requires `wallet_address`)
+ *
+ * Outbound and reversal (against a one-off transaction funded from an offramp
+ * account; require `account_id` AND `one_off_transaction_id`):
+ * - `ach_outbound_settled` / `ach_outbound_failed` / `ach_outbound_returned` / `ach_outbound_rejected`
+ * - `fedwire_outbound_settled` / `fedwire_outbound_failed` / `fedwire_outbound_returned` / `fedwire_outbound_rejected`
+ * - `swift_outbound_settled` / `swift_outbound_failed` / `swift_outbound_returned` / `swift_outbound_rejected`
+ * - `ach_reversal` / `fedwire_reversal` / `swift_reversal`
+ *
+ * The rail a deposit books on is derived from the RECEIVING account, so
+ * `swift_inbound` and `fedwire_inbound` behave identically: against a SWIFT
+ * onramp account both produce a SWIFT deposit, against a domestic account both
+ * produce a Fedwire one.
+ *
+ * The `wire_*` values are legacy aliases for `fedwire_*`, accepted for
+ * backwards compatibility and may be removed in a future major version.
  */
 export type SimulateInboundType =
   | 'ach_inbound'
-  | 'wire_inbound'
+  | 'fedwire_inbound'
+  | 'swift_inbound'
+  | 'fednow_inbound'
   | 'crypto_inbound'
   | 'ach_outbound_settled'
   | 'ach_outbound_failed'
   | 'ach_outbound_returned'
   | 'ach_outbound_rejected'
-  | 'wire_outbound_settled'
-  | 'wire_outbound_failed'
-  | 'wire_outbound_returned'
-  | 'wire_outbound_rejected'
+  | 'fedwire_outbound_settled'
+  | 'fedwire_outbound_failed'
+  | 'fedwire_outbound_returned'
+  | 'fedwire_outbound_rejected'
+  | 'swift_outbound_settled'
+  | 'swift_outbound_failed'
+  | 'swift_outbound_returned'
+  | 'swift_outbound_rejected'
   | 'ach_reversal'
+  | 'fedwire_reversal'
+  | 'swift_reversal'
+  /** @deprecated Legacy alias for `fedwire_inbound`. */
+  | 'wire_inbound'
+  /** @deprecated Legacy alias for `fedwire_outbound_settled`. */
+  | 'wire_outbound_settled'
+  /** @deprecated Legacy alias for `fedwire_outbound_failed`. */
+  | 'wire_outbound_failed'
+  /** @deprecated Legacy alias for `fedwire_outbound_returned`. */
+  | 'wire_outbound_returned'
+  /** @deprecated Legacy alias for `fedwire_outbound_rejected`. */
+  | 'wire_outbound_rejected'
+  /** @deprecated Legacy alias for `fedwire_reversal`. */
   | 'wire_reversal';
 
 /**
@@ -725,9 +776,9 @@ export type SimulateInboundType =
  *
  * | Type | Required Fields |
  * |------|-----------------|
- * | `ach_inbound`, `wire_inbound` | `account_id` |
- * | `crypto_inbound` | `wallet_id` |
- * | `*_outbound_*`, `*_reversal` | `movement_id` |
+ * | `ach_inbound`, `fedwire_inbound`, `swift_inbound`, `fednow_inbound` | `account_id` |
+ * | `crypto_inbound` | `wallet_address` |
+ * | `*_outbound_*`, `*_reversal` | `account_id` + `one_off_transaction_id` |
  *
  * @example
  * // Simulate ACH deposit to on-ramp account
@@ -744,7 +795,8 @@ export type SimulateInboundType =
  * await client.sandbox.simulateInbound({
  *   simulation_id: 'sim_002',
  *   type: 'ach_outbound_settled',
- *   movement_id: 'mov_456',
+ *   account_id: 'acc_456',
+ *   one_off_transaction_id: '2NfHrqBHb3cTfLVkFSGmHZqdDQ7',
  *   amount: '500.00',
  *   currency: 'USD',
  * });
@@ -762,13 +814,32 @@ export interface SimulateInboundRequest {
   /** Currency code (e.g., 'USD', 'USDC'). Required. */
   currency: string;
 
-  /** Platform account ID. Required for `ach_inbound` and `wire_inbound`. */
+  /**
+   * Platform account ID of the target onramp/offramp auto account.
+   *
+   * Required for EVERY fiat `type`. On an inbound simulation it is the onramp
+   * account receiving the payment; on an outbound or reversal simulation it
+   * is the offramp account that funded the one-off transaction. Ignored only
+   * for `crypto_inbound`.
+   */
   account_id?: string;
 
-  /** Wallet ID. Required for `crypto_inbound`. */
+  /**
+   * The on-chain wallet address returned by `POST /wallets`. Required for
+   * `crypto_inbound`; ignored for other types.
+   */
+  wallet_address?: string;
+
+  /** @deprecated Legacy alias for `wallet_address`. */
   wallet_id?: string;
 
-  /** Movement/Transaction ID. Required for outbound types (`*_outbound_*`, `*_reversal`). */
+  /**
+   * The one-off transaction ID returned by `POST /transactions/one-off`.
+   * Required for outbound and reversal types; ignored for inbound types.
+   */
+  one_off_transaction_id?: string;
+
+  /** @deprecated Legacy alias for `one_off_transaction_id`. */
   movement_id?: string;
 
   /**
@@ -1552,6 +1623,93 @@ export type InsightEvidence = components['schemas']['InsightEvidence'];
 
 /** The typed-facts snapshot inside an InsightReport. */
 export type InsightSnapshot = components['schemas']['InsightSnapshot'];
+
+/**
+ * The client-level portfolio insight report (deterministic, read-only).
+ *
+ * One report over ALL of the caller's customers' agentic activity. Its
+ * `insights` and `suggestions` reuse {@link InsightItem}, with two additive
+ * fields at this scope: `customer_id` (omitted on cross-customer aggregates)
+ * and `responsibility` (a grouping label, not ownership). On top of the items
+ * it carries dashboard-shaped data: KPI `metrics` with previous-window values,
+ * daily `series`, and a per-customer roll-up in `customers`.
+ *
+ * `snapshot.customers.scanned < total` means the report hit its per-request
+ * scan cap and was computed over a prefix of the book — never silently.
+ */
+export type ClientInsightReport = components['schemas']['ClientInsightReport'];
+
+/** The typed-facts snapshot inside a ClientInsightReport. */
+export type ClientInsightSnapshot = components['schemas']['ClientInsightSnapshot'];
+
+/**
+ * One portfolio KPI over the report window, with the previous window's value
+ * for a trend delta. `key` is an OPEN set; amount metrics repeat per `asset`.
+ */
+export type ClientInsightMetric = components['schemas']['ClientInsightMetric'];
+
+/**
+ * Daily time series for charts. Map keys are an OPEN set — `<metric>` for
+ * counts, `<metric>.<ASSET>` for amounts. Ignore keys you do not recognize.
+ */
+export type ClientInsightSeries = components['schemas']['ClientInsightSeries'];
+
+/** One bucket of a ClientInsightSeries — unix seconds + decimal string. */
+export type ClientInsightSeriesPoint = components['schemas']['ClientInsightSeriesPoint'];
+
+/** One customer's roll-up row in a ClientInsightReport, for a drill-down table. */
+export type ClientInsightCustomer = components['schemas']['ClientInsightCustomer'];
+
+/** How many report items reference a customer, by severity. */
+export type ClientInsightItemCounts = components['schemas']['ClientInsightItemCounts'];
+
+/** The customer population behind a ClientInsightReport. */
+export type ClientInsightCustomersSummary = components['schemas']['ClientInsightCustomersSummary'];
+
+/**
+ * The values present in a ClientInsightReport BEFORE its item filters were
+ * applied, so a UI can offer every option while a filter is active.
+ */
+export type ClientInsightFacets = components['schemas']['ClientInsightFacets'];
+
+/**
+ * Filters for the client-level insight report. Every filter is optional and
+ * only NARROWS the report; the response shape never changes.
+ *
+ * The multi-value filters (`kind`, `severity`, `responsibility`) are
+ * comma-separated strings — `'critical,warn'`, not `['critical', 'warn']` —
+ * matching the rest of this SDK's list filters.
+ */
+export interface ClientInsightsParams {
+  /**
+   * Scope the whole report to one customer (drill-down). An unknown or
+   * foreign customer is a 404, mirroring the customer report.
+   */
+  customer_id?: string;
+  /** Keep only items whose evidence references this wallet. */
+  wallet_id?: string;
+  /**
+   * Keep only items of these kinds, comma-separated (e.g.
+   * `'volume_anomaly,recipient_dormant'`). Open set — an unrecognized value
+   * simply matches nothing.
+   */
+  kind?: string;
+  /**
+   * Keep only items of these severities, comma-separated. Values are `info`,
+   * `warn`, `critical`; anything else is a 400.
+   */
+  severity?: string;
+  /**
+   * Keep only items carrying one of these grouping labels, comma-separated.
+   * Values today are `payment_ops` and `compliance`.
+   */
+  responsibility?: string;
+  /**
+   * Report window in days (1-90, default 14) — the lookback for trends and
+   * series, and the horizon for upcoming obligations.
+   */
+  window_days?: number;
+}
 
 /** Parameters for listing mandates. */
 export interface MandateListParams extends ListParams {
