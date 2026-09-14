@@ -161,6 +161,37 @@ export type paths = {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/customers/{customer_id}/applications/{application_id}/withdraw": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Withdraw a customer's onboarding application
+         * @description Closes a customer's onboarding application when they will not or cannot
+         *     continue, for example after a request for information the customer chose
+         *     not to answer.
+         *
+         *     Withdrawal is final. The application and its entities are recorded as
+         *     withdrawn and the customer's `status` becomes `withdrawn`; onboarding
+         *     that customer again requires a new application. An application that
+         *     already has a decision returns `409`.
+         *
+         *     Emits `customer.application.withdrawn`.
+         *
+         *     Send at least an empty JSON object as the body.
+         */
+        readonly post: operations["WithdrawCustomerApplication"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/wallets": {
         readonly parameters: {
             readonly query?: never;
@@ -1280,6 +1311,8 @@ export type paths = {
         /**
          * Create a new signer
          * @description Creates a signer resource that can be attached to signer groups.
+         *
+         *     A public key belongs to exactly one organization. A key already registered by another organization returns `409`, and that response carries no detail about the existing signer — including when the key backs that organization's platform-managed settlement signer, which returns the same `409` rather than a distinguishable refusal. `403` is reserved for your own platform-managed key material, which you may not re-register.
          */
         readonly post: operations["createSigner"];
         readonly delete?: never;
@@ -1404,7 +1437,11 @@ export type paths = {
         readonly post?: never;
         /**
          * Delete a signer by public key
-         * @description Soft-deletes your signer with the given public key. Only the signer's owner can delete it, so a public key belonging to another organization is reported as `404` exactly like one that does not exist. Returns `404` when you have no signer for the given public key, `409` when that signer is still a member of an active signer group, and `403` when the key is a platform-managed settlement signer, which is retired only through platform-internal offboarding.
+         * @description Soft-deletes your signer with the given public key. Only the signer's owner can delete it, so a public key belonging to another organization is reported as `404` exactly like one that does not exist — including when that key is a platform-managed settlement signer.
+         *
+         *     Ownership is resolved first, so the responses below describe only keys you hold. Returns `404` when you have no signer for the given public key, `403` when the key is one of your platform-managed settlement signers, which is retired only through platform-internal offboarding, and `409` when the signer is still a member of an active signer group.
+         *
+         *     A signer is matched on the exact public key string you registered. Another encoding of the same key names no signer you hold and is reported as `404`.
          */
         readonly delete: operations["deleteSigner"];
         readonly options?: never;
@@ -2347,6 +2384,28 @@ export type paths = {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/insights": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Get the client-level portfolio insight report (BETA)
+         * @description > **Beta** — early access.
+         *
+         *     The client-scope companion of the customer insight report: one deterministic, read-only report over ALL of the caller's customers' agentic activity. Observations (`insights`) and advisory recommendations (`suggestions`) reuse the customer report's item schema — `{kind, severity, message, detail, evidence}` — with two additive fields at this scope: `customer_id` attributes an item to one customer (omitted on cross-customer aggregates, which list the affected customers in `detail`), and `responsibility` is a coarse grouping label (`payment_ops` / `compliance`) for filtering only — it carries no ownership semantics. On top of the items the report adds dashboard-shaped data: KPI `metrics` with previous-window values for trend deltas, daily time `series` for charts, and a per-customer roll-up (`customers`) for drill-down. All query filters are optional and only narrow the report; the response shape never changes. `kind` remains an OPEN set; clients must ignore kinds they do not recognize. Every number is computed server-side on read; nothing is stored, and nothing here moves money or changes state.
+         */
+        readonly get: operations["getClientInsights"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/rd-marketing-fee/statements": {
         readonly parameters: {
             readonly query?: never;
@@ -2466,7 +2525,9 @@ export type paths = {
          *
          *     Versioning is append-only. The outgoing version's rule is never rewritten and stays readable at GET /mandates/{mandate_id}/versions; the newest version governs from the moment it lands.
          *
-         *     **Only the amount fields (`max_per_tx` and the window caps) and `targets` may change.** `target_type`, `window`, `asset` and `network_id` are frozen — changing one is rejected with a 400 telling you to cancel this mandate and create a new one. The window in particular is frozen because usage rows carry no window label, so changing it would retroactively re-bucket every past spend.
+         *     **The amount fields (`max_per_tx` and the window caps), `targets`, and `target_type` may change.** `window`, `asset` and `network_id` are frozen — changing one is rejected with a 400 telling you to cancel this mandate and create a new one. The window in particular is frozen because usage rows carry no window label, so changing it would retroactively re-bucket every past spend.
+         *
+         *     **Changing `target_type` additionally requires the resulting rule to carry an aggregate ceiling**, settable in the same amendment: `max_amount_in_window`, or `max_count_in_window` when the rule keeps no per-payee amount cap (spend crossing the change is metered only by the aggregate caps, and a count ceiling does not bound the dollars a per-payee amount budget is measured in). A target change reshapes who the agent may pay, so the mandate must state what it may spend in total. Spend already made in the window carries across the change: each recorded spend re-attributes to the new rule's payee buckets where the payment's recorded destination identifies one, and always keeps counting against the aggregate caps. For the same reason, an amendment may not remove the last aggregate ceiling while the current window still holds spend from an earlier target scope that only the ceiling meters — raise or change it instead; the restriction lifts once that spend leaves the window.
          *
          *     **ADDING a payee to `targets` additionally requires the resulting rule to carry an aggregate ceiling** — `max_amount_in_window` or `max_count_in_window`. Without one, each payee has its own separate budget, so a new payee brings a new budget and the payee list alone would move what the agent can spend in total, with no amount you approved having changed. Set the ceiling in the SAME amendment that adds the payee: the amount fields are amendable, so this costs no second signature and no budget reset. A count-preserving swap counts as adding, because the incoming payee starts with an empty budget. REMOVING payees is always allowed — it can only lower what the agent may spend.
          *
@@ -2519,6 +2580,37 @@ export type paths = {
          *     A recognized signer OTHER than the bound one signs the mandate payload to activate it; arms its scheduled payments.
          */
         readonly post: operations["approveMandate"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/rd-marketing-fee/payout-destination": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Get your RD marketing-fee payout destination
+         * @description Returns the wallet your RD marketing fee is sent to.
+         *
+         *     A 404 means no wallet is registered yet, which is the ordinary state
+         *     for a client who has not set one — not an error.
+         */
+        readonly get: operations["getRDPayoutDestination"];
+        /**
+         * Register your RD marketing-fee payout destination
+         * @description Registers, or replaces, the wallet your RD marketing fee is sent to.
+         *
+         *     RD exists only on Base, so the chain is not a parameter. This is a
+         *     separate registration from your developer-fee payout destination: the
+         *     two programmes pay different assets and are set independently.
+         */
+        readonly put: operations["putRDPayoutDestination"];
+        readonly post?: never;
         readonly delete?: never;
         readonly options?: never;
         readonly head?: never;
@@ -2610,13 +2702,25 @@ export type components = {
             readonly month: string;
             /**
              * Format: double
-             * @description The rate in force for THIS month, in monthly basis points. A later rate change does not rewrite it.
+             * @description The rate APPLIED to this month, in monthly basis points: the annual
+             *     contract rate charged for the days this month actually has
+             *     (y_bps_annual x days_in_month / 365), rounded to 2 decimal places —
+             *     the precision it is charged and stored at. A later rate change does
+             *     not rewrite it.
              */
             readonly y_bps_monthly: number;
             /**
-             * @description What the month owes this client, RD minor units. ABSENT until the
-             *     month is priced — never zero, which would state that nothing is
-             *     owed.
+             * Format: double
+             * @description The CONTRACT rate, in basis points per year, as the Order Form
+             *     quotes it. Stated beside the applied rate so a client can check the
+             *     month was charged from the rate they signed.
+             */
+            readonly y_bps_annual: number;
+            /**
+             * @description What the month will pay this client, as a whole number of RD
+             *     minor units. ABSENT until the month is priced — absent and zero
+             *     are different facts, and zero means the month owes nothing
+             *     payable.
              */
             readonly owed_minor?: string;
             /** @description The mean of the month's stored daily principals. Absent while the month is incomplete. */
@@ -2815,8 +2919,8 @@ export type components = {
              * @description Machine-readable item type. This is an OPEN set — the values below are the kinds emitted TODAY, but new kinds may be added at any time without a breaking change, so it is documented as an extensible enum rather than a closed one. A client MUST render an unrecognized kind generically from `message` + `severity` (and `evidence`), never drop it. Kinds emitted today, by array:
              *     Observations (`insights[]`):
              *       * `upcoming_payments` — open payments due within the horizon (count + per-asset totals).
-             *       * `payment_failures_clustered` — ≥2 recent failures to the same payee sharing one reason (root cause).
-             *       * `payments_failed` — remaining recent singleton failures, summarized.
+             *       * `payment_failures_clustered` — ≥2 recent failures to the same payee sharing one reason (root cause). `detail` carries `failure_reason`, `failure_code` (the documented stable code, when the reason classifies) and `docs_url` (the published failure_code reference).
+             *       * `payments_failed` — remaining recent singleton failures, summarized (`detail.docs_url` links the reference).
              *       * `account_activity` — executed volume over the window + mandates awaiting signature.
              *       * `new_counterparty` — first open payments to a recently-added payee.
              *       * `counterparty_concentration` — one payee dominates recent executed outflow.
@@ -2826,6 +2930,10 @@ export type components = {
              *       * `funding_shortfall` — a funding wallet's indexed balance is below its near-term payment needs.
              *       * `mandate_expiring` — an active mandate ends soon (warn when open payments depend on it).
              *       * `mandate_headroom` — a mandate's window budget is nearly or already over-consumed.
+             *
+             *     Kinds emitted only by the client-level report (`GET /insights`) today:
+             *       * `volume_anomaly` — a customer's executed volume is a large multiple of that customer's own baseline (observation).
+             *       * `recipient_dormant` — a previously-paid recipient has gone unpaid for a long stretch (observation; `detail` carries `days_since_last_use` and `last_used_at`).
              */
             readonly kind: string;
             /** @enum {string} */
@@ -2838,6 +2946,10 @@ export type components = {
             };
             /** @description The platform objects this item is computed from (capped; may be empty when the claim is an aggregate). */
             readonly evidence: readonly components["schemas"]["InsightEvidence"][];
+            /** @description Client-level report only — the customer this item is about. Omitted on cross-customer aggregates (which list the affected customers in `detail`) and on the customer report, where the scope is the path. */
+            readonly customer_id?: string;
+            /** @description Client-level report only — a coarse grouping label for routing and filtering (which "department" cares). A label, not ownership: it reuses the insight-agent responsibility catalog names so a future entity build can adopt them without a contract change. */
+            readonly responsibility?: string;
         };
         /** @description One funding wallet's indexed holding of one asset on one network. The balance index prices holdings in USD; values may lag the chain. */
         readonly InsightSnapshotBalance: {
@@ -2874,6 +2986,110 @@ export type components = {
             readonly insights: readonly components["schemas"]["InsightItem"][];
             /** @description Advisory recommendations (always present, possibly empty). Non-binding — acting on one is a separate, human-gated step. */
             readonly suggestions: readonly components["schemas"]["InsightItem"][];
+        };
+        /** @description One portfolio KPI over the report window, paired with the previous window's value so a dashboard can render a trend delta (value + change vs the prior period). Amount metrics repeat per asset with `asset` set; count metrics omit it. `key` is an OPEN set like `kind`. */
+        readonly ClientInsightMetric: {
+            /** @description Machine-readable metric name. Open set — emitted today are `executed_volume` (per asset), `executed_payments`, `failed_payments` and `new_counterparties`. */
+            readonly key: string;
+            /** @description Human-readable metric name for direct rendering. */
+            readonly label: string;
+            /** @description Set on amount metrics (one metric entry per asset); absent on counts. */
+            readonly asset?: string;
+            /** @description Decimal string — the metric over the report window. */
+            readonly value: string;
+            /** @description Decimal string — the same metric over the window immediately before the report window. */
+            readonly previous?: string;
+            /** @description Decimal string, signed — percent change vs `previous`. Omitted when `previous` is zero. */
+            readonly change_pct?: string;
+        };
+        /** @description One bucket of a time series. */
+        readonly ClientInsightSeriesPoint: {
+            /**
+             * Format: int64
+             * @description Bucket start (unix seconds, UTC).
+             */
+            readonly t: number;
+            /** @description Decimal string — the bucket's value. */
+            readonly v: string;
+        };
+        /** @description Daily time series for charts. Map keys are an OPEN set named `<metric>` for counts and `<metric>.<ASSET>` for amounts — emitted today: `executed_payments`, `failed_payments`, `executed_volume.<ASSET>` (lookback over the report window) and `upcoming_obligations.<ASSET>` (forward-looking: open payments due per day from now through the next `window_days`; an OVERDUE open payment is not plotted here — it is counted in `snapshot.upcoming`, which spans everything due through the horizon, and surfaces as a `payment_at_risk` item). Clients must ignore keys they do not recognize. */
+        readonly ClientInsightSeries: {
+            /** @enum {string} */
+            readonly bucket: "day";
+            /**
+             * Format: int64
+             * @description Start of the earliest bucket (unix seconds).
+             */
+            readonly from: number;
+            /**
+             * Format: int64
+             * @description End of the latest bucket (unix seconds).
+             */
+            readonly to: number;
+            readonly metrics: {
+                readonly [key: string]: readonly components["schemas"]["ClientInsightSeriesPoint"][];
+            };
+        };
+        /** @description How many report items (insights + suggestions) reference the customer, by severity. */
+        readonly ClientInsightItemCounts: {
+            readonly critical: number;
+            readonly warn: number;
+            readonly info: number;
+        };
+        /** @description One customer's roll-up row for the drill-down table. Re-query with `?customer_id=` (or the customer report) for the full picture. */
+        readonly ClientInsightCustomer: {
+            readonly customer_id: string;
+            readonly name?: string;
+            /** @description Indexed funding-wallet balance in USD. Present only when the balance index is configured. */
+            readonly total_usd?: string;
+            readonly open_scheduled_payments: number;
+            readonly active_mandates: number;
+            readonly upcoming: components["schemas"]["InsightSnapshotUpcoming"];
+            readonly item_counts: components["schemas"]["ClientInsightItemCounts"];
+            /**
+             * Format: int64
+             * @description Unix seconds of the customer's most recent executed payment in the lookback. Omitted when there is none.
+             */
+            readonly last_activity_at?: number;
+        };
+        /** @description The customer population behind the report. `scanned < total` means the report hit its per-request scan cap (100) and was computed over a prefix of the book in the customer list's order (name, then id) — truncation is never silent. `with_activity` counts customers with any non-cancelled scheduled payment or report item, not only inside the window. */
+        readonly ClientInsightCustomersSummary: {
+            readonly total: number;
+            readonly scanned: number;
+            readonly with_activity: number;
+            readonly with_critical: number;
+        };
+        /** @description The values present in the report BEFORE the item filters (`kind`, `severity`, `responsibility`) were applied — so a UI can offer every option a client could pick even while a filter is active. `assets` are the assets moving in the window (metrics + series). */
+        readonly ClientInsightFacets: {
+            readonly kinds: readonly string[];
+            readonly severities: readonly string[];
+            readonly responsibilities: readonly string[];
+            readonly assets: readonly string[];
+        };
+        /** @description Typed FACTS about the client's whole book — rendered directly, not narrated. `total_usd` covers indexed funding-wallet balances and is present only when the balance index is configured; it degrades to absent, never to an error. `balances` (per wallet × asset) is present only when the report is scoped to one customer (`?customer_id=`), so a drill-down can show that customer's holdings overall, by asset and by wallet. */
+        readonly ClientInsightSnapshot: {
+            readonly customers: components["schemas"]["ClientInsightCustomersSummary"];
+            readonly total_usd?: string;
+            readonly balances?: readonly components["schemas"]["InsightSnapshotBalance"][];
+            readonly upcoming: components["schemas"]["InsightSnapshotUpcoming"];
+            readonly open_scheduled_payments: number;
+            readonly active_mandates: number;
+            readonly metrics: readonly components["schemas"]["ClientInsightMetric"][];
+        };
+        /** @description The deterministic, read-only portfolio insight report for the calling client. Computed on demand across the client's own customers (never cross-tenant); nothing is stored. */
+        readonly ClientInsightReport: {
+            /** Format: int64 */
+            readonly generated_at: number;
+            readonly window_days: number;
+            readonly snapshot: components["schemas"]["ClientInsightSnapshot"];
+            readonly facets: components["schemas"]["ClientInsightFacets"];
+            readonly series: components["schemas"]["ClientInsightSeries"];
+            /** @description Observations across the book (always present, possibly empty). */
+            readonly insights: readonly components["schemas"]["InsightItem"][];
+            /** @description Advisory recommendations (always present, possibly empty). Non-binding — acting on one is a separate, human-gated step. */
+            readonly suggestions: readonly components["schemas"]["InsightItem"][];
+            /** @description Per-customer roll-up for the drill-down table, sorted worst-first (critical count, then warn, then activity). */
+            readonly customers: readonly components["schemas"]["ClientInsightCustomer"][];
         };
         readonly CreateScheduledPaymentsAction: {
             readonly destination_id?: string;
@@ -3237,6 +3453,8 @@ export type components = {
              *     **`"?"` means the figure could not be summed and MUST be treated as no headroom.** A stored amount or cap in this bucket did not parse as a decimal; the mandate gate fails closed on the same data, so a payment sent against this bucket will be denied. Do not coerce `"?"` to 0 and do not fall back to the rule's cap — both read as headroom that is not there.
              */
             readonly remaining_amount?: string;
+            /** @description True on a `per_target` line whose spend was booked under an EARLIER version's target scope (before a `target_type` amendment) and that no current rule target claims. The spend is real and still counts toward the `aggregate` lines, but no payment can consume this bucket under the current rule — so **on a prior-scope line, absent `remaining_count`/`remaining_amount` means NO headroom, not "not capped"**. Never set on `aggregate` lines. Omitted (false) on ordinary lines. */
+            readonly prior_scope?: boolean;
         };
         /** @description A mandate's remaining spend budget at a point in time. Advisory: nothing here reserves budget, and the mandate gate remains the authority at fire time. */
         readonly MandateBudget: {
@@ -4051,7 +4269,7 @@ export type components = {
          * @example transaction.auto.updated
          * @enum {string}
          */
-        readonly EventType: "user.created" | "user.updated" | "user.deleted" | "api_key.created" | "api_key.deleted" | "customer.created" | "customer.updated" | "customer.kyb_link.created" | "customer.kyb_link.updated" | "customer.kyb_status.created" | "customer.kyb_status.updated" | "customer.kyb_application.submitted" | "customer.capability_status.updated" | "auto_account.created" | "auto_account.updated" | "auto_account.deleted" | "transaction.auto.created" | "transaction.auto.updated" | "transaction.one_off.created" | "transaction.one_off.updated" | "recipient.created" | "recipient.updated" | "recipient.deleted" | "destination.created" | "destination.deleted" | "target.created" | "target.updated" | "target.deleted" | "exception.created" | "exception.cleared" | "bvnk.onboarding.created" | "bvnk.onboarding.updated" | "wallet.created" | "wallet.updated" | "wallet.signer_group.created" | "wallet.signer_group.updated" | "wallet.policy.created" | "wallet.policy.updated" | "wallet.transaction.created" | "wallet.transaction.updated" | "wallet.deposit" | "fee_payout_destination.updated" | "fee_payout_destination.deleted" | "scheduled_payment.failed";
+        readonly EventType: "user.created" | "user.updated" | "user.deleted" | "api_key.created" | "api_key.deleted" | "customer.created" | "customer.updated" | "customer.kyb_link.created" | "customer.kyb_link.updated" | "customer.kyb_status.created" | "customer.kyb_status.updated" | "customer.kyb_application.submitted" | "customer.capability_status.updated" | "customer.rfi.requested" | "customer.rfi.responded" | "customer.application.withdrawn" | "auto_account.created" | "auto_account.updated" | "auto_account.deleted" | "transaction.auto.created" | "transaction.auto.updated" | "transaction.one_off.created" | "transaction.one_off.updated" | "recipient.created" | "recipient.updated" | "recipient.deleted" | "destination.created" | "destination.deleted" | "target.created" | "target.updated" | "target.deleted" | "exception.created" | "exception.cleared" | "wallet.created" | "wallet.updated" | "wallet.signer_group.created" | "wallet.signer_group.updated" | "wallet.policy.created" | "wallet.policy.updated" | "wallet.transaction.created" | "wallet.transaction.updated" | "wallet.deposit" | "rd_payout_destination.updated" | "fee_payout_destination.updated" | "fee_payout_destination.deleted" | "scheduled_payment.failed";
         /** @description Request metadata for the original operation that emitted the event, when available. */
         readonly EventRequest: {
             /**
@@ -4664,10 +4882,11 @@ export type components = {
          *       (proof_of_address, bank_statement, or utility_bill) after their application has
          *       already been approved or completed. The customer remains active but is subject to
          *       the $3,000 USD-equivalent rolling 7-day transaction limit until the review concludes.
+         *     - `closed` - Compliance took the application out of review without a decision. It may be reopened to `under_review` by compliance.
          * @example submitted
          * @enum {string}
          */
-        readonly ApplicationStatus: "pending" | "submitted" | "under_review" | "request_for_information" | "admin_revision" | "approved" | "declined" | "completed" | "compliance_review";
+        readonly ApplicationStatus: "pending" | "submitted" | "under_review" | "request_for_information" | "admin_revision" | "approved" | "declined" | "completed" | "compliance_review" | "closed";
         /**
          * Family
          * @description Blockchain family for the crypto account.
@@ -5126,6 +5345,11 @@ export type components = {
              * @example DEUTDEFFXXX
              */
             readonly bic?: string;
+            /**
+             * @description BIC of the correspondent bank that carries the payment between Dakota's bank and `bic`. Leave it unset for destinations the sending bank can route on its own, which is nearly all of them. Set it only when a payment is refused for want of an intermediary. A destination cannot be changed after it is created, so a destination that needs one is replaced, not edited.
+             * @example CHASUS33
+             */
+            readonly intermediary_bic?: string;
             /** @example John Doe */
             readonly account_holder_name: string;
             readonly account_holder_address: components["schemas"]["Address"];
@@ -5351,6 +5575,11 @@ export type components = {
              */
             readonly bic?: string;
             /**
+             * @description BIC of the correspondent bank that carries the payment between Dakota's bank and `bic`. Leave it unset for destinations the sending bank can route on its own, which is nearly all of them. Set it only when a payment is refused for want of an intermediary. A destination cannot be changed after it is created, so a destination that needs one is replaced, not edited.
+             * @example CHASUS33
+             */
+            readonly intermediary_bic?: string;
+            /**
              * @description Name of the account holder.
              * @example John Doe
              */
@@ -5452,6 +5681,8 @@ export type components = {
             readonly imad?: string | null;
             /** @description Output Message Accountability Data for certain US transactions. */
             readonly omad?: string | null;
+            /** @description Unique End-to-end Transaction Reference (UETR), the RFC 4122 UUID that identifies this payment end to end across every institution on the wire rail. Absent for non-wire rails and for wires whose reference has not yet been assigned. */
+            readonly uetr?: string | null;
         };
         /** @description A transaction object for use within composite transactions (without further nesting). */
         readonly NestedTransaction: {
@@ -5601,6 +5832,25 @@ export type components = {
             readonly chain: string;
             /** @example 0x1234567890123456789012345678901234567890 */
             readonly address: string;
+        };
+        /** @description The wallet to send this client's RD marketing fee to. */
+        readonly RDPayoutDestinationRequest: {
+            /**
+             * @description An EVM address on Base.
+             * @example 0x1234567890123456789012345678901234567890
+             */
+            readonly address: string;
+        };
+        /** @description A client's registered destination for RD marketing-fee payouts. */
+        readonly RDPayoutDestination: {
+            /**
+             * @description CAIP-2 chain id. Always Base, because RD exists only there.
+             * @example eip155:8453
+             */
+            readonly chain: string;
+            readonly address: string;
+            /** Format: date-time */
+            readonly updated_at: string;
         };
         /** @description A client's registered destination for developer-fee payouts. */
         readonly FeePayoutDestination: {
@@ -5768,6 +6018,8 @@ export type components = {
             readonly imad?: string;
             /** @description Input Message Accountability Data for certain US transactions. */
             readonly omad?: string;
+            /** @description Unique End-to-end Transaction Reference (UETR), the RFC 4122 UUID that identifies this payment end to end across every institution on the wire rail. Absent for non-wire rails and for wires whose reference has not yet been assigned. */
+            readonly uetr?: string;
             /** @description Input amount details */
             readonly input: components["schemas"]["AmountDetails"];
             /** @description Subtotal amount after fees */
@@ -9566,6 +9818,103 @@ export interface operations {
              *     `GET /customers/{customer_id}`. That original link stays valid for
              *     90 days from creation.
              */
+            readonly 409: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal server error */
+            readonly 500: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    readonly WithdrawCustomerApplication: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header: {
+                /** @description Unique key to ensure request idempotency. If the same key is used within a certain time window, the original response will be returned instead of executing the request again. */
+                readonly "x-idempotency-key": components["parameters"]["IdempotencyKeyHeader"];
+            };
+            readonly path: {
+                /** @description Unique identifier (ksuid) of the customer record */
+                readonly customer_id: components["schemas"]["KSUID"];
+                /** @description Unique identifier (ksuid) of the customer's onboarding application */
+                readonly application_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                /**
+                 * @example {
+                 *       "reason": "Customer opted not to proceed"
+                 *     }
+                 */
+                readonly "application/json": {
+                    /**
+                     * @description Why the application is being withdrawn, recorded for audit
+                     *     and shown to reviewers. Defaults to a generic reason when
+                     *     omitted.
+                     * @example Customer opted not to proceed
+                     */
+                    readonly reason?: string;
+                };
+            };
+        };
+        readonly responses: {
+            /** @description Application withdrawn. */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid identifier or request */
+            readonly 400: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            readonly 401: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            readonly 403: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description No such customer, or the application does not belong to it */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description The application already has a decision and cannot be withdrawn */
             readonly 409: {
                 headers: {
                     readonly [name: string]: unknown;
@@ -20320,7 +20669,11 @@ export interface operations {
                     readonly "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
-            /** @description Conflict - the public key is already registered to a live signer belonging to a different client, or a duplicate request was detected. A public key belongs to exactly one client, so a key registered by someone else cannot be registered again; register a distinct key instead. The response deliberately carries no detail about the existing signer. */
+            /**
+             * @description Conflict - the public key is already registered to a live signer belonging to a different client, or a duplicate request was detected. A public key belongs to exactly one client, so a key registered by someone else cannot be registered again; register a distinct key instead. The response deliberately carries no detail about the existing signer.
+             *
+             *     This is also the answer when the key material belongs to another organization's platform-managed settlement signer. Such a key is registered, so it reports here exactly as any other key held by someone else, and the response does not reveal that it is platform-managed.
+             */
             readonly 409: {
                 headers: {
                     readonly [name: string]: unknown;
@@ -23587,14 +23940,30 @@ export interface operations {
                      *     Fedwire flows; the `wire_*` values are accepted as legacy
                      *     aliases for backwards compatibility and may be removed in
                      *     a future major version.
+                     *
+                     *     Use `swift_inbound` to simulate an international deposit
+                     *     into a SWIFT onramp account. The rail a deposit books on is
+                     *     derived from the receiving account, so `swift_inbound` and
+                     *     `wire_inbound` behave identically: against a SWIFT account
+                     *     both produce a SWIFT deposit, and against a domestic
+                     *     account both produce a Fedwire one.
                      * @example ach_inbound
                      * @enum {string}
                      */
-                    readonly type: "ach_inbound" | "fedwire_inbound" | "wire_inbound" | "fednow_inbound" | "crypto_inbound" | "ach_outbound_returned" | "ach_outbound_failed" | "fedwire_outbound_returned" | "wire_outbound_returned" | "fedwire_outbound_failed" | "wire_outbound_failed" | "ach_outbound_settled" | "ach_outbound_rejected" | "fedwire_outbound_settled" | "wire_outbound_settled" | "fedwire_outbound_rejected" | "wire_outbound_rejected" | "ach_reversal" | "fedwire_reversal" | "wire_reversal";
+                    readonly type: "ach_inbound" | "fedwire_inbound" | "wire_inbound" | "swift_inbound" | "fednow_inbound" | "crypto_inbound" | "ach_outbound_returned" | "ach_outbound_failed" | "fedwire_outbound_returned" | "wire_outbound_returned" | "swift_outbound_returned" | "fedwire_outbound_failed" | "wire_outbound_failed" | "swift_outbound_failed" | "ach_outbound_settled" | "ach_outbound_rejected" | "fedwire_outbound_settled" | "wire_outbound_settled" | "swift_outbound_settled" | "fedwire_outbound_rejected" | "wire_outbound_rejected" | "swift_outbound_rejected" | "ach_reversal" | "fedwire_reversal" | "wire_reversal" | "swift_reversal";
                     /**
                      * @description Platform account ID of the target onramp/offramp auto account.
-                     *     **Required for `ach_inbound`, `fedwire_inbound`, and `fednow_inbound`.**
-                     *     Ignored for other `type` values.
+                     *
+                     *     **Required for every fiat `type`** — all `*_inbound` values
+                     *     except `crypto_inbound`, and all `*_outbound_*` and
+                     *     `*_reversal` values. On an inbound simulation it is the
+                     *     onramp account receiving the payment. On an outbound or
+                     *     reversal simulation it is the offramp account that funded
+                     *     the one-off transaction, and `one_off_transaction_id` is
+                     *     required alongside it.
+                     *
+                     *     Ignored only for `crypto_inbound`, which uses
+                     *     `wallet_address` instead.
                      * @example acc_123
                      */
                     readonly account_id?: string;
@@ -25625,7 +25994,8 @@ export interface operations {
                     /**
                      * @example {
                      *       "month": "2026-08-01",
-                     *       "y_bps_monthly": 15,
+                     *       "y_bps_monthly": 4.25,
+                     *       "y_bps_annual": 50,
                      *       "days_in_month": 31,
                      *       "days_stamped": 2,
                      *       "daily": [
@@ -26086,6 +26456,247 @@ export interface operations {
                     readonly [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    readonly getClientInsights: {
+        readonly parameters: {
+            readonly query?: {
+                /** @description Scope the whole report to one customer (drill-down). An unknown or foreign customer is a 404, mirroring the customer report. */
+                readonly customer_id?: string;
+                /** @description Keep only items whose evidence references this wallet. */
+                readonly wallet_id?: string;
+                /** @description Keep only items of these kinds (comma-separated, e.g. `kind=volume_anomaly,recipient_dormant`; open set — an unrecognized value simply matches nothing). */
+                readonly kind?: readonly string[];
+                /** @description Keep only items of these severities (comma-separated, e.g. `severity=critical,warn`). Values are `info`, `warn`, `critical`; anything else is a 400. */
+                readonly severity?: readonly string[];
+                /** @description Keep only items carrying one of these grouping labels (comma-separated). */
+                readonly responsibility?: readonly string[];
+                /** @description Report window in days — the lookback for trends/series and the horizon for upcoming obligations. */
+                readonly window_days?: number;
+            };
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The client's portfolio insight report */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "generated_at": 1788337300,
+                     *       "window_days": 14,
+                     *       "snapshot": {
+                     *         "customers": {
+                     *           "total": 42,
+                     *           "scanned": 42,
+                     *           "with_activity": 17,
+                     *           "with_critical": 2
+                     *         },
+                     *         "total_usd": "1284500.00",
+                     *         "upcoming": {
+                     *           "days": 14,
+                     *           "count": 31,
+                     *           "totals": {
+                     *             "USDC": "412600"
+                     *           }
+                     *         },
+                     *         "open_scheduled_payments": 44,
+                     *         "active_mandates": 57,
+                     *         "metrics": [
+                     *           {
+                     *             "key": "executed_volume",
+                     *             "label": "Executed volume",
+                     *             "asset": "USDC",
+                     *             "value": "861200",
+                     *             "previous": "702300",
+                     *             "change_pct": "22.6"
+                     *           },
+                     *           {
+                     *             "key": "failed_payments",
+                     *             "label": "Payments failed",
+                     *             "value": "9",
+                     *             "previous": "3",
+                     *             "change_pct": "200.0"
+                     *           }
+                     *         ]
+                     *       },
+                     *       "series": {
+                     *         "bucket": "day",
+                     *         "from": 1787097600,
+                     *         "to": 1789516800,
+                     *         "metrics": {
+                     *           "failed_payments": [
+                     *             {
+                     *               "t": 1787097600,
+                     *               "v": "0"
+                     *             },
+                     *             {
+                     *               "t": 1787184000,
+                     *               "v": "3"
+                     *             }
+                     *           ],
+                     *           "executed_volume.USDC": [
+                     *             {
+                     *               "t": 1787097600,
+                     *               "v": "41200"
+                     *             },
+                     *             {
+                     *               "t": 1787184000,
+                     *               "v": "63800"
+                     *             }
+                     *           ]
+                     *         }
+                     *       },
+                     *       "facets": {
+                     *         "kinds": [
+                     *           "mandate_expiring",
+                     *           "payment_failures_clustered",
+                     *           "recipient_dormant"
+                     *         ],
+                     *         "severities": [
+                     *           "info",
+                     *           "warn"
+                     *         ],
+                     *         "responsibilities": [
+                     *           "compliance",
+                     *           "payment_ops"
+                     *         ],
+                     *         "assets": [
+                     *           "USDC"
+                     *         ]
+                     *       },
+                     *       "insights": [
+                     *         {
+                     *           "kind": "payment_failures_clustered",
+                     *           "severity": "warn",
+                     *           "responsibility": "payment_ops",
+                     *           "message": "7 payments across 2 customers failed in the last 14 days with the same failure code: mandate_denied (e.g. \"transaction denied by mandate: amount 5000 exceeds max_per_tx 2500\").",
+                     *           "detail": {
+                     *             "count": 7,
+                     *             "window_days": 14,
+                     *             "failure_code": "mandate_denied",
+                     *             "failure_reason": "transaction denied by mandate: amount 5000 exceeds max_per_tx 2500",
+                     *             "docs_url": "https://docs.dakota.xyz/documentation/agentic-payments/webhooks#failure_code-reference",
+                     *             "customer_ids": [
+                     *               "2vWxCustomer0000000000000000",
+                     *               "2vWxCustomer0000000000000001"
+                     *             ]
+                     *           },
+                     *           "evidence": [
+                     *             {
+                     *               "type": "scheduled_payment",
+                     *               "id": "2vWxPayment00000000000000000"
+                     *             }
+                     *           ]
+                     *         },
+                     *         {
+                     *           "kind": "recipient_dormant",
+                     *           "severity": "info",
+                     *           "responsibility": "compliance",
+                     *           "customer_id": "2vWxCustomer0000000000000000",
+                     *           "message": "Recipient \"Northwind Ltd\" hasn't been paid in 123 days (last payment 2026-05-02, 14 payment(s) before that).",
+                     *           "detail": {
+                     *             "recipient_id": "2vWxRecipient000000000000000",
+                     *             "recipient_name": "Northwind Ltd",
+                     *             "days_since_last_use": 123,
+                     *             "last_used_at": 1777500000,
+                     *             "prior_payments": 14
+                     *           },
+                     *           "evidence": [
+                     *             {
+                     *               "type": "recipient",
+                     *               "id": "2vWxRecipient000000000000000"
+                     *             }
+                     *           ]
+                     *         }
+                     *       ],
+                     *       "suggestions": [
+                     *         {
+                     *           "kind": "mandate_expiring",
+                     *           "severity": "warn",
+                     *           "responsibility": "payment_ops",
+                     *           "customer_id": "2vWxCustomer0000000000000000",
+                     *           "message": "Mandate for USDC on base expires in 6 day(s) (2026-09-07). 3 open scheduled payment(s) depend on it. Mandates are immutable — a replacement needs a new signature.",
+                     *           "detail": {
+                     *             "mandate_id": "2vWxMandate00000000000000000",
+                     *             "days_left": 6,
+                     *             "valid_until": 1788855700,
+                     *             "dependent_payments": 3
+                     *           },
+                     *           "evidence": [
+                     *             {
+                     *               "type": "mandate",
+                     *               "id": "2vWxMandate00000000000000000"
+                     *             }
+                     *           ]
+                     *         }
+                     *       ],
+                     *       "customers": [
+                     *         {
+                     *           "customer_id": "2vWxCustomer0000000000000000",
+                     *           "name": "Acme Robotics",
+                     *           "total_usd": "84200.00",
+                     *           "open_scheduled_payments": 6,
+                     *           "active_mandates": 4,
+                     *           "upcoming": {
+                     *             "days": 14,
+                     *             "count": 5,
+                     *             "totals": {
+                     *               "USDC": "9400"
+                     *             }
+                     *           },
+                     *           "item_counts": {
+                     *             "critical": 1,
+                     *             "warn": 1,
+                     *             "info": 1
+                     *           },
+                     *           "last_activity_at": 1788310000
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["ClientInsightReport"];
+                };
+            };
+            /** @description Invalid request */
+            readonly 400: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#invalid-identifier",
+                     *       "title": "Invalid Identifier",
+                     *       "status": 400,
+                     *       "detail": "invalid customer id"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Agentic payments not enabled, or the customer_id filter names an unknown customer */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#not-found",
+                     *       "title": "Not Found",
+                     *       "status": 404,
+                     *       "detail": "agentic payments are not enabled"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
             };
         };
     };
@@ -26800,6 +27411,126 @@ export interface operations {
                      *       "detail": "agentic payments are not enabled"
                      *     }
                      */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    readonly getRDPayoutDestination: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The registered destination. */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "chain": "eip155:8453",
+                     *       "address": "0x1234567890123456789012345678901234567890",
+                     *       "updated_at": "2026-08-20T12:00:00Z"
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["RDPayoutDestination"];
+                };
+            };
+            /** @description Unauthorized */
+            readonly 401: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description The client is not in the RD marketing-fee programme. */
+            readonly 403: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description No destination is registered. */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    readonly putRDPayoutDestination: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header: {
+                /** @description Unique key to ensure request idempotency. If the same key is used within a certain time window, the original response will be returned instead of executing the request again. */
+                readonly "x-idempotency-key": components["parameters"]["IdempotencyKeyHeader"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                /**
+                 * @example {
+                 *       "address": "0x1234567890123456789012345678901234567890"
+                 *     }
+                 */
+                readonly "application/json": components["schemas"]["RDPayoutDestinationRequest"];
+            };
+        };
+        readonly responses: {
+            /** @description The registered destination. */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "chain": "eip155:8453",
+                     *       "address": "0x1234567890123456789012345678901234567890",
+                     *       "updated_at": "2026-08-20T12:00:00Z"
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["RDPayoutDestination"];
+                };
+            };
+            /** @description Unauthorized */
+            readonly 401: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description The client is not in the RD marketing-fee programme. */
+            readonly 403: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description The address is not a usable destination. */
+            readonly 422: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
                     readonly "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };

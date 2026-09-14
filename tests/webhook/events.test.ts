@@ -2,7 +2,11 @@
  * Webhook event parsing tests.
  */
 
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
+
 import { describe, it, expect } from 'vitest';
+import * as yaml from 'js-yaml';
 import {
   parseEvent,
   matchesEventType,
@@ -10,6 +14,10 @@ import {
   type KybLinkData,
   type KybApplicationSubmittedData,
   type CustomerCapabilityStatusUpdatedData,
+  type CustomerRfiRequestedData,
+  type CustomerRfiRespondedData,
+  type CustomerApplicationWithdrawnData,
+  type RdPayoutDestinationUpdatedData,
   type ScheduledPaymentFailedData,
 } from '../../src/webhook/events.js';
 
@@ -272,6 +280,129 @@ describe('Webhook Events', () => {
       expect(event.data.object.requirements[0]?.severity).toBe('required');
       expect(event.data.object.requirements[1]?.url).toBe('https://docs.example');
     });
+
+    it('decodes an RFI requested payload — every requirement vocabulary, no link', () => {
+      // Mirrors the platform's own example: a document by type, a document by
+      // purpose that is already on file, a field, and a question.
+      const payload = JSON.stringify({
+        id: 'evt_rfi_1',
+        type: 'customer.rfi.requested',
+        created: 1735689700,
+        data: {
+          object: {
+            customer_id: 'cust_1',
+            application_id: 'app_1',
+            message_id: 'rfimsg_1',
+            requested_at: 1735689700,
+            requirements: [
+              {
+                type: 'document',
+                document_type: 'bank_statement',
+                entity: { kind: 'business' },
+                status: 'missing',
+              },
+              {
+                type: 'document',
+                purpose: 'individual_proof_of_address',
+                entity: { kind: 'individual', id: 'ind_1' },
+                status: 'on_file',
+              },
+              { type: 'field', path: 'business.business_description' },
+              {
+                type: 'question',
+                key: 'q1',
+                prompt: 'Explain the source of the June deposits.',
+                require_document: true,
+              },
+            ],
+          },
+        },
+      });
+
+      const event = parseEvent<CustomerRfiRequestedData>(payload);
+      const { object } = event.data;
+
+      expect(event.type).toBe(WebhookEventType.CustomerRfiRequested);
+      expect(object.message_id).toBe('rfimsg_1');
+      expect(object.requirements).toHaveLength(4);
+      expect(object.requirements[0]?.document_type).toBe('bank_statement');
+      expect(object.requirements[0]?.purpose).toBeUndefined();
+      expect(object.requirements[1]?.status).toBe('on_file');
+      expect(object.requirements[1]?.entity?.id).toBe('ind_1');
+      expect(object.requirements[2]?.path).toBe('business.business_description');
+      expect(object.requirements[3]?.require_document).toBe(true);
+      // The resubmission link embeds a credential and is deliberately absent.
+      expect(object).not.toHaveProperty('url');
+      expect(object).not.toHaveProperty('application_url');
+    });
+
+    it('decodes an RFI responded payload', () => {
+      const payload = JSON.stringify({
+        id: 'evt_rfi_2',
+        type: 'customer.rfi.responded',
+        created: 1735776100,
+        data: {
+          object: { customer_id: 'cust_1', application_id: 'app_1', responded_at: 1735776100 },
+        },
+      });
+
+      const event = parseEvent<CustomerRfiRespondedData>(payload);
+
+      expect(event.type).toBe(WebhookEventType.CustomerRfiResponded);
+      expect(event.data.object.responded_at).toBe(1735776100);
+    });
+
+    it('decodes an application withdrawn payload, with and without a reason', () => {
+      const withReason = parseEvent<CustomerApplicationWithdrawnData>(
+        JSON.stringify({
+          id: 'evt_wd_1',
+          type: 'customer.application.withdrawn',
+          created: 1735862500,
+          data: {
+            object: {
+              customer_id: 'cust_1',
+              application_id: 'app_1',
+              reason: 'Customer opted not to proceed',
+            },
+          },
+        })
+      );
+      expect(withReason.type).toBe(WebhookEventType.CustomerApplicationWithdrawn);
+      expect(withReason.data.object.reason).toBe('Customer opted not to proceed');
+
+      // The platform omits `reason` rather than sending an empty string.
+      const bare = parseEvent<CustomerApplicationWithdrawnData>(
+        JSON.stringify({
+          id: 'evt_wd_2',
+          type: 'customer.application.withdrawn',
+          created: 1735862500,
+          data: { object: { customer_id: 'cust_1', application_id: 'app_1' } },
+        })
+      );
+      expect(bare.data.object.reason).toBeUndefined();
+    });
+
+    it('decodes an RD payout destination updated payload', () => {
+      const payload = JSON.stringify({
+        id: 'evt_rd_1',
+        type: 'rd_payout_destination.updated',
+        created: 1735862500,
+        data: {
+          object: {
+            wallet_address: '0xabcdefabcdefabcdefabcdefabcdefabcdefabcd',
+            previous_address: '',
+            updated_by: 'usr_1',
+          },
+        },
+      });
+
+      const event = parseEvent<RdPayoutDestinationUpdatedData>(payload);
+
+      expect(event.type).toBe(WebhookEventType.RdPayoutDestinationUpdated);
+      expect(event.data.object.wallet_address).toBe('0xabcdefabcdefabcdefabcdefabcdefabcdefabcd');
+      // Empty on a first registration — a string, not absent.
+      expect(event.data.object.previous_address).toBe('');
+    });
   });
 
   describe('matchesEventType', () => {
@@ -343,9 +474,33 @@ describe('Webhook Events', () => {
       );
     });
 
-    it('has fee payout destination events', () => {
+    it('has the RFI and withdrawal events', () => {
+      expect(WebhookEventType.CustomerRfiRequested).toBe('customer.rfi.requested');
+      expect(WebhookEventType.CustomerRfiResponded).toBe('customer.rfi.responded');
+      expect(WebhookEventType.CustomerApplicationWithdrawn).toBe('customer.application.withdrawn');
+    });
+
+    it('carries every event type the public spec enumerates', () => {
+      // The spec's EventType enum is the platform's contract for what a target
+      // can subscribe to. Every value in it must be reachable by name here, so
+      // a sync that adds one fails loudly instead of leaving a handler with
+      // only a string literal to register on.
+      const spec = yaml.load(readFileSync(resolve(__dirname, '../../openapi.yaml'), 'utf8')) as {
+        components: { schemas: { EventType: { enum: string[] } } };
+      };
+      const enumerated = spec.components.schemas.EventType.enum;
+      const known = new Set(Object.values(WebhookEventType) as string[]);
+
+      const missing = enumerated.filter((type) => !known.has(type));
+
+      expect(enumerated.length).toBeGreaterThan(40);
+      expect(missing).toEqual([]);
+    });
+
+    it('has the payout destination events', () => {
       expect(WebhookEventType.FeePayoutDestinationUpdated).toBe('fee_payout_destination.updated');
       expect(WebhookEventType.FeePayoutDestinationDeleted).toBe('fee_payout_destination.deleted');
+      expect(WebhookEventType.RdPayoutDestinationUpdated).toBe('rd_payout_destination.updated');
     });
   });
 });

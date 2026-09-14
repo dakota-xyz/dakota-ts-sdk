@@ -44,6 +44,18 @@ export interface TransportRequestOptions {
    * never override a deadline someone deliberately chose.
    */
   endpointTimeout?: number;
+  /**
+   * The operation's success response carries NO body — a bare 200, as
+   * `POST /customers/{id}/applications/{id}/withdraw` answers. The transport
+   * then resolves `undefined` without parsing, exactly as for a 204.
+   *
+   * Opt-in per operation on purpose. Every other call promises a document,
+   * and for those an empty 2xx body is a fault (a proxy, a stalled upstream)
+   * that must keep surfacing as an error and keep its retry: resolving
+   * `undefined` there would move the failure to a TypeError far from the
+   * call site.
+   */
+  noContent?: boolean;
 }
 
 /**
@@ -60,7 +72,7 @@ export class Transport {
    * Make an HTTP request with automatic retry and error handling.
    */
   async request<T>(options: TransportRequestOptions): Promise<T> {
-    const { method, path, body, query, headers, idempotencyKey, signal } = options;
+    const { method, path, body, query, headers, idempotencyKey, signal, noContent } = options;
 
     // Build URL with query parameters
     const url = this.buildURL(path, query);
@@ -80,7 +92,8 @@ export class Transport {
         body: requestBody,
         signal,
       },
-      this.resolveTimeout(options)
+      this.resolveTimeout(options),
+      noContent === true
     );
   }
 
@@ -204,7 +217,12 @@ export class Transport {
    * deadline, so a request that keeps timing out can take up to
    * `timeout × maxAttempts` before it throws.
    */
-  private async executeWithRetry<T>(url: string, init: RequestInit, timeout: number): Promise<T> {
+  private async executeWithRetry<T>(
+    url: string,
+    init: RequestInit,
+    timeout: number,
+    noContent = false
+  ): Promise<T> {
     const { maxAttempts, initialBackoffMs, maxBackoffMs } = this.config.retryPolicy;
     const method = init.method ?? 'GET';
 
@@ -240,8 +258,10 @@ export class Transport {
 
         // Check for successful response
         if (response.ok) {
-          // Handle 204 No Content
-          if (response.status === 204) {
+          // Handle 204 No Content, and the operations that declare a bodiless
+          // 200 (see `noContent`). Parsing an empty body as JSON throws, which
+          // would reject a call whose side effect already happened.
+          if (response.status === 204 || noContent) {
             return undefined as T;
           }
           return (await response.json()) as T;

@@ -201,11 +201,17 @@ export class MandatesResource extends BaseResource {
    * it at its due date, days later, with the payee unpaid.
    *
    * Advisory — nothing here reserves budget, and the gate remains the
-   * authority at fire time. Two things to honour when reading a line:
-   * an ABSENT `remaining_amount` / `remaining_count` means "not capped", never
-   * "nothing left"; a `remaining_amount` of `'?'` means the figure could not
-   * be summed and MUST be treated as no headroom (the gate fails closed on the
-   * same data).
+   * authority at fire time. Three things to honour when reading a line:
+   *
+   * - An ABSENT `remaining_amount` / `remaining_count` means "not capped",
+   *   never "nothing left" — EXCEPT on a `per_target` line with
+   *   `prior_scope: true`. That line's spend was booked under an earlier
+   *   version's target scope (before a `target_type` amendment) and no
+   *   current target claims it: the spend is real and still counts toward
+   *   the aggregate caps, but no payment can consume the bucket, so absent
+   *   remaining_* there means NO headroom. Never set on aggregate lines.
+   * - A `remaining_amount` of `'?'` means the figure could not be summed and
+   *   MUST be treated as no headroom (the gate fails closed on the same data).
    *
    * @param mandateId - Mandate ID
    * @returns Per-target and aggregate budget lines, as of a stated instant
@@ -213,8 +219,11 @@ export class MandatesResource extends BaseResource {
    * @example
    * ```typescript
    * const budget = await client.mandates.getBudget(mandateId);
-   * for (const line of budget.aggregate) {
-   *   console.log(line.bucket, line.remaining_amount ?? 'uncapped');
+   * for (const line of [...budget.per_target, ...budget.aggregate]) {
+   *   const headroom = line.prior_scope
+   *     ? 'none (prior scope)'
+   *     : (line.remaining_amount ?? 'uncapped');
+   *   console.log(line.target ?? '(all payees)', line.bucket, headroom);
    * }
    * ```
    */

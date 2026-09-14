@@ -933,6 +933,226 @@ paths:
                 title: Not Found
                 status: 404
                 detail: customer not found
+  /insights:
+    x-beta: true
+    get:
+      tags:
+        - Insights
+      summary: Get the client-level portfolio insight report (BETA)
+      description: >
+        > **Beta** — early access.
+
+
+        The client-scope companion of the customer insight report: one deterministic, read-only report over ALL of the caller's customers' agentic activity. Observations (`insights`) and advisory recommendations (`suggestions`) reuse the customer report's item schema — `{kind, severity, message, detail, evidence}` — with two additive fields at this scope: `customer_id` attributes an item to one customer (omitted on cross-customer aggregates, which list the affected customers in `detail`), and `responsibility` is a coarse grouping label (`payment_ops` / `compliance`) for filtering only — it carries no ownership semantics. On top of the items the report adds dashboard-shaped data: KPI `metrics` with previous-window values for trend deltas, daily time `series` for charts, and a per-customer roll-up (`customers`) for drill-down. All query filters are optional and only narrow the report; the response shape never changes. `kind` remains an OPEN set; clients must ignore kinds they do not
+        recognize. Every number is computed server-side on read; nothing is stored, and nothing here moves money or changes state.
+      operationId: getClientInsights
+      parameters:
+        - name: customer_id
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Scope the whole report to one customer (drill-down). An unknown or foreign customer is a 404, mirroring the customer report.
+        - name: wallet_id
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Keep only items whose evidence references this wallet.
+        - name: kind
+          in: query
+          required: false
+          style: form
+          explode: false
+          schema:
+            type: array
+            items:
+              type: string
+          description: Keep only items of these kinds (comma-separated, e.g. `kind=volume_anomaly,recipient_dormant`; open set — an unrecognized value simply matches nothing).
+        - name: severity
+          in: query
+          required: false
+          style: form
+          explode: false
+          schema:
+            type: array
+            items:
+              type: string
+              x-extensible-enum:
+                - info
+                - warn
+                - critical
+          description: |
+            Keep only items of these severities (comma-separated, e.g. `severity=critical,warn`). Values are `info`, `warn`, `critical`; anything else is a 400.
+        - name: responsibility
+          in: query
+          required: false
+          style: form
+          explode: false
+          schema:
+            type: array
+            items:
+              type: string
+              x-extensible-enum:
+                - payment_ops
+                - compliance
+          description: Keep only items carrying one of these grouping labels (comma-separated).
+        - name: window_days
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 90
+            default: 14
+          description: Report window in days — the lookback for trends/series and the horizon for upcoming obligations.
+      responses:
+        '200':
+          description: The client's portfolio insight report
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ClientInsightReport'
+              example:
+                generated_at: 1788337300
+                window_days: 14
+                snapshot:
+                  customers:
+                    total: 42
+                    scanned: 42
+                    with_activity: 17
+                    with_critical: 2
+                  total_usd: '1284500.00'
+                  upcoming:
+                    days: 14
+                    count: 31
+                    totals:
+                      USDC: '412600'
+                  open_scheduled_payments: 44
+                  active_mandates: 57
+                  metrics:
+                    - key: executed_volume
+                      label: Executed volume
+                      asset: USDC
+                      value: '861200'
+                      previous: '702300'
+                      change_pct: '22.6'
+                    - key: failed_payments
+                      label: Payments failed
+                      value: '9'
+                      previous: '3'
+                      change_pct: '200.0'
+                series:
+                  bucket: day
+                  from: 1787097600
+                  to: 1789516800
+                  metrics:
+                    failed_payments:
+                      - t: 1787097600
+                        v: '0'
+                      - t: 1787184000
+                        v: '3'
+                    executed_volume.USDC:
+                      - t: 1787097600
+                        v: '41200'
+                      - t: 1787184000
+                        v: '63800'
+                facets:
+                  kinds:
+                    - mandate_expiring
+                    - payment_failures_clustered
+                    - recipient_dormant
+                  severities:
+                    - info
+                    - warn
+                  responsibilities:
+                    - compliance
+                    - payment_ops
+                  assets:
+                    - USDC
+                insights:
+                  - kind: payment_failures_clustered
+                    severity: warn
+                    responsibility: payment_ops
+                    message: '7 payments across 2 customers failed in the last 14 days with the same failure code: mandate_denied (e.g. "transaction denied by mandate: amount 5000 exceeds max_per_tx 2500").'
+                    detail:
+                      count: 7
+                      window_days: 14
+                      failure_code: mandate_denied
+                      failure_reason: 'transaction denied by mandate: amount 5000 exceeds max_per_tx 2500'
+                      docs_url: https://docs.dakota.xyz/documentation/agentic-payments/webhooks#failure_code-reference
+                      customer_ids:
+                        - 2vWxCustomer0000000000000000
+                        - 2vWxCustomer0000000000000001
+                    evidence:
+                      - type: scheduled_payment
+                        id: 2vWxPayment00000000000000000
+                  - kind: recipient_dormant
+                    severity: info
+                    responsibility: compliance
+                    customer_id: 2vWxCustomer0000000000000000
+                    message: Recipient "Northwind Ltd" hasn't been paid in 123 days (last payment 2026-05-02, 14 payment(s) before that).
+                    detail:
+                      recipient_id: 2vWxRecipient000000000000000
+                      recipient_name: Northwind Ltd
+                      days_since_last_use: 123
+                      last_used_at: 1777500000
+                      prior_payments: 14
+                    evidence:
+                      - type: recipient
+                        id: 2vWxRecipient000000000000000
+                suggestions:
+                  - kind: mandate_expiring
+                    severity: warn
+                    responsibility: payment_ops
+                    customer_id: 2vWxCustomer0000000000000000
+                    message: Mandate for USDC on base expires in 6 day(s) (2026-09-07). 3 open scheduled payment(s) depend on it. Mandates are immutable — a replacement needs a new signature.
+                    detail:
+                      mandate_id: 2vWxMandate00000000000000000
+                      days_left: 6
+                      valid_until: 1788855700
+                      dependent_payments: 3
+                    evidence:
+                      - type: mandate
+                        id: 2vWxMandate00000000000000000
+                customers:
+                  - customer_id: 2vWxCustomer0000000000000000
+                    name: Acme Robotics
+                    total_usd: '84200.00'
+                    open_scheduled_payments: 6
+                    active_mandates: 4
+                    upcoming:
+                      days: 14
+                      count: 5
+                      totals:
+                        USDC: '9400'
+                    item_counts:
+                      critical: 1
+                      warn: 1
+                      info: 1
+                    last_activity_at: 1788310000
+        '400':
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#invalid-identifier
+                title: Invalid Identifier
+                status: 400
+                detail: invalid customer id
+        '404':
+          description: Agentic payments not enabled, or the customer_id filter names an unknown customer
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#not-found
+                title: Not Found
+                status: 404
+                detail: agentic payments are not enabled
   /agentic-policy:
     x-beta: true
     put:
@@ -1065,7 +1285,9 @@ paths:
 
         Versioning is append-only. The outgoing version's rule is never rewritten and stays readable at GET /mandates/{mandate_id}/versions; the newest version governs from the moment it lands.
 
-        **Only the amount fields (`max_per_tx` and the window caps) and `targets` may change.** `target_type`, `window`, `asset` and `network_id` are frozen — changing one is rejected with a 400 telling you to cancel this mandate and create a new one. The window in particular is frozen because usage rows carry no window label, so changing it would retroactively re-bucket every past spend.
+        **The amount fields (`max_per_tx` and the window caps), `targets`, and `target_type` may change.** `window`, `asset` and `network_id` are frozen — changing one is rejected with a 400 telling you to cancel this mandate and create a new one. The window in particular is frozen because usage rows carry no window label, so changing it would retroactively re-bucket every past spend.
+
+        **Changing `target_type` additionally requires the resulting rule to carry an aggregate ceiling**, settable in the same amendment: `max_amount_in_window`, or `max_count_in_window` when the rule keeps no per-payee amount cap (spend crossing the change is metered only by the aggregate caps, and a count ceiling does not bound the dollars a per-payee amount budget is measured in). A target change reshapes who the agent may pay, so the mandate must state what it may spend in total. Spend already made in the window carries across the change: each recorded spend re-attributes to the new rule's payee buckets where the payment's recorded destination identifies one, and always keeps counting against the aggregate caps. For the same reason, an amendment may not remove the last aggregate ceiling while the current window still holds spend from an earlier target scope that only the ceiling meters — raise or change it instead; the restriction lifts once that spend leaves the window.
 
         **ADDING a payee to `targets` additionally requires the resulting rule to carry an aggregate ceiling** — `max_amount_in_window` or `max_count_in_window`. Without one, each payee has its own separate budget, so a new payee brings a new budget and the payee list alone would move what the agent can spend in total, with no amount you approved having changed. Set the ceiling in the SAME amendment that adds the payee: the amount fields are amendable, so this costs no second signature and no budget reset. A count-preserving swap counts as adding, because the incoming payee starts with an empty budget. REMOVING payees is always allowed — it can only lower what the agent may spend.
 
@@ -2221,6 +2443,10 @@ components:
             Amount still permitted in this bucket after committed spend and open earmarks, floored at 0 and returned as a decimal string. ABSENT when the rule sets no amount cap for this line's scope — absence means "not capped", never "nothing left".
 
             **`"?"` means the figure could not be summed and MUST be treated as no headroom.** A stored amount or cap in this bucket did not parse as a decimal; the mandate gate fails closed on the same data, so a payment sent against this bucket will be denied. Do not coerce `"?"` to 0 and do not fall back to the rule's cap — both read as headroom that is not there.
+        prior_scope:
+          type: boolean
+          description: |
+            True on a `per_target` line whose spend was booked under an EARLIER version's target scope (before a `target_type` amendment) and that no current rule target claims. The spend is real and still counts toward the `aggregate` lines, but no payment can consume this bucket under the current rule — so **on a prior-scope line, absent `remaining_count`/`remaining_amount` means NO headroom, not "not capped"**. Never set on `aggregate` lines. Omitted (false) on ordinary lines.
     MandateVersion:
       type: object
       description: |
@@ -2504,8 +2730,8 @@ components:
             Machine-readable item type. This is an OPEN set — the values below are the kinds emitted TODAY, but new kinds may be added at any time without a breaking change, so it is documented as an extensible enum rather than a closed one. A client MUST render an unrecognized kind generically from `message` + `severity` (and `evidence`), never drop it. Kinds emitted today, by array:
             Observations (`insights[]`):
               * `upcoming_payments` — open payments due within the horizon (count + per-asset totals).
-              * `payment_failures_clustered` — ≥2 recent failures to the same payee sharing one reason (root cause).
-              * `payments_failed` — remaining recent singleton failures, summarized.
+              * `payment_failures_clustered` — ≥2 recent failures to the same payee sharing one reason (root cause). `detail` carries `failure_reason`, `failure_code` (the documented stable code, when the reason classifies) and `docs_url` (the published failure_code reference).
+              * `payments_failed` — remaining recent singleton failures, summarized (`detail.docs_url` links the reference).
               * `account_activity` — executed volume over the window + mandates awaiting signature.
               * `new_counterparty` — first open payments to a recently-added payee.
               * `counterparty_concentration` — one payee dominates recent executed outflow.
@@ -2515,6 +2741,10 @@ components:
               * `funding_shortfall` — a funding wallet's indexed balance is below its near-term payment needs.
               * `mandate_expiring` — an active mandate ends soon (warn when open payments depend on it).
               * `mandate_headroom` — a mandate's window budget is nearly or already over-consumed.
+
+            Kinds emitted only by the client-level report (`GET /insights`) today:
+              * `volume_anomaly` — a customer's executed volume is a large multiple of that customer's own baseline (observation).
+              * `recipient_dormant` — a previously-paid recipient has gone unpaid for a long stretch (observation; `detail` carries `days_since_last_use` and `last_used_at`).
           x-extensible-enum:
             - upcoming_payments
             - payment_failures_clustered
@@ -2526,6 +2756,8 @@ components:
             - funding_shortfall
             - mandate_expiring
             - mandate_headroom
+            - volume_anomaly
+            - recipient_dormant
         severity:
           type: string
           enum:
@@ -2544,6 +2776,17 @@ components:
           items:
             $ref: '#/components/schemas/InsightEvidence'
           description: The platform objects this item is computed from (capped; may be empty when the claim is an aggregate).
+        customer_id:
+          type: string
+          description: |
+            Client-level report only — the customer this item is about. Omitted on cross-customer aggregates (which list the affected customers in `detail`) and on the customer report, where the scope is the path.
+        responsibility:
+          type: string
+          description: |
+            Client-level report only — a coarse grouping label for routing and filtering (which "department" cares). A label, not ownership: it reuses the insight-agent responsibility catalog names so a future entity build can adopt them without a contract change.
+          x-extensible-enum:
+            - payment_ops
+            - compliance
     InsightSnapshotBalance:
       type: object
       required:
@@ -2627,3 +2870,235 @@ components:
           items:
             $ref: '#/components/schemas/InsightItem'
           description: Advisory recommendations (always present, possibly empty). Non-binding — acting on one is a separate, human-gated step.
+    ClientInsightMetric:
+      type: object
+      required:
+        - key
+        - label
+        - value
+      description: |
+        One portfolio KPI over the report window, paired with the previous window's value so a dashboard can render a trend delta (value + change vs the prior period). Amount metrics repeat per asset with `asset` set; count metrics omit it. `key` is an OPEN set like `kind`.
+      properties:
+        key:
+          type: string
+          description: |
+            Machine-readable metric name. Open set — emitted today are `executed_volume` (per asset), `executed_payments`, `failed_payments` and `new_counterparties`.
+          x-extensible-enum:
+            - executed_volume
+            - executed_payments
+            - failed_payments
+            - new_counterparties
+        label:
+          type: string
+          description: Human-readable metric name for direct rendering.
+        asset:
+          type: string
+          description: Set on amount metrics (one metric entry per asset); absent on counts.
+        value:
+          type: string
+          description: Decimal string — the metric over the report window.
+        previous:
+          type: string
+          description: Decimal string — the same metric over the window immediately before the report window.
+        change_pct:
+          type: string
+          description: Decimal string, signed — percent change vs `previous`. Omitted when `previous` is zero.
+    ClientInsightSeriesPoint:
+      type: object
+      required:
+        - t
+        - v
+      description: One bucket of a time series.
+      properties:
+        t:
+          type: integer
+          format: int64
+          description: Bucket start (unix seconds, UTC).
+        v:
+          type: string
+          description: Decimal string — the bucket's value.
+    ClientInsightSeries:
+      type: object
+      required:
+        - bucket
+        - from
+        - to
+        - metrics
+      description: |
+        Daily time series for charts. Map keys are an OPEN set named `<metric>` for counts and `<metric>.<ASSET>` for amounts — emitted today: `executed_payments`, `failed_payments`, `executed_volume.<ASSET>` (lookback over the report window) and `upcoming_obligations.<ASSET>` (forward-looking: open payments due per day from now through the next `window_days`; an OVERDUE open payment is not plotted here — it is counted in `snapshot.upcoming`, which spans everything due through the horizon, and surfaces as a `payment_at_risk` item). Clients must ignore keys they do not recognize.
+      properties:
+        bucket:
+          type: string
+          enum:
+            - day
+        from:
+          type: integer
+          format: int64
+          description: Start of the earliest bucket (unix seconds).
+        to:
+          type: integer
+          format: int64
+          description: End of the latest bucket (unix seconds).
+        metrics:
+          type: object
+          additionalProperties:
+            type: array
+            items:
+              $ref: '#/components/schemas/ClientInsightSeriesPoint'
+    ClientInsightItemCounts:
+      type: object
+      required:
+        - critical
+        - warn
+        - info
+      description: How many report items (insights + suggestions) reference the customer, by severity.
+      properties:
+        critical:
+          type: integer
+        warn:
+          type: integer
+        info:
+          type: integer
+    ClientInsightCustomer:
+      type: object
+      required:
+        - customer_id
+        - open_scheduled_payments
+        - active_mandates
+        - upcoming
+        - item_counts
+      description: |
+        One customer's roll-up row for the drill-down table. Re-query with `?customer_id=` (or the customer report) for the full picture.
+      properties:
+        customer_id:
+          type: string
+        name:
+          type: string
+        total_usd:
+          type: string
+          description: Indexed funding-wallet balance in USD. Present only when the balance index is configured.
+        open_scheduled_payments:
+          type: integer
+        active_mandates:
+          type: integer
+        upcoming:
+          $ref: '#/components/schemas/InsightSnapshotUpcoming'
+        item_counts:
+          $ref: '#/components/schemas/ClientInsightItemCounts'
+        last_activity_at:
+          type: integer
+          format: int64
+          description: Unix seconds of the customer's most recent executed payment in the lookback. Omitted when there is none.
+    ClientInsightCustomersSummary:
+      type: object
+      required:
+        - total
+        - scanned
+        - with_activity
+        - with_critical
+      description: |
+        The customer population behind the report. `scanned < total` means the report hit its per-request scan cap (100) and was computed over a prefix of the book in the customer list's order (name, then id) — truncation is never silent. `with_activity` counts customers with any non-cancelled scheduled payment or report item, not only inside the window.
+      properties:
+        total:
+          type: integer
+        scanned:
+          type: integer
+        with_activity:
+          type: integer
+        with_critical:
+          type: integer
+    ClientInsightFacets:
+      type: object
+      required:
+        - kinds
+        - severities
+        - responsibilities
+        - assets
+      description: |
+        The values present in the report BEFORE the item filters (`kind`, `severity`, `responsibility`) were applied — so a UI can offer every option a client could pick even while a filter is active. `assets` are the assets moving in the window (metrics + series).
+      properties:
+        kinds:
+          type: array
+          items:
+            type: string
+        severities:
+          type: array
+          items:
+            type: string
+        responsibilities:
+          type: array
+          items:
+            type: string
+        assets:
+          type: array
+          items:
+            type: string
+    ClientInsightSnapshot:
+      type: object
+      required:
+        - customers
+        - upcoming
+        - open_scheduled_payments
+        - active_mandates
+        - metrics
+      description: |
+        Typed FACTS about the client's whole book — rendered directly, not narrated. `total_usd` covers indexed funding-wallet balances and is present only when the balance index is configured; it degrades to absent, never to an error. `balances` (per wallet × asset) is present only when the report is scoped to one customer (`?customer_id=`), so a drill-down can show that customer's holdings overall, by asset and by wallet.
+      properties:
+        customers:
+          $ref: '#/components/schemas/ClientInsightCustomersSummary'
+        total_usd:
+          type: string
+        balances:
+          type: array
+          items:
+            $ref: '#/components/schemas/InsightSnapshotBalance'
+        upcoming:
+          $ref: '#/components/schemas/InsightSnapshotUpcoming'
+        open_scheduled_payments:
+          type: integer
+        active_mandates:
+          type: integer
+        metrics:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClientInsightMetric'
+    ClientInsightReport:
+      type: object
+      required:
+        - generated_at
+        - window_days
+        - snapshot
+        - series
+        - facets
+        - insights
+        - suggestions
+        - customers
+      description: |
+        The deterministic, read-only portfolio insight report for the calling client. Computed on demand across the client's own customers (never cross-tenant); nothing is stored.
+      properties:
+        generated_at:
+          type: integer
+          format: int64
+        window_days:
+          type: integer
+        snapshot:
+          $ref: '#/components/schemas/ClientInsightSnapshot'
+        facets:
+          $ref: '#/components/schemas/ClientInsightFacets'
+        series:
+          $ref: '#/components/schemas/ClientInsightSeries'
+        insights:
+          type: array
+          items:
+            $ref: '#/components/schemas/InsightItem'
+          description: Observations across the book (always present, possibly empty).
+        suggestions:
+          type: array
+          items:
+            $ref: '#/components/schemas/InsightItem'
+          description: Advisory recommendations (always present, possibly empty). Non-binding — acting on one is a separate, human-gated step.
+        customers:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClientInsightCustomer'
+          description: Per-customer roll-up for the drill-down table, sorted worst-first (critical count, then warn, then activity).

@@ -4,6 +4,140 @@ All notable changes to the Dakota TypeScript SDK are documented in this file.
 
 ## [Unreleased]
 
+### Added — the surface the 2026-09 spec sync brought in
+
+`openapi.yaml` is a copy of platform `openapi.public.yaml` at `39c2aa1e`
+(2026-09-14), replacing one 839 lines behind. Four operations on three new
+paths and eleven schemas are new, four webhook event types were added and two
+removed, and a handful of existing shapes gained fields. Everything below is additive to the
+SDK's public surface; the one behavioural change is a transport fix that a new
+endpoint made necessary.
+
+**Withdraw an onboarding application.**
+`customers.withdrawApplication(customerId, applicationId, { reason? })`, for a
+customer who will not or cannot continue — after a request for information
+they chose not to answer, say. FINAL: the customer's `status` becomes
+`withdrawn` and onboarding them again needs a new application. An already
+decided application answers 409. `reason` (≤500 chars) is recorded for audit
+and shown to reviewers; it defaults when omitted. Emits
+`customer.application.withdrawn`.
+
+**Client-level portfolio insights (BETA).** `insights.getClientReport(params?)`
+is the whole-book companion of `insights.get(customerId)`: one deterministic,
+read-only report over every customer's agentic activity. Items reuse
+`InsightItem` plus `customer_id` (omitted on cross-customer aggregates) and
+`responsibility` (`payment_ops` / `compliance` — a grouping label for routing,
+not ownership). On top of the items: KPI `snapshot.metrics` with previous-window
+values for trend deltas, daily `series` for charts (open-set keys — `<metric>`
+for counts, `<metric>.<ASSET>` for amounts), `facets` listing the values present
+BEFORE the item filters, and a per-customer roll-up in `customers` sorted
+worst-first. Every filter (`customer_id`, `wallet_id`, `kind`, `severity`,
+`responsibility`, `window_days`) is optional and only narrows; the multi-value
+ones are comma-separated strings like the rest of the SDK. Scans at most 100
+customers per request — `snapshot.customers.scanned < total` says so. Two kinds
+are emitted only at this scope today, `volume_anomaly` and `recipient_dormant`.
+New aliases: `ClientInsightReport`, `ClientInsightSnapshot`,
+`ClientInsightMetric`, `ClientInsightSeries`, `ClientInsightSeriesPoint`,
+`ClientInsightCustomer`, `ClientInsightCustomersSummary`,
+`ClientInsightFacets`, `ClientInsightItemCounts`, `ClientInsightsParams`.
+
+**RD marketing-fee payout destination.**
+`rdMarketingFee.getPayoutDestination()` and
+`rdMarketingFee.setPayoutDestination({ address })`. A SEPARATE registration
+from `client.feePayoutDestination` — the two programmes pay different assets.
+RD exists only on Base, so the chain is not a parameter and the response's
+`chain` is always `eip155:8453`. `get` answers 404 while nothing is registered
+(the ordinary state for a new client, not an error) and 403 when the client is
+not in the programme. `set` replaces any existing destination and emits
+`rd_payout_destination.updated`. New aliases: `RDPayoutDestination`,
+`RDPayoutDestinationRequest`.
+
+**Webhook event types.** `WebhookEventType` gains `CustomerRfiRequested`
+(`customer.rfi.requested`), `CustomerRfiResponded` (`customer.rfi.responded`),
+`CustomerApplicationWithdrawn` (`customer.application.withdrawn`) and
+`RdPayoutDestinationUpdated` (`rd_payout_destination.updated`), each with a
+typed payload: `CustomerRfiRequestedData` (with `RfiRequirement` and
+`RfiRequirementEntity`), `CustomerRfiRespondedData`,
+`CustomerApplicationWithdrawnData`, `RdPayoutDestinationUpdatedData`. The
+shapes are taken from the platform's emitters, not guessed. Two things worth
+knowing about the RFI payload: it deliberately carries NO resubmission link
+(the link embeds a credential and webhook bodies come to rest in logs — read it
+from the customer resource), and `message_id` is the correlation handle for
+deduping redeliveries and pairing a later `customer.rfi.responded`. A new test
+checks every value in the spec's `EventType` enum is reachable by name on the
+TypeScript enum, so the next sync cannot add one silently.
+
+**Sandbox: SWIFT simulation, and the types stop drifting.**
+`SimulateInboundType` gains `swift_inbound`, `swift_outbound_settled` /
+`_failed` / `_returned` / `_rejected` and `swift_reversal`. The rail a deposit
+books on is derived from the RECEIVING account, so `swift_inbound` and
+`fedwire_inbound` behave identically — pick the account, not the type. The
+hand-written union had already fallen behind the spec (no `fedwire_*`, no
+`fednow_inbound`) with nothing failing, so it is now DERIVED from the
+generated `simulateInbound` operation: a sync that adds a value reaches
+callers with no edit. The `wire_*` values are documented as the deprecated
+aliases they are. `SimulateInboundRequest` gains the spec's field names
+`wallet_address` and `one_off_transaction_id`, with `wallet_id` and
+`movement_id` kept as deprecated aliases, and its doc table now says what the
+platform requires: every fiat type takes `account_id`, and outbound /
+reversal types take the funding offramp `account_id` AND the
+`one_off_transaction_id`. `WithdrawApplicationRequest` is derived the same
+way.
+
+**Smaller shape changes, all additive.**
+- `RDMarketingFeeStatement.y_bps_annual` (required): the CONTRACT rate as the
+  Order Form quotes it, beside `y_bps_monthly`, which is now documented as the
+  rate APPLIED to the month (annual × days in month / 365, 2 dp).
+- `ApplicationStatus` gains `closed` — compliance took the application out of
+  review without a decision; it may be reopened to `under_review`.
+- International bank destinations (request and response) gain
+  `intermediary_bic`: the correspondent bank between Dakota's bank and `bic`.
+  Leave it unset unless a payment is refused for want of one; a destination
+  that needs one is replaced, not edited.
+- `TransactionSettlement` and `TransactionReceipt` gain `uetr`, the RFC 4122
+  end-to-end reference that identifies a payment across every institution on
+  the wire rail. Absent for non-wire rails and for wires whose reference has
+  not been assigned yet.
+- `MandateBudgetLine.prior_scope`: true on a `per_target` line whose spend was
+  booked under an EARLIER target scope. On such a line absent
+  `remaining_count` / `remaining_amount` means NO headroom, not "not capped".
+- Mandate amend: `target_type` may now change, and doing so requires the
+  resulting rule to carry an aggregate ceiling. Documentation only in this SDK;
+  `mandateAmendSignPayload` is unchanged.
+- Signer create / delete descriptions now state the ownership rules and which
+  of 403 / 404 / 409 each case answers.
+
+### Fixed — a bare 200 with no body no longer rejects a successful call
+
+The transport parsed every non-204 success as JSON. The platform answers
+`POST /customers/{id}/applications/{id}/withdraw` with a 200 and an EMPTY body —
+the first public operation to do so — and `response.json()` on an empty body
+throws, which would have rejected a call whose side effect had already
+happened (and, because the throw was wrapped as a transport error, retried it
+with the same idempotency key).
+
+`TransportRequestOptions` gains `noContent`: an operation that declares it
+resolves `undefined` on a 2xx exactly as for a 204, and `withdrawApplication`
+declares it. Deliberately opt-in rather than a global "empty body means no
+content" rule: every other call promises a document, and for those an empty
+2xx body is a fault (a proxy, a stalled upstream) that must keep surfacing as
+a `TransportError` and keep its retry — resolving `undefined` there would
+move the failure to a TypeError far from the call site. Tests pin both sides.
+
+### Deprecated — the BVNK onboarding event types
+
+`WebhookEventType.BvnkOnboardingCreated` and `BvnkOnboardingUpdated` are
+deprecated. The platform no longer defines or emits `bvnk.onboarding.*`, and
+the public `EventType` enum dropped them. They stay on the enum so existing
+handler registrations keep compiling, and will be removed in the next major.
+
+### Changed — the agentic overlay carries `/insights`
+
+`/insights` is `x-beta`, so `openapi.agentic.yaml` now carries it, and the
+allowlist in `scripts/extract-agentic.mjs` gained the nine `ClientInsight*`
+schemas it owns (19 paths, 52 schemas). The spec guard that derives the required
+set from the spec is what would have caught a missing one.
+
 ### Changed — the agentic surface is BETA, not alpha (ENG-3168)
 
 Platform promoted the whole agentic surface from alpha to beta. The wire

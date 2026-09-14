@@ -229,6 +229,10 @@ await client.mandates.approve(mandate.id!, {
 ```typescript
 // Deterministic report: balances, upcoming payments, mandate headroom, risks.
 const report = await client.insights.get(customerId);
+
+// The same, over your WHOLE book: portfolio KPIs with trend deltas, daily
+// series for charts, and a per-customer roll-up sorted worst-first.
+const portfolio = await client.insights.getClientReport({ severity: 'critical,warn' });
 ```
 
 The full agentic surface is reachable via `client.paymentAgents`, `client.mandates`, `client.instructions`, `client.scheduledPayments`, and `client.insights`.
@@ -544,6 +548,7 @@ Manage customer entities representing businesses and organizations.
 | `customers.delete(id)` | Soft-delete a customer (blocked if it has accounts) |
 | `customers.getCapabilities(id)` | Capabilities + outstanding requirements to unlock each |
 | `customers.reEngage(id)` | Mint a fresh application link for an approved customer |
+| `customers.withdrawApplication(id, applicationId, data?)` | Withdraw an undecided onboarding application (final) |
 | `customers.bulkImportFromSumsubTokens(data)` | Import from Sumsub share tokens (synchronous) |
 | `customers.importPersonaTokens(data)` | Import from Persona Connect share tokens (async job) |
 | `customers.listPersonaImportJobs(params?)` | List Persona import jobs, newest first |
@@ -567,6 +572,20 @@ console.log(page.status_counts?.info_requested ?? 0);
 `kyb_statuses`, `kyc_statuses` and `application_statuses` take the same
 comma-separated form, and `sort_by` / `sort_dir` / `created_at_from` /
 `created_at_to` are also accepted.
+
+When a customer will not or cannot continue onboarding — after a request for
+information they chose not to answer, say — withdraw the application rather
+than leaving it open:
+
+```typescript
+await client.customers.withdrawApplication(customerId, applicationId, {
+  reason: 'Customer opted not to proceed',
+});
+```
+
+Withdrawal is **final**: the customer's `status` becomes `withdrawn`, and
+onboarding them again needs a new application. An application that already has
+a decision answers **409**. The platform emits `customer.application.withdrawn`.
 
 ### Recipients
 
@@ -798,6 +817,8 @@ session, so there is no id to pass.
 |--------|-------------|
 | `rdMarketingFee.listMonths()` | The months with a statement, newest first |
 | `rdMarketingFee.getStatement(month)` | One month, one row per calendar day |
+| `rdMarketingFee.getPayoutDestination()` | The wallet the fee is paid to (404 = none yet) |
+| `rdMarketingFee.setPayoutDestination(data)` | Register or replace it — an EVM address on Base |
 
 ```typescript
 const months = await client.rdMarketingFee.listMonths();
@@ -814,17 +835,43 @@ A client with no contract gets a **404**; an empty month list means the
 contract is real but starts later. The running month is included, with its fee
 figures absent rather than zero.
 
+Each statement carries both rates: `y_bps_annual` is the contract rate as the
+Order Form quotes it, and `y_bps_monthly` is what THIS month was charged at
+(annual × days in month / 365, to 2 decimal places), so a client can check the
+month against the rate they signed.
+
+The fee is paid to a wallet you register separately from your developer-fee
+destination — RD exists only on Base, so only the address is a parameter:
+
+```typescript
+const dest = await client.rdMarketingFee.setPayoutDestination({
+  address: '0x1234567890123456789012345678901234567890',
+});
+console.log(dest.chain); // always 'eip155:8453'
+```
+
+`getPayoutDestination()` answers **404** while nothing is registered — the
+ordinary state for a new client, not an error — and **403** when the client is
+not in the programme. A change emits `rd_payout_destination.updated`.
+
 ### Sandbox
 
 Test simulations (sandbox environment only).
 
 | Method | Description |
 |--------|-------------|
-| `sandbox.simulateInbound(data)` | Simulate inbound deposit |
+| `sandbox.simulateInbound(data)` | Simulate a deposit, an outbound settlement/return, or a reversal |
 | `sandbox.simulateOnboarding(data)` | Simulate KYB completion |
 | `sandbox.getSimulation(id)` | Get simulation by ID |
 | `sandbox.advanceSimulation(id)` | Advance simulation state |
 | `sandbox.listScenarios(params?)` | List available scenarios |
+
+`simulateInbound` covers every fiat rail — `ach_*`, `fedwire_*`, `swift_*`,
+`fednow_inbound` — plus `crypto_inbound`. Inbound types take the receiving
+`account_id`; outbound and reversal types take the funding offramp `account_id`
+AND the `one_off_transaction_id`. A SWIFT deposit is chosen by the ACCOUNT, not
+the type: `swift_inbound` and `fedwire_inbound` both book as SWIFT against a
+SWIFT onramp account and as Fedwire against a domestic one.
 
 ### Fee Payout Destination
 
@@ -947,32 +994,56 @@ Read-only advisory reporting over a customer's agentic activity.
 
 | Method | Description |
 |--------|-------------|
-| `insights.get(customerId)` | Deterministic account insight report |
+| `insights.get(customerId)` | Deterministic account insight report for one customer |
+| `insights.getClientReport(params?)` | The same over the whole book: KPIs, daily series, per-customer roll-up |
+
+`getClientReport` filters (`customer_id`, `wallet_id`, `kind`, `severity`,
+`responsibility`, `window_days`) are all optional and only narrow the report;
+the multi-value ones are comma-separated strings. Items gain `customer_id`
+(omitted on cross-customer aggregates) and `responsibility` — a grouping label
+for routing, not ownership. `kind` stays an OPEN set; two kinds are emitted
+only at this scope today, `volume_anomaly` and `recipient_dormant`. The report
+scans at most 100 customers per request and says so through
+`snapshot.customers.scanned < total`.
 
 ---
 
 ## Webhook Event Types
 
+Every value the platform's `EventType` enum lists — and therefore every value
+a webhook target can subscribe to — is a member of `WebhookEventType`; a test
+keeps the two in step on every spec sync. Names not in this table (for
+example `transaction.completed` or `application.approved`) are never emitted:
+a transaction's outcome arrives as an `*.updated` event with the new status,
+and an application decision arrives as `customer.kyb_status.updated`.
+
 | Event Type | Description |
 |------------|-------------|
-| `customer.created` | Customer was created |
-| `customer.updated` | Customer was updated |
-| `customer.kyb_status_changed` | KYB status changed |
-| `recipient.created` | Recipient was created |
-| `recipient.updated` | Recipient was updated |
-| `destination.created` | Destination was created |
-| `account.created` | Account was created |
-| `account.updated` | Account was updated |
-| `transaction.created` | Transaction was created |
-| `transaction.updated` | Transaction was updated |
-| `transaction.completed` | Transaction completed |
-| `transaction.failed` | Transaction failed |
-| `transaction.cancelled` | Transaction was cancelled |
-| `wallet.created` | Wallet was created |
-| `application.created` | Application was created |
-| `application.submitted` | Application was submitted |
-| `application.approved` | Application was approved |
-| `application.rejected` | Application was rejected |
+| `user.created` / `user.updated` / `user.deleted` | Dashboard user lifecycle |
+| `api_key.created` / `api_key.deleted` | API key lifecycle |
+| `customer.created` / `customer.updated` | Customer record lifecycle |
+| `customer.kyb_link.created` / `customer.kyb_link.updated` | Onboarding link issued or changed |
+| `customer.kyb_status.created` / `customer.kyb_status.updated` | KYB status set or changed (an application decision arrives here) |
+| `customer.kyb_application.submitted` | The customer submitted their onboarding application |
+| `customer.capability_status.updated` | A rail's standing changed; payload lists what still gates it |
+| `customer.rfi.requested` | A reviewer needs more information; payload lists what is owed (never the link) |
+| `customer.rfi.responded` | The information arrived; the application is back in review |
+| `customer.application.withdrawn` | The onboarding application was withdrawn (terminal) |
+| `auto_account.created` / `auto_account.updated` / `auto_account.deleted` | On-ramp / off-ramp account lifecycle |
+| `transaction.auto.created` / `transaction.auto.updated` | Auto (account-driven) transaction created or changed status |
+| `transaction.one_off.created` / `transaction.one_off.updated` | One-off transaction created or changed status |
+| `recipient.created` / `recipient.updated` / `recipient.deleted` | Recipient lifecycle |
+| `destination.created` / `destination.deleted` | Destination lifecycle |
+| `target.created` / `target.updated` / `target.deleted` | Webhook target lifecycle |
+| `exception.created` / `exception.cleared` | A compliance or operational exception raised or cleared |
+| `wallet.created` / `wallet.updated` | Wallet lifecycle |
+| `wallet.signer_group.created` / `wallet.signer_group.updated` | Signer group attached to a wallet, or changed |
+| `wallet.policy.created` / `wallet.policy.updated` | Wallet policy attached, or changed |
+| `wallet.transaction.created` / `wallet.transaction.updated` | Wallet transaction created or changed status |
+| `wallet.deposit` | A deposit landed in a wallet |
+| `rd_payout_destination.updated` | The RD marketing-fee wallet was set or replaced |
+| `fee_payout_destination.updated` / `fee_payout_destination.deleted` | Developer-fee payout destination set, replaced, or removed |
+| `scheduled_payment.failed` | A scheduled payment reached the failed terminal state |
 
 ---
 
