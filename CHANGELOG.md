@@ -7,9 +7,9 @@ All notable changes to the Dakota TypeScript SDK are documented in this file.
 ### Added — the surface the 2026-09 spec sync brought in
 
 `openapi.yaml` is a copy of platform `openapi.public.yaml` at `39c2aa1e`
-(2026-09-14), replacing one 839 lines behind. Three operations and eleven
-schemas are new, four webhook event types were added and two removed, and a
-handful of existing shapes gained fields. Everything below is additive to the
+(2026-09-14), replacing one 839 lines behind. Four operations on three new
+paths and eleven schemas are new, four webhook event types were added and two
+removed, and a handful of existing shapes gained fields. Everything below is additive to the
 SDK's public surface; the one behavioural change is a transport fix that a new
 endpoint made necessary.
 
@@ -94,8 +94,10 @@ way.
   `intermediary_bic`: the correspondent bank between Dakota's bank and `bic`.
   Leave it unset unless a payment is refused for want of one; a destination
   that needs one is replaced, not edited.
-- `OneOffTransaction` and the nested transaction gain `uetr`, the RFC 4122
-  end-to-end reference on the wire rail; `omad` is now nullable.
+- `TransactionSettlement` and `TransactionReceipt` gain `uetr`, the RFC 4122
+  end-to-end reference that identifies a payment across every institution on
+  the wire rail. Absent for non-wire rails and for wires whose reference has
+  not been assigned yet.
 - `MandateBudgetLine.prior_scope`: true on a `per_target` line whose spend was
   booked under an EARLIER target scope. On such a line absent
   `remaining_count` / `remaining_amount` means NO headroom, not "not capped".

@@ -17,9 +17,11 @@ import type {
  * from the session and is never named in a request, so there is no id to pass
  * and no other client's statements to address.
  *
- * A client who has never had a rate gets a **404** from both methods: holding a
- * rate is what being in the programme means, and there is no separate
- * entitlement record to read.
+ * A client who has never had a rate gets a **404** from the two statement
+ * methods: holding a rate is what being in the programme means, and there is
+ * no separate entitlement record to read. The payout-destination methods
+ * answer differently — see each: there a 404 means "nothing registered yet"
+ * and it is 403 that means "not in the programme".
  */
 export class RDMarketingFeeResource extends BaseResource {
   /**

@@ -921,8 +921,8 @@ handler.on('transaction.*', async (event) => {
 // Onboarding RFI lifecycle. The requested payload lists what is still owed
 // (documents by type or purpose, fields, questions) but NEVER the resubmission
 // link — it embeds a credential. Read the link from the customer resource.
-handler.on(WebhookEventType.CustomerRfiRequested, async (event) => {
-  const { customer_id, message_id, requirements } = event.data.object as CustomerRfiRequestedData;
+handler.on<CustomerRfiRequestedData>(WebhookEventType.CustomerRfiRequested, async (event) => {
+  const { customer_id, message_id, requirements } = event.data.object;
   // message_id: dedupe redeliveries, pair with the later customer.rfi.responded.
 });
 handler.on(WebhookEventType.CustomerRfiResponded, async (event) => { /* stop chasing */ });

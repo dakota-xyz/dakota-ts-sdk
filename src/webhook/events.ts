@@ -409,7 +409,10 @@ export interface RdPayoutDestinationUpdatedData {
   wallet_address: string;
   /** The address it replaced. Empty string on a first registration. */
   previous_address: string;
-  /** The user who made the change. Empty string when not attributable. */
+  /**
+   * The EMAIL of the dashboard user who made the change — personal data, so
+   * treat a logged payload accordingly. Empty string when not attributable.
+   */
   updated_by: string;
 }
 

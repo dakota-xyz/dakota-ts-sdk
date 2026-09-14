@@ -1,7 +1,6 @@
 /**
- * The surface the 2026-09 spec sync brought in: withdrawing an onboarding
- * application, the RD marketing-fee payout destination, and the sandbox's
- * SWIFT simulation types.
+ * Withdrawing an onboarding application, the RD marketing-fee payout
+ * destination, and the sandbox's SWIFT simulation types.
  */
 
 import { describe, it, expect } from 'vitest';

@@ -480,12 +480,6 @@ describe('Webhook Events', () => {
       expect(WebhookEventType.CustomerApplicationWithdrawn).toBe('customer.application.withdrawn');
     });
 
-    it('has the payout destination events', () => {
-      expect(WebhookEventType.FeePayoutDestinationUpdated).toBe('fee_payout_destination.updated');
-      expect(WebhookEventType.FeePayoutDestinationDeleted).toBe('fee_payout_destination.deleted');
-      expect(WebhookEventType.RdPayoutDestinationUpdated).toBe('rd_payout_destination.updated');
-    });
-
     it('carries every event type the public spec enumerates', () => {
       // The spec's EventType enum is the platform's contract for what a target
       // can subscribe to. Every value in it must be reachable by name here, so
@@ -503,9 +497,10 @@ describe('Webhook Events', () => {
       expect(missing).toEqual([]);
     });
 
-    it('has fee payout destination events', () => {
+    it('has the payout destination events', () => {
       expect(WebhookEventType.FeePayoutDestinationUpdated).toBe('fee_payout_destination.updated');
       expect(WebhookEventType.FeePayoutDestinationDeleted).toBe('fee_payout_destination.deleted');
+      expect(WebhookEventType.RdPayoutDestinationUpdated).toBe('rd_payout_destination.updated');
     });
   });
 });
