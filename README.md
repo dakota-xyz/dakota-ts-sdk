@@ -1010,30 +1010,40 @@ scans at most 100 customers per request and says so through
 
 ## Webhook Event Types
 
+Every value the platform's `EventType` enum lists — and therefore every value
+a webhook target can subscribe to — is a member of `WebhookEventType`; a test
+keeps the two in step on every spec sync. Names not in this table (for
+example `transaction.completed` or `application.approved`) are never emitted:
+a transaction's outcome arrives as an `*.updated` event with the new status,
+and an application decision arrives as `customer.kyb_status.updated`.
+
 | Event Type | Description |
 |------------|-------------|
-| `customer.created` | Customer was created |
-| `customer.updated` | Customer was updated |
-| `customer.kyb_status_changed` | KYB status changed |
+| `user.created` / `user.updated` / `user.deleted` | Dashboard user lifecycle |
+| `api_key.created` / `api_key.deleted` | API key lifecycle |
+| `customer.created` / `customer.updated` | Customer record lifecycle |
+| `customer.kyb_link.created` / `customer.kyb_link.updated` | Onboarding link issued or changed |
+| `customer.kyb_status.created` / `customer.kyb_status.updated` | KYB status set or changed (an application decision arrives here) |
+| `customer.kyb_application.submitted` | The customer submitted their onboarding application |
+| `customer.capability_status.updated` | A rail's standing changed; payload lists what still gates it |
 | `customer.rfi.requested` | A reviewer needs more information; payload lists what is owed (never the link) |
 | `customer.rfi.responded` | The information arrived; the application is back in review |
 | `customer.application.withdrawn` | The onboarding application was withdrawn (terminal) |
+| `auto_account.created` / `auto_account.updated` / `auto_account.deleted` | On-ramp / off-ramp account lifecycle |
+| `transaction.auto.created` / `transaction.auto.updated` | Auto (account-driven) transaction created or changed status |
+| `transaction.one_off.created` / `transaction.one_off.updated` | One-off transaction created or changed status |
+| `recipient.created` / `recipient.updated` / `recipient.deleted` | Recipient lifecycle |
+| `destination.created` / `destination.deleted` | Destination lifecycle |
+| `target.created` / `target.updated` / `target.deleted` | Webhook target lifecycle |
+| `exception.created` / `exception.cleared` | A compliance or operational exception raised or cleared |
+| `wallet.created` / `wallet.updated` | Wallet lifecycle |
+| `wallet.signer_group.created` / `wallet.signer_group.updated` | Signer group attached to a wallet, or changed |
+| `wallet.policy.created` / `wallet.policy.updated` | Wallet policy attached, or changed |
+| `wallet.transaction.created` / `wallet.transaction.updated` | Wallet transaction created or changed status |
+| `wallet.deposit` | A deposit landed in a wallet |
 | `rd_payout_destination.updated` | The RD marketing-fee wallet was set or replaced |
-| `recipient.created` | Recipient was created |
-| `recipient.updated` | Recipient was updated |
-| `destination.created` | Destination was created |
-| `account.created` | Account was created |
-| `account.updated` | Account was updated |
-| `transaction.created` | Transaction was created |
-| `transaction.updated` | Transaction was updated |
-| `transaction.completed` | Transaction completed |
-| `transaction.failed` | Transaction failed |
-| `transaction.cancelled` | Transaction was cancelled |
-| `wallet.created` | Wallet was created |
-| `application.created` | Application was created |
-| `application.submitted` | Application was submitted |
-| `application.approved` | Application was approved |
-| `application.rejected` | Application was rejected |
+| `fee_payout_destination.updated` / `fee_payout_destination.deleted` | Developer-fee payout destination set, replaced, or removed |
+| `scheduled_payment.failed` | A scheduled payment reached the failed terminal state |
 
 ---
 
