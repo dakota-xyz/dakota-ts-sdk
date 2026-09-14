@@ -74,6 +74,15 @@ const AGENTIC_SCHEMAS = new Set([
   'InsightSnapshotUpcoming',
   'InsightSnapshot',
   'InsightReport',
+  'ClientInsightMetric',
+  'ClientInsightSeriesPoint',
+  'ClientInsightSeries',
+  'ClientInsightItemCounts',
+  'ClientInsightCustomer',
+  'ClientInsightCustomersSummary',
+  'ClientInsightFacets',
+  'ClientInsightSnapshot',
+  'ClientInsightReport',
 ]);
 
 const base = yaml.load(readFileSync(BASE, 'utf8'));
