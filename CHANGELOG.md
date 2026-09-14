@@ -67,19 +67,22 @@ deduping redeliveries and pairing a later `customer.rfi.responded`. A new test
 checks every value in the spec's `EventType` enum is reachable by name on the
 TypeScript enum, so the next sync cannot add one silently.
 
-**Sandbox: SWIFT simulation, and the types catch up with the spec.**
+**Sandbox: SWIFT simulation, and the types stop drifting.**
 `SimulateInboundType` gains `swift_inbound`, `swift_outbound_settled` /
 `_failed` / `_returned` / `_rejected` and `swift_reversal`. The rail a deposit
 books on is derived from the RECEIVING account, so `swift_inbound` and
-`fedwire_inbound` behave identically — pick the account, not the type. While
-there, the hand-written type finally lists what the spec has carried for a
-while: `fedwire_*` (the `wire_*` values are now marked as the deprecated
-aliases they are) and `fednow_inbound`; and `SimulateInboundRequest` gains the
-spec's field names `wallet_address` and `one_off_transaction_id`, with
-`wallet_id` and `movement_id` kept as deprecated aliases. The doc table now
-says what the platform requires: every fiat type takes `account_id`, and
-outbound / reversal types take the funding offramp `account_id` AND the
-`one_off_transaction_id`.
+`fedwire_inbound` behave identically — pick the account, not the type. The
+hand-written union had already fallen behind the spec (no `fedwire_*`, no
+`fednow_inbound`) with nothing failing, so it is now DERIVED from the
+generated `simulateInbound` operation: a sync that adds a value reaches
+callers with no edit. The `wire_*` values are documented as the deprecated
+aliases they are. `SimulateInboundRequest` gains the spec's field names
+`wallet_address` and `one_off_transaction_id`, with `wallet_id` and
+`movement_id` kept as deprecated aliases, and its doc table now says what the
+platform requires: every fiat type takes `account_id`, and outbound /
+reversal types take the funding offramp `account_id` AND the
+`one_off_transaction_id`. `WithdrawApplicationRequest` is derived the same
+way.
 
 **Smaller shape changes, all additive.**
 - `RDMarketingFeeStatement.y_bps_annual` (required): the CONTRACT rate as the

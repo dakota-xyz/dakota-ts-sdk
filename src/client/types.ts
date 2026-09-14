@@ -359,13 +359,12 @@ export type RFIRequestedItems = components['schemas']['RFIRequestedItems'];
 /**
  * Request body for withdrawing a customer's onboarding application.
  *
- * `reason` is recorded for audit and shown to reviewers; it defaults to a
- * generic reason when omitted. Send at least an empty object.
+ * `reason` (max 500 characters) is recorded for audit and shown to reviewers;
+ * it defaults to a generic reason when omitted. Send at least an empty object.
  */
-export interface WithdrawApplicationRequest {
-  /** Why the application is being withdrawn (max 500 characters). */
-  reason?: string;
-}
+export type WithdrawApplicationRequest = NonNullable<
+  operations['WithdrawCustomerApplication']['requestBody']
+>['content']['application/json'];
 
 /**
  * Business application creation request.
@@ -713,6 +712,11 @@ export interface Network {
 /**
  * Payment simulation types for inbound payment events.
  *
+ * Derived from the generated operation rather than spelled out by hand: the
+ * hand-written copy had already drifted behind the spec (no `fedwire_*`, no
+ * `fednow_inbound`) before the `swift_*` values landed, and nothing failed.
+ * A sync that adds a value now reaches callers with no edit here.
+ *
  * Inbound (a deposit into an onramp account, or a wallet):
  * - `ach_inbound` - ACH deposit (requires `account_id`)
  * - `fedwire_inbound` - Fedwire deposit (requires `account_id`)
@@ -735,39 +739,9 @@ export interface Network {
  * The `wire_*` values are legacy aliases for `fedwire_*`, accepted for
  * backwards compatibility and may be removed in a future major version.
  */
-export type SimulateInboundType =
-  | 'ach_inbound'
-  | 'fedwire_inbound'
-  | 'swift_inbound'
-  | 'fednow_inbound'
-  | 'crypto_inbound'
-  | 'ach_outbound_settled'
-  | 'ach_outbound_failed'
-  | 'ach_outbound_returned'
-  | 'ach_outbound_rejected'
-  | 'fedwire_outbound_settled'
-  | 'fedwire_outbound_failed'
-  | 'fedwire_outbound_returned'
-  | 'fedwire_outbound_rejected'
-  | 'swift_outbound_settled'
-  | 'swift_outbound_failed'
-  | 'swift_outbound_returned'
-  | 'swift_outbound_rejected'
-  | 'ach_reversal'
-  | 'fedwire_reversal'
-  | 'swift_reversal'
-  /** @deprecated Legacy alias for `fedwire_inbound`. */
-  | 'wire_inbound'
-  /** @deprecated Legacy alias for `fedwire_outbound_settled`. */
-  | 'wire_outbound_settled'
-  /** @deprecated Legacy alias for `fedwire_outbound_failed`. */
-  | 'wire_outbound_failed'
-  /** @deprecated Legacy alias for `fedwire_outbound_returned`. */
-  | 'wire_outbound_returned'
-  /** @deprecated Legacy alias for `fedwire_outbound_rejected`. */
-  | 'wire_outbound_rejected'
-  /** @deprecated Legacy alias for `fedwire_reversal`. */
-  | 'wire_reversal';
+export type SimulateInboundType = NonNullable<
+  operations['simulateInbound']['requestBody']
+>['content']['application/json']['type'];
 
 /**
  * Sandbox inbound simulation request.
