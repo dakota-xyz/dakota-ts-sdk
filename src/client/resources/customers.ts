@@ -276,6 +276,8 @@ export class CustomersResource extends BaseResource {
       body: data,
       idempotencyKey: options?.idempotencyKey,
       timeout: options?.timeout,
+      // The platform answers a bare 200 with no body.
+      noContent: true,
     });
   }
 

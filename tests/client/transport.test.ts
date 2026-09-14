@@ -302,7 +302,7 @@ describe('Transport', () => {
       expect(result).toBeUndefined();
     });
 
-    it('handles a 200 with no body the same as a 204', async () => {
+    it('handles a bare 200 the same as a 204 when the call declares noContent', async () => {
       // The platform answers POST /customers/{id}/applications/{id}/withdraw
       // with a bare 200 and no body. Parsing that as JSON would reject a call
       // whose side effect already happened.
@@ -317,9 +317,30 @@ describe('Transport', () => {
         method: 'POST',
         path: '/customers/123/applications/456/withdraw',
         body: {},
+        noContent: true,
       });
 
       expect(result).toBeUndefined();
+      expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('a typed call still treats an empty 200 as a fault, and retries it', async () => {
+      // Only operations that declare noContent get the shortcut. A GET that
+      // promises a document and receives nothing has hit a fault (a proxy, a
+      // stalled upstream) and must keep failing loudly — resolving undefined
+      // would move the failure to a TypeError far from the call site.
+      mockFetch = createMockFetch([{ status: 200 }]);
+      const config = resolveConfig({
+        apiKey: 'test_api_key',
+        fetch: mockFetch as unknown as typeof fetch,
+        retryPolicy: { maxAttempts: 2, initialBackoffMs: 1, maxBackoffMs: 1 },
+      });
+      transport = new Transport(config);
+
+      await expect(
+        transport.request({ method: 'GET', path: '/customers/123' })
+      ).rejects.toBeInstanceOf(TransportError);
+      expect(mockFetch).toHaveBeenCalledTimes(2);
     });
 
     it('still rejects a malformed 200 body', async () => {
@@ -330,10 +351,14 @@ describe('Transport', () => {
       const config = resolveConfig({
         apiKey: 'test_api_key',
         fetch: mockFetch as unknown as typeof fetch,
+        retryPolicy: { maxAttempts: 1, initialBackoffMs: 1, maxBackoffMs: 1 },
       });
       transport = new Transport(config);
 
-      await expect(transport.request({ method: 'GET', path: '/customers' })).rejects.toThrow();
+      await expect(transport.request({ method: 'GET', path: '/customers' })).rejects.toBeInstanceOf(
+        TransportError
+      );
+      expect(mockFetch).toHaveBeenCalledTimes(1);
     });
 
     it('throws APIError for 4xx responses', async () => {

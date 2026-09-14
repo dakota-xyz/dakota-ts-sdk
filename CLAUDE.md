@@ -103,8 +103,10 @@ server otherwise INFERS it from the other filters — `customer_id` alone infers
   `getClientReport(params?)` for the whole book (KPIs, daily series,
   per-customer roll-up; filters only narrow)
 - `client.customers.withdrawApplication(customerId, applicationId, data?)` -
-  final; the platform answers a bare 200 with NO body, which the transport
-  treats like a 204
+  final; the platform answers a bare 200 with NO body, so the call passes
+  `noContent: true` to the transport (a per-operation opt-in that resolves
+  `undefined` like a 204 — every other call keeps treating an empty 2xx as a
+  fault)
 - `client.customers.listPage()` returns one page PLUS `status_counts`, which
   `list()` cannot reach because it iterates rows and drops the envelope
 

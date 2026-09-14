@@ -108,8 +108,16 @@ The transport parsed every non-204 success as JSON. The platform answers
 `POST /customers/{id}/applications/{id}/withdraw` with a 200 and an EMPTY body —
 the first public operation to do so — and `response.json()` on an empty body
 throws, which would have rejected a call whose side effect had already
-happened. An empty 2xx body is now treated as no content, exactly like a 204.
-A malformed non-empty body still rejects.
+happened (and, because the throw was wrapped as a transport error, retried it
+with the same idempotency key).
+
+`TransportRequestOptions` gains `noContent`: an operation that declares it
+resolves `undefined` on a 2xx exactly as for a 204, and `withdrawApplication`
+declares it. Deliberately opt-in rather than a global "empty body means no
+content" rule: every other call promises a document, and for those an empty
+2xx body is a fault (a proxy, a stalled upstream) that must keep surfacing as
+a `TransportError` and keep its retry — resolving `undefined` there would
+move the failure to a TypeError far from the call site. Tests pin both sides.
 
 ### Deprecated — the BVNK onboarding event types
 
