@@ -802,10 +802,14 @@ for await (const sp of client.scheduledPayments.list({ customer_id: customerId }
 // denies it at its due date — days later, with the payee unpaid.
 const budget = await client.mandates.getBudget(mandateId);
 for (const line of [...budget.per_target, ...budget.aggregate]) {
-  // ABSENT remaining_* means "not capped", never "nothing left".
+  // ABSENT remaining_* means "not capped", never "nothing left" — EXCEPT on a
+  // per_target line with prior_scope: true. Its spend was booked under an
+  // EARLIER target scope (before a target_type amendment) and no current
+  // target claims it, so absent remaining_* there means NO headroom.
   // remaining_amount === '?' means the figure could not be summed and MUST
   // be treated as NO headroom — the gate fails closed on the same data.
-  console.log(line.target || '(all payees)', line.bucket, line.remaining_amount ?? 'uncapped');
+  const headroom = line.prior_scope ? 'none (prior scope)' : (line.remaining_amount ?? 'uncapped');
+  console.log(line.target || '(all payees)', line.bucket, headroom);
 }
 
 // Amend a mandate: append a NEW signed version WITHOUT resetting the spend
