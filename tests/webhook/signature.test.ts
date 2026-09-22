@@ -126,6 +126,19 @@ describe('Webhook Signature', () => {
       expect(() => validateTimestamp('not-a-number', 300)).toThrow(SignatureVerificationError);
       expect(() => validateTimestamp('not-a-number', 300)).toThrow('must be a Unix timestamp');
     });
+
+    it('rejects partially numeric timestamps', () => {
+      const now = Math.floor(Date.now() / 1000);
+      expect(() => validateTimestamp(`${now}abc`, 300)).toThrow(SignatureVerificationError);
+      expect(() => validateTimestamp(`${now}abc`, 300)).toThrow('must be a Unix timestamp');
+    });
+
+    it('rejects unsafe integer timestamps', () => {
+      expect(() => validateTimestamp('9007199254740992', 300)).toThrow(SignatureVerificationError);
+      expect(() => validateTimestamp('9007199254740992', 300)).toThrow(
+        'must be a safe Unix timestamp'
+      );
+    });
   });
 
   describe('verifySignature', () => {

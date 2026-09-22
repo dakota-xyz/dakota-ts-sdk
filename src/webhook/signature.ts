@@ -112,9 +112,13 @@ export function validateTimestamp(timestampStr: string, toleranceSeconds: number
     throw new SignatureVerificationError('Timestamp is required');
   }
 
-  const timestamp = parseInt(timestampStr, 10);
-  if (isNaN(timestamp)) {
+  if (!/^[0-9]+$/.test(timestampStr)) {
     throw new SignatureVerificationError('Invalid timestamp: must be a Unix timestamp');
+  }
+
+  const timestamp = Number(timestampStr);
+  if (!Number.isSafeInteger(timestamp)) {
+    throw new SignatureVerificationError('Invalid timestamp: must be a safe Unix timestamp');
   }
 
   const now = Math.floor(Date.now() / 1000);
