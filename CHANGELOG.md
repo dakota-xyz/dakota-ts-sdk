@@ -4,6 +4,45 @@ All notable changes to the Dakota TypeScript SDK are documented in this file.
 
 ## [Unreleased]
 
+## [3.1.0] — x402, and the 2026-09-23 spec sync
+
+`openapi.yaml` is refreshed from platform `openapi.public.yaml` at `fef7169e`,
+the first copy to carry x402. Additive throughout — nothing existing changed
+shape.
+
+### Added
+
+**x402 agentic payments**, six operations and nine schemas. Enable x402 on an
+agent and read its wallet, create and list spending mandates, ask for a
+payment signature, and list the holds those signatures were recorded against.
+Platform's settle endpoint stays internal and is deliberately absent.
+
+Two things to know before calling them:
+
+- The signing endpoint is genuinely idempotent on `X-Idempotency-Key`: one key
+  mints at most one payment authorization, so a request that times out is safe
+  to retry under the same key. Reuse a key for a DIFFERENT payment and you get
+  a 409. One 409 must not be retried — the one saying the payment already
+  settled — because a fresh key would pay the seller a second time.
+- `payment_header` is the value to send; `payment_header_name` says which
+  header to put it in (`X-PAYMENT` on x402 v1, `PAYMENT-SIGNATURE` on v2).
+  Treat the value like cash: anyone holding it can settle the payment until
+  `valid_before`.
+
+The x402 schemas are owned by the beta surface, so they are in the SDK's
+agentic overlay (`scripts/extract-agentic.mjs`) rather than left to a base
+sync that could strip them.
+
+**Webhooks:** `WebhookEventType.DeploymentPayoutDestinationUpdated`
+("deployment_payout_destination.updated") and its payload
+`DeploymentPayoutDestinationUpdatedData`. It splits from
+`rd_payout_destination.updated` so a subscriber to RD's event is never handed
+another deployment's wallet as RD's, and carries the same three fields plus
+the `asset` and `network` naming the deployment.
+
+The sync also brings in everything else platform published since `39c2aa1e`.
+
+
 ### Added — the surface the 2026-09 spec sync brought in
 
 `openapi.yaml` is a copy of platform `openapi.public.yaml` at `39c2aa1e`

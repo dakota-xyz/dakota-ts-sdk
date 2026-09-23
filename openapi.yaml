@@ -14,7 +14,7 @@ info:
 
     All API endpoints require the following headers:
 
-    - `x-idempotency-key`: Required for all POST endpoints to ensure request idempotency
+    - `X-Idempotency-Key`: Required for all POST endpoints to ensure request idempotency
     - `x-api-key`: Required for authentication across all endpoints
 
     Note: On /applications endpoints you need a token for authentication instead of a x-api-key
@@ -139,6 +139,18 @@ tags:
 
       **Prerequisites:** Auth credentials and client context must be established.
       **Related:** Events
+  - name: RD Marketing Fee
+    description: |-
+      Everything behind your RD marketing fee: read what a month came to, declare the wallets you hold outside Dakota so the RD in them counts, and say where the fee should be sent.
+
+      **Prerequisites:** Client must be in the RD marketing-fee programme. A month is readable once it has closed.
+      **Related:** Wallets, Events
+  - name: Self Serve
+    description: |-
+      Buy and track prepaid credits, and read the tiers and pricing they are sold at.
+
+      **Prerequisites:** Auth credentials and client context must be established.
+      **Related:** Billing
   - name: Events
     description: |-
       Retrieve event records emitted by platform operations for audit and troubleshooting.
@@ -3497,10 +3509,17 @@ paths:
       description: |-
         Partially update an onramp, offramp, or swap account.
 
-        Only the account's destination routing may be changed. For onramp
-        accounts these are `crypto_destination_id`, `destination_network_id`,
-        and `destination_asset`; for offramp accounts it is
-        `fiat_destination_id`.
+        **Only `developer_fee_bps` can be updated on an existing account.**
+        The updated fee applies to future transactions only; existing
+        transactions are unaffected. Routing is immutable after creation:
+        `crypto_destination_id`, `destination_network_id`, `destination_asset`,
+        and `fiat_destination_id` cannot be changed.
+
+        To change the destination asset, network, or address, create a new
+        account with the desired routing. For onramp accounts, the new account
+        returns new virtual account (VA) details; the existing VA details
+        cannot be retained for the new routing. Creating a new crypto
+        destination alone does not change routing on an existing account.
 
         An account's `capabilities` and `rail` are fixed when the account is
         created and cannot be changed through this endpoint. To use a
@@ -3516,10 +3535,7 @@ paths:
               $ref: '#/components/schemas/AccountUpdateRequest'
             example:
               account_type: onramp
-              crypto_destination_id: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
-              fiat_destination_id: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
-              destination_network_id: ethereum-mainnet
-              destination_asset: USDC
+              developer_fee_bps: 50
       responses:
         '200':
           description: Account updated successfully.
@@ -12084,6 +12100,11 @@ paths:
         - `proof_of_address_rejected` — emitted when compliance rejects a submitted PoA document.
         - `proof_of_address_approved` — emitted when compliance approves a submitted PoA, unfreezing the customer.
 
+        `customer.kyb_status.created` and `customer.kyb_status.updated` events for a declined application
+        (`kyb_status` of `rejected` or `auto_declined`) carry the decline category as `reason_code`, one of
+        `unsupported_region`, `prohibited_country`, `prohibited_business_type` or `other`. See the
+        `DeclineReason` schema. Declines with no recorded category omit it.
+
         Other `customer.kyb_status.*` events do not include `reason_code`.
       operationId: listEvents
       parameters:
@@ -13037,6 +13058,376 @@ paths:
       externalDocs:
         description: Read full guide in docs
         url: https://docs.dakota.xyz/api-reference/sandbox/simulate-onboarding
+  /sandbox/cards/simulate/transaction:
+    post:
+      tags:
+        - Sandbox
+      summary: Simulate a card authorization
+      description: |
+        Presents a card authorization to Dakota as if a merchant had swiped the
+        card. The authorization runs the production path: the authorization
+        service decides it, the hold lands on the wallet, and the
+        `card_transaction.created` webhook fires. Only the trigger is synthetic.
+
+        A decline is a normal outcome, not an HTTP error. A card with too little
+        spendable balance produces a `card_transaction` carrying the real
+        decline result, so read the transaction rather than the status code to
+        learn whether the authorization was approved.
+
+        An authorization holds more than its own amount. The hold carries a
+        buffer for network adjustments, so a 2 USD authorization needs about
+        2.60 USD of spendable balance. Fund the wallet with two faucet calls
+        before you simulate a 2 USD purchase.
+
+        The card must belong to a customer of the authenticated client.
+        Available in sandbox mode only.
+      operationId: simulateCardTransaction
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SandboxCardTransactionRequest'
+            example:
+              card_id: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
+              amount: '2.00'
+              merchant:
+                descriptor: COFFEE ROASTERS
+                mcc: '5814'
+                city: BROOKLYN
+                state: NY
+                country: USA
+              type: authorization
+      responses:
+        '202':
+          description: Card simulation accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SandboxCardSimulationResponse'
+              example:
+                simulation_id: sim_card_01J8ZQ4T7K2M9X
+                card_transaction_id: 2ZFHrqBHb3cTfLVkFSGmHZqdDPi
+                status: completed
+        '400':
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#invalid-request
+                title: Invalid request
+                status: 400
+                detail: amount must be a positive decimal with at most two decimal places
+                instance: https://api.platform.dakota.xyz/sandbox/cards/simulate/transaction
+                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+        '403':
+          description: Not available outside sandbox mode
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#forbidden
+                title: Forbidden
+                status: 403
+                detail: Endpoint only available in sandbox mode
+                instance: https://api.platform.dakota.xyz/sandbox/cards/simulate/transaction
+                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+        '404':
+          description: Card not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#not-found
+                title: Card not found
+                status: 404
+                detail: Card not found
+                instance: https://api.platform.dakota.xyz/sandbox/cards/simulate/transaction
+                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+        '409':
+          description: |
+            The card cannot present a transaction, the idempotency key was
+            reused with different parameters, or the simulation under this
+            idempotency key was abandoned before it recorded a result. The last
+            one never resolves under the same key: retry it with a new
+            `X-Idempotency-Key`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#card-not-active
+                title: Card Not Active
+                status: 409
+                detail: The card must be active to present a simulated transaction.
+                instance: https://api.platform.dakota.xyz/sandbox/cards/simulate/transaction
+                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+        '422':
+          description: |
+            Amount over the sandbox per-transaction cap, or a client that is not
+            provisioned at the provider yet.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#sandbox-amount-cap-exceeded
+                title: Sandbox Amount Cap Exceeded
+                status: 422
+                detail: amount 25 exceeds sandbox cap of 2; reduce the amount and retry
+                instance: https://api.platform.dakota.xyz/sandbox/cards/simulate/transaction
+                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+        '429':
+          description: |
+            The client has used its card-simulation allowance for the day. The
+            allowance restores itself within 24 hours.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#sandbox-card-simulation-daily-limit
+                title: Sandbox Card Simulation Daily Limit
+                status: 429
+                detail: This client has used its card-simulation allowance for the day. Retry within 24 hours.
+                instance: https://api.platform.dakota.xyz/sandbox/cards/simulate/transaction
+                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+        '500':
+          description: Platform failed to process the request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#internal-error
+                title: Internal Error
+                status: 500
+                detail: An internal error occurred
+                instance: https://api.platform.dakota.xyz/sandbox/cards/simulate/transaction
+                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+        '501':
+          description: Card simulation is not enabled in this deployment
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#not-implemented
+                title: Not Implemented
+                status: 501
+                detail: card simulation is not available in this deployment yet
+                instance: https://api.platform.dakota.xyz/sandbox/cards/simulate/transaction
+                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+        '502':
+          description: Provider gRPC call failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#provider-error
+                title: Provider Error
+                status: 502
+                detail: provider sandbox service returned an error
+                instance: https://api.platform.dakota.xyz/sandbox/cards/simulate/transaction
+                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+      externalDocs:
+        description: Read full guide in docs
+        url: https://docs.dakota.xyz/api-reference/sandbox/simulate-card-transactions
+  /sandbox/cards/simulate/transaction/{card_transaction_id}:
+    parameters:
+      - name: card_transaction_id
+        in: path
+        required: true
+        description: Card transaction to advance.
+        schema:
+          $ref: '#/components/schemas/KSUID'
+    patch:
+      tags:
+        - Sandbox
+      summary: Advance a simulated card transaction
+      description: |
+        Moves a simulated card transaction through the rest of its lifecycle.
+        Each action produces the same records and webhooks the network would
+        produce in production.
+
+        | Action | Effect | Amount |
+        | --- | --- | --- |
+        | `clear` | Settles the authorization. | Optional, for a partial or over-capture clearing. |
+        | `void` | Releases the authorization without settling it. | Optional, for a partial reversal. |
+        | `expire` | Lets the authorization lapse. | Not used. |
+        | `update_amount` | Increments or decrements the held amount. | Required. |
+        | `return` | Refunds the cardholder. | Required. |
+        | `return_reversal` | Reverses a return. | Not used. |
+
+        A return is a standalone transaction on the same card rather than a
+        state of the original authorization, so the response names the **new**
+        return transaction. Target that transaction to reverse the return.
+
+        Available in sandbox mode only.
+      operationId: advanceCardTransaction
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SandboxCardTransactionAction'
+            example:
+              action: clear
+              amount: '2.00'
+      responses:
+        '202':
+          description: Card simulation accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SandboxCardSimulationResponse'
+              example:
+                simulation_id: sim_card_01J8ZQ4T7K2M9Y
+                card_transaction_id: 2ZFHrqBHb3cTfLVkFSGmHZqdDPi
+                status: completed
+        '400':
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#invalid-request
+                title: Invalid request
+                status: 400
+                detail: amount must be a positive decimal with at most two decimal places
+                instance: https://api.platform.dakota.xyz/sandbox/cards/simulate/transaction/2ZFHrqBHb3cTfLVkFSGmHZqdDPi
+                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+        '403':
+          description: Not available outside sandbox mode
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#forbidden
+                title: Forbidden
+                status: 403
+                detail: Endpoint only available in sandbox mode
+                instance: https://api.platform.dakota.xyz/sandbox/cards/simulate/transaction/2ZFHrqBHb3cTfLVkFSGmHZqdDPi
+                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+        '404':
+          description: Card transaction not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#not-found
+                title: Card Transaction not found
+                status: 404
+                detail: Card Transaction not found
+                instance: https://api.platform.dakota.xyz/sandbox/cards/simulate/transaction/2ZFHrqBHb3cTfLVkFSGmHZqdDPi
+                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+        '409':
+          description: |
+            The idempotency key was reused with different parameters, or on
+            another sandbox simulation, or the simulation under this key was
+            abandoned before it recorded a result. Neither of the last two
+            resolves under the same key: retry with a new
+            `X-Idempotency-Key`.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#conflict
+                title: Conflict
+                status: 409
+                detail: idempotency key already used with different parameters or on another sandbox simulation
+                instance: https://api.platform.dakota.xyz/sandbox/cards/simulate/transaction/2ZFHrqBHb3cTfLVkFSGmHZqdDPi
+                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+        '422':
+          description: |
+            The amount is over the sandbox cap, the client is not provisioned
+            at the provider yet, or the action does not fit the transaction.
+            `#sandbox-invalid-action-for-transaction` covers every way the last
+            two disagree: an action whose required amount is missing, an amount
+            supplied to `expire` or `return_reversal`, which take none, and an
+            action the target transaction cannot take, such as
+            `return_reversal` on a transaction that is not a return.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#sandbox-invalid-action-for-transaction
+                title: Sandbox Invalid Action For Transaction
+                status: 422
+                detail: action update_amount requires an amount
+                instance: https://api.platform.dakota.xyz/sandbox/cards/simulate/transaction/2ZFHrqBHb3cTfLVkFSGmHZqdDPi
+                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+        '429':
+          description: |
+            The client has used its card-simulation allowance for the day. The
+            allowance restores itself within 24 hours.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#sandbox-card-simulation-daily-limit
+                title: Sandbox Card Simulation Daily Limit
+                status: 429
+                detail: This client has used its card-simulation allowance for the day. Retry within 24 hours.
+                instance: https://api.platform.dakota.xyz/sandbox/cards/simulate/transaction/2ZFHrqBHb3cTfLVkFSGmHZqdDPi
+                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+        '500':
+          description: Platform failed to process the request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#internal-error
+                title: Internal Error
+                status: 500
+                detail: An internal error occurred
+                instance: https://api.platform.dakota.xyz/sandbox/cards/simulate/transaction/2ZFHrqBHb3cTfLVkFSGmHZqdDPi
+                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+        '501':
+          description: Card simulation is not enabled in this deployment
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#not-implemented
+                title: Not Implemented
+                status: 501
+                detail: card simulation is not available in this deployment yet
+                instance: https://api.platform.dakota.xyz/sandbox/cards/simulate/transaction/2ZFHrqBHb3cTfLVkFSGmHZqdDPi
+                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+        '502':
+          description: Provider gRPC call failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#provider-error
+                title: Provider Error
+                status: 502
+                detail: provider sandbox service returned an error
+                instance: https://api.platform.dakota.xyz/sandbox/cards/simulate/transaction/2ZFHrqBHb3cTfLVkFSGmHZqdDPi
+                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+      externalDocs:
+        description: Read full guide in docs
+        url: https://docs.dakota.xyz/api-reference/sandbox/simulate-card-transactions
   /sandbox/simulations/{simulation_id}:
     get:
       tags:
@@ -13175,6 +13566,191 @@ paths:
       externalDocs:
         description: Read full guide in docs
         url: https://docs.dakota.xyz/api-reference/sandbox/list-available-simulation-scenarios
+  /sandbox/wallets/{wallet_id}/faucet:
+    parameters:
+      - name: wallet_id
+        in: path
+        required: true
+        description: Wallet to fund.
+        schema:
+          $ref: '#/components/schemas/KSUID'
+    post:
+      tags:
+        - Sandbox
+      summary: Fund a sandbox wallet from the testnet faucet
+      description: |
+        Sends testnet RD from Dakota's sandbox float wallet to the wallet on
+        Base Sepolia. The transfer is a real on-chain send, so the balance
+        arrives through the same deposit ingestion a customer's own deposit
+        takes; only the trigger is synthetic.
+
+        Accepted immediately. Poll `GET /sandbox/simulations/{simulation_id}`
+        for the terminal state; the simulation completes once the deposit
+        webhook is ingested.
+
+        The faucet draws on a shared float, so calls are metered per wallet
+        per day, per client per day, and against a floor the float must still
+        hold after the transfer. Each refusal carries a distinct problem type
+        so a client can tell a limit that clears on its own from one that
+        needs an operator.
+
+        Available in sandbox mode only.
+      operationId: faucetWallet
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SandboxFaucetRequest'
+            example:
+              asset: RD
+              amount: '2.00'
+      responses:
+        '202':
+          description: Faucet transfer accepted
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SandboxFaucetResponse'
+              example:
+                simulation_id: sim_faucet_01J8ZQ4T7K2M9X
+                wallet_id: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
+                asset: RD
+                amount: '2.00'
+                status: accepted
+        '400':
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#invalid-request
+                title: Invalid Request
+                status: 400
+                detail: amount must be a positive decimal
+                instance: https://api.platform.dakota.xyz/sandbox/wallets/1NFHrqBHb3cTfLVkFSGmHZqdDPi/faucet
+                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+        '403':
+          description: Not available outside sandbox mode
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#forbidden
+                title: Forbidden
+                status: 403
+                detail: Endpoint only available in sandbox mode
+                instance: https://api.platform.dakota.xyz/sandbox/wallets/1NFHrqBHb3cTfLVkFSGmHZqdDPi/faucet
+                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+        '404':
+          description: Wallet not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#not-found
+                title: Wallet Not Found
+                status: 404
+                detail: Wallet 1NFHrqBHb3cTfLVkFSGmHZqdDPi was not found
+                instance: https://api.platform.dakota.xyz/sandbox/wallets/1NFHrqBHb3cTfLVkFSGmHZqdDPi/faucet
+                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+        '409':
+          description: |
+            The idempotency key cannot serve this request. The key was
+            already used with different parameters, or on another sandbox
+            simulation, or an earlier request with this key failed. A failed
+            request is not replayed, and a key belongs to one simulation:
+            retry with a new idempotency key.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              examples:
+                different_parameters:
+                  summary: Key already used with different parameters, or on another simulation
+                  value:
+                    type: https://docs.dakota.xyz/api-reference/errors#conflict
+                    title: Simulation Conflict
+                    status: 409
+                    detail: idempotency key already used with different parameters or on another sandbox simulation
+                    instance: https://api.platform.dakota.xyz/sandbox/wallets/1NFHrqBHb3cTfLVkFSGmHZqdDPi/faucet
+                    request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+                previous_request_failed:
+                  summary: An earlier request with this key failed
+                  value:
+                    type: https://docs.dakota.xyz/api-reference/errors#conflict
+                    title: Simulation Conflict
+                    status: 409
+                    detail: a previous request with this idempotency key failed; retry with a new idempotency key
+                    instance: https://api.platform.dakota.xyz/sandbox/wallets/1NFHrqBHb3cTfLVkFSGmHZqdDPi/faucet
+                    request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+        '422':
+          description: |
+            Amount over the sandbox cap, a wallet the faucet asset cannot reach,
+            or a client that is not provisioned at the provider yet.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#sandbox-amount-cap-exceeded
+                title: Sandbox Amount Cap Exceeded
+                status: 422
+                detail: amount 25 exceeds sandbox cap of 2; reduce the amount and retry
+                instance: https://api.platform.dakota.xyz/sandbox/wallets/1NFHrqBHb3cTfLVkFSGmHZqdDPi/faucet
+                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+        '429':
+          description: |
+            A faucet limit refused the call. The problem `type` says which one:
+            `#sandbox-faucet-wallet-daily-limit` and
+            `#sandbox-faucet-client-daily-limit` clear on their own within 24
+            hours; `#sandbox-faucet-float-floor` means the shared float is low
+            and needs an operator to replenish it.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#sandbox-faucet-wallet-daily-limit
+                title: Sandbox Faucet Wallet Daily Limit
+                status: 429
+                detail: This wallet has used its faucet allowance for the day. Retry within 24 hours.
+                instance: https://api.platform.dakota.xyz/sandbox/wallets/1NFHrqBHb3cTfLVkFSGmHZqdDPi/faucet
+                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+        '500':
+          description: Platform failed to process the request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#internal-error
+                title: Internal Server Error
+                status: 500
+                detail: An unexpected error occurred.
+                instance: https://api.platform.dakota.xyz/sandbox/wallets/1NFHrqBHb3cTfLVkFSGmHZqdDPi/faucet
+                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+        '502':
+          description: Provider gRPC call failed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+              example:
+                type: https://docs.dakota.xyz/api-reference/errors#provider-error
+                title: Provider Error
+                status: 502
+                detail: provider sandbox service returned an error
+                instance: https://api.platform.dakota.xyz/sandbox/wallets/1NFHrqBHb3cTfLVkFSGmHZqdDPi/faucet
+                request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+      externalDocs:
+        description: Read full guide in docs
+        url: https://docs.dakota.xyz/api-reference/sandbox/fund-a-wallet
   /sandbox/simulations/{simulation_id}/advance:
     post:
       tags:
@@ -13365,6 +13941,121 @@ paths:
                 detail: Stripe checkout is not configured
         default:
           description: Unexpected error
+  /rd-marketing-fee/declared-wallets:
+    post:
+      tags:
+        - RD Marketing Fee
+      summary: Declare a wallet you hold outside Dakota
+      description: |
+        Adds a wallet you hold outside Dakota, so its RD balance counts toward
+        your marketing fee.
+
+        The wallet counts from the first instant of the month you add it in, so
+        a wallet added on 20 September earns for all of September. It starts
+        later than that only when the address already counted for somebody
+        earlier in the same month, in which case it resumes where that ended.
+
+        Days earlier in the current month have usually been calculated and shown
+        to you already. Those figures are recalculated overnight to include the
+        new wallet, so they go up. A month that has already been priced is never
+        affected, so adding a wallet cannot change a figure you have been paid
+        against.
+
+        Adding a wallet registers it. Dakota then reads that wallet's RD history
+        on chain before its balance can count, which normally completes within a
+        day. Until it does, the wallet contributes nothing, and the days in
+        between are recalculated once the history lands. `counting_from` is when
+        the wallet became eligible, not when Dakota began seeing its balance.
+
+        RD exists only on Base, so the chain is not a parameter.
+      operationId: addRDDeclaredWallet
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RDDeclaredWalletRequest'
+            example:
+              address: '0x1234567890123456789012345678901234567890'
+      responses:
+        '201':
+          description: The wallet now counts.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RDDeclaredWallet'
+              example:
+                chain: eip155:8453
+                address: '0x1234567890123456789012345678901234567890'
+                counting_from: '2026-09-01T00:00:00Z'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: The client is not in the RD marketing-fee programme.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: |
+            The address cannot be declared. Either another client has declared
+            it, or it is already a wallet Dakota holds.
+
+            An address Dakota holds is not necessarily earning a marketing fee:
+            only wallets held for one of your customers do. Contact support if
+            you believe this address should be counting.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          description: The address is not a usable Base address.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+    get:
+      tags:
+        - RD Marketing Fee
+      summary: List the wallets you hold outside Dakota
+      description: |
+        Returns the wallets you have declared, and which therefore count toward
+        your RD marketing fee.
+
+        Only wallets that count today are listed. A wallet you have removed is
+        not returned, though the months it counted toward keep the figures it
+        earned.
+      operationId: listRDDeclaredWallets
+      responses:
+        '200':
+          description: The wallets that count today.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RDDeclaredWalletList'
+              example:
+                wallets:
+                  - chain: eip155:8453
+                    address: '0x1234567890123456789012345678901234567890'
+                    counting_from: '2026-09-01T00:00:00Z'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: The client is not in the RD marketing-fee programme.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /payment-agents:
     x-beta: true
     post:
@@ -13855,6 +14546,141 @@ paths:
                 title: Not Found
                 status: 404
                 detail: agentic payments are not enabled
+  /rd-marketing-fee/payout-destinations/{asset}/{network}:
+    parameters:
+      - name: asset
+        in: path
+        required: true
+        description: |-
+          The asset the payout is made in: RD, or a branded token your client
+          owns.
+        schema:
+          type: string
+        example: RD
+      - name: network
+        in: path
+        required: true
+        description: |-
+          The network of the deployment. A deployment's payout is sent on its
+          own network, so this names which deployment the destination is for
+          rather than offering a choice of chain.
+        schema:
+          $ref: '#/components/schemas/NetworkId'
+        example: base-mainnet
+    put:
+      tags:
+        - RD Marketing Fee
+      summary: Register your payout destination for one deployment
+      description: |
+        Registers, or replaces, the wallet the payouts for one deployment are
+        sent to. Each deployment has its own destination, so replacing one
+        never moves another, and it is separate from your developer-fee payout
+        destination.
+
+        The chain is the deployment's, so it is not a parameter: the address
+        must be valid on the deployment's network. RD's deployment is RD on
+        base-mainnet, the same destination `PUT
+        /rd-marketing-fee/payout-destination` registers. A branded token's
+        destination can be registered only by the client that owns it, once
+        that client has held a contract rate for the token.
+      operationId: putDeploymentPayoutDestination
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeploymentPayoutDestinationRequest'
+            example:
+              address: '0x1234567890123456789012345678901234567890'
+      responses:
+        '200':
+          description: The registered destination.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeploymentPayoutDestination'
+              example:
+                asset: RD
+                network: base-mainnet
+                chain: eip155:8453
+                address: '0x1234567890123456789012345678901234567890'
+                updated_at: '2026-09-22T12:00:00Z'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Your client has never held a contract rate for this asset.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: No payout is made to your client in this asset on this network.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          description: The address is not a usable destination on the deployment's network.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+    get:
+      tags:
+        - RD Marketing Fee
+      summary: Get your payout destination for one deployment
+      description: |
+        Returns the wallet the payouts for one deployment, an asset on a
+        network, are sent to.
+
+        RD's deployment is RD on base-mainnet, and reading it here returns the
+        same destination as `GET /rd-marketing-fee/payout-destination`. A
+        branded token is readable only by the client that owns it, and only
+        once that client has held a contract rate for the token.
+
+        A 404 means no wallet is registered for the deployment yet, or no
+        payout is made to your client in this asset on this network, which is
+        also the answer for a branded token another client owns.
+      operationId: getDeploymentPayoutDestination
+      responses:
+        '200':
+          description: The registered destination.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeploymentPayoutDestination'
+              example:
+                asset: RD
+                network: base-mainnet
+                chain: eip155:8453
+                address: '0x1234567890123456789012345678901234567890'
+                updated_at: '2026-09-22T12:00:00Z'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Your client has never held a contract rate for this asset.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: |-
+            No destination is registered for the deployment, or no payout is
+            made to your client in this asset on this network.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /legal/documents/{document_key}:
     get:
       tags:
@@ -13972,6 +14798,114 @@ paths:
                 title: Not Found
                 status: 404
                 detail: agent not found
+  /payment-agents/{payment_agent_id}/x402/holds:
+    x-beta: true
+    get:
+      tags:
+        - Agentic Payments
+      summary: List an agent's x402 authorization holds (BETA)
+      description: |
+        > **Beta** — early access.
+
+        Every issued x402 signature has a hold: `outstanding` while it is settleable, `settled` once the transfer is seen on-chain, `released` if its window closed unused. Outstanding and settled holds both count against the mandate's budget; a released one returns it.
+
+        This is the only record of x402 spend - an x402 authorization moves money without a Dakota-initiated transaction, so it writes no transaction row.
+      operationId: listX402Holds
+      parameters:
+        - name: payment_agent_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: false
+          description: Filter to one hold state.
+          schema:
+            type: string
+            enum:
+              - outstanding
+              - settled
+              - released
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/StartingAfterParam'
+        - $ref: '#/components/parameters/EndingBeforeParam'
+      responses:
+        '200':
+          description: One page of the agent's holds, newest first
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedListResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/X402HoldResponse'
+              example:
+                data:
+                  - id: 2vWxX402Hold000000000000001
+                    nonce: '0x3f1c8a5b2d7e4906c1a3f85b2e6d04971c8a5b3f2d7e4906c1a3f85b2e6d0497'
+                    mandate_id: 2vWxX402Mandate000000000001
+                    agent_id: 2vWxAgent000000000000000000
+                    wallet_id: 2vWxWallet00000000000000000
+                    pay_to: '0x94aE0f8B9F3c2A1d5E6b7C8D9e0F1a2B3c4D5E6F'
+                    value: '100000'
+                    asset: USDC
+                    network: base-sepolia
+                    state: settled
+                    created_at: '2026-09-08T00:00:05Z'
+                    valid_before: '2026-09-08T00:02:05Z'
+                    tx_hash: '0x05dd3a9587f41b2c6e8d0a4f7b3c95e2d18a6f40b7c29e5d3a81f64b0c7e2d95'
+                    settled_at: '2026-09-08T00:00:07Z'
+                meta:
+                  total_count: 1
+                  has_more_after: false
+                  has_more_before: false
+        '400':
+          description: |
+            The agent id, the state filter or a pagination parameter is malformed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: |
+            Missing or invalid credentials
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: |
+            The caller lacks the permission this route requires
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: |
+            Agentic payments are not enabled for the client, x402 is not enabled for the agent (enable it with POST /payment-agents/{payment_agent_id}/x402), or the agent was not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '429':
+          description: |
+            Too many requests; back off and retry
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          description: |
+            Internal error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /payment-agents/{payment_agent_id}/proposals/progress:
     x-beta: true
     get:
@@ -14437,6 +15371,45 @@ paths:
             application/problem+json:
               schema:
                 $ref: '#/components/schemas/ProblemDetails'
+  /rd-marketing-fee/declared-wallets/{address}:
+    delete:
+      tags:
+        - RD Marketing Fee
+      summary: Remove a wallet you hold outside Dakota
+      description: |
+        Stops a declared wallet counting toward your marketing fee, from now on.
+
+        Months that have already counted it keep their figures. Removing a
+        wallet never restates a month you have already been shown or paid.
+      operationId: removeRDDeclaredWallet
+      parameters:
+        - name: address
+          in: path
+          required: true
+          schema:
+            type: string
+          description: The address to stop counting.
+      responses:
+        '204':
+          description: The wallet no longer counts.
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: The client is not in the RD marketing-fee programme.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: You have no such wallet counting today.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /legal/documents:
     get:
       tags:
@@ -14753,6 +15726,101 @@ paths:
                 detail: Credit management is only available for self-serve customers.
         default:
           description: Unexpected error
+  /developer-fees/statement:
+    get:
+      tags:
+        - Payouts
+      summary: Get your developer fee statement
+      description: |
+        Returns what your developer fees came to over a date range: the totals
+        earned and paid in the range, the balance owed as of the range end,
+        per-month sub-totals, per-asset earnings, and the fee transactions the
+        earned figure is made of.
+
+        The statement is always your own. Nothing in a request names a client.
+
+        `owed` is cumulative and is not bounded by `from`: a balance you were
+        owed before the range still counts. Payouts are initiated by Dakota, so
+        an owed balance is what is due rather than what is scheduled.
+
+        All money figures are decimal strings. The USD totals are USD; a
+        per-asset `earned` is in that asset's own units.
+      operationId: getMyDeveloperFeeStatement
+      parameters:
+        - name: from
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+          description: Unix seconds lower bound on the fee's completion time (inclusive).
+        - name: to
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+          description: |
+            Unix seconds upper bound on the fee's completion time (inclusive).
+            Also the as-of date for the owed balance.
+        - name: page
+          in: query
+          required: false
+          schema:
+            type: integer
+            minimum: 1
+            default: 1
+          description: |
+            1-based page of the fee transactions list. The page size is 250;
+            `transactions.total` reports the full count so you can tell when a
+            range runs past one page.
+      responses:
+        '200':
+          description: Your developer fee statement over the range.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeveloperFeeStatementResponse'
+              example:
+                totals:
+                  earned: '12480.55'
+                  paid: '9200.00'
+                  owed: '3280.55'
+                months:
+                  - month: 2026-09
+                    earned: '2140.20'
+                    paid: '0'
+                  - month: 2026-08
+                    earned: '3510.80'
+                    paid: '3510.80'
+                assets:
+                  - asset: eip155:8453/erc20:0x833589fcd6edb6e08f4c7c32d4f71b54bda02913
+                    symbol: USDC
+                    earned: '10204.30'
+                  - asset: eip155:8453/erc20:0x3788806ff15b639146a0309218190572ff365059
+                    symbol: RD
+                    earned: '1890.25'
+                transactions:
+                  items:
+                    - id: 3JSAEmeRoI3MYTxJR43kVc1kQ82
+                      date: 1789603200
+                      asset: eip155:8453/erc20:0x833589fcd6edb6e08f4c7c32d4f71b54bda02913
+                      symbol: USDC
+                      volume: '40000.00'
+                      fee: '40.00'
+                  total: 1284
+        '401':
+          description: Unauthorized.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '502':
+          description: The figures could not be retrieved.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /insights:
     x-beta: true
     get:
@@ -15547,7 +16615,7 @@ paths:
   /rd-marketing-fee/payout-destination:
     put:
       tags:
-        - Payouts
+        - RD Marketing Fee
       summary: Register your RD marketing-fee payout destination
       description: |
         Registers, or replaces, the wallet your RD marketing fee is sent to.
@@ -15597,7 +16665,7 @@ paths:
                 $ref: '#/components/schemas/ProblemDetails'
     get:
       tags:
-        - Payouts
+        - RD Marketing Fee
       summary: Get your RD marketing-fee payout destination
       description: |
         Returns the wallet your RD marketing fee is sent to.
@@ -15630,6 +16698,169 @@ paths:
                 $ref: '#/components/schemas/ProblemDetails'
         '404':
           description: No destination is registered.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+  /payment-agents/{payment_agent_id}/x402:
+    x-beta: true
+    post:
+      tags:
+        - Agentic Payments
+      summary: Enable x402 payments for an agent (BETA)
+      description: |
+        > **Beta** — early access.
+
+        Gives the agent its x402 wallet: a new EVM wallet reserved for paying x402-metered resources. The wallet can sign x402 payments and nothing else — it can never send funds itself — which keeps it acceptable to every x402 facilitator. Fund it by transferring USDC to the returned address. Each agent has exactly one x402 wallet, so x402 signing and mandates never need a wallet id.
+        Idempotent: calling it again returns the same wallet. If a previous call failed part-way, calling it again completes the setup.
+      operationId: enableX402
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: payment_agent_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The agent's x402 wallet
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/X402Enablement'
+              example:
+                payment_agent_id: 2vWxAgent000000000000000000
+                status: active
+                wallet_id: 2vWxWallet00000000000000000
+                address: '0x8982a181fC35d5A8AcA08fD41cA4B4A432ea6E58'
+        '400':
+          description: |
+            The agent id is malformed, or the agent cannot hold an x402 wallet (it is not hosted, or not active)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: |
+            Missing or invalid credentials
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: |
+            The caller lacks the permission this route requires, or the customer is frozen
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: |
+            Agentic payments are not enabled for the client, or the agent was not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: |
+            Another enable call for this agent is in progress; retry shortly
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '429':
+          description: |
+            Too many requests
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          description: |
+            Internal error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '501':
+          description: |
+            The wallet provider does not support this operation
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '503':
+          description: |
+            A dependency (the policy engine or the wallet provider) is unavailable; retry
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+    get:
+      tags:
+        - Agentic Payments
+      summary: Get an agent's x402 wallet (BETA)
+      description: |
+        > **Beta** — early access.
+
+        Returns the agent's x402 wallet and the address to fund it at, or 404 when x402 has not been enabled for the agent.
+      operationId: getX402
+      parameters:
+        - name: payment_agent_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The agent's x402 wallet
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/X402Enablement'
+              example:
+                payment_agent_id: 2vWxAgent000000000000000000
+                status: active
+                wallet_id: 2vWxWallet00000000000000000
+                address: '0x8982a181fC35d5A8AcA08fD41cA4B4A432ea6E58'
+        '400':
+          description: |
+            The agent id is malformed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: |
+            Missing or invalid credentials
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: |
+            The caller lacks the permission this route requires
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: |
+            Agentic payments are not enabled for the client, x402 is not enabled for the agent (enable it with POST /payment-agents/{payment_agent_id}/x402), or the agent was not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '429':
+          description: |
+            Too many requests; back off and retry
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          description: |
+            Internal error
           content:
             application/problem+json:
               schema:
@@ -15787,6 +17018,202 @@ paths:
                 title: Rate Limited
                 status: 429
                 detail: proposal rate limit reached for this customer (hour window) — retry later
+  /payment-agents/{payment_agent_id}/x402/mandates:
+    x-beta: true
+    post:
+      tags:
+        - Agentic Payments
+      summary: Create an x402 spend mandate (BETA)
+      description: |
+        > **Beta** — early access.
+
+        Creates the standing allowance an agent pays x402-metered resources under. Unlike a payment mandate this authorizes a BUDGET rather than a payee: x402 payees are discovered at request time from a seller's 402 response, so the controls are a per-call ceiling plus a rolling aggregate across every payee. Amounts are atomic units of the asset (USDC has 6 decimals, so "100000" is $0.10).
+      operationId: createX402Mandate
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: payment_agent_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/X402MandateRequest'
+            example:
+              asset: USDC
+              network: base-sepolia
+              max_per_call: '500000'
+              max_per_window: '2000000'
+              window_seconds: 3600
+              payee_policy:
+                mode: domain_allowlist
+                domains:
+                  - '*.marketpulse.example'
+      responses:
+        '201':
+          description: Mandate created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/X402MandateResponse'
+              example:
+                id: 2vWxX402Mandate000000000001
+                agent_id: 2vWxAgent000000000000000000
+                wallet_id: 2vWxWallet00000000000000000
+                asset: USDC
+                network: base-sepolia
+                max_per_call: '500000'
+                max_per_window: '2000000'
+                window_seconds: 3600
+                payee_policy:
+                  mode: domain_allowlist
+                  domains:
+                    - '*.marketpulse.example'
+                valid_from: '2026-09-08T00:00:00Z'
+                valid_until: '2026-10-08T00:00:00Z'
+                window_committed: '100000'
+                window_calls: 1
+        '400':
+          description: |
+            Malformed agent id or mandate request, an unsupported asset or network, or the agent is not active
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: |
+            Missing or invalid credentials
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: |
+            The caller lacks the permission this route requires
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: |
+            Agentic payments are not enabled for the client, x402 is not enabled for the agent (enable it with POST /payment-agents/{payment_agent_id}/x402), or the agent was not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '429':
+          description: |
+            Too many requests
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          description: |
+            Internal error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+    get:
+      tags:
+        - Agentic Payments
+      summary: List an agent's x402 spend mandates (BETA)
+      description: |
+        > **Beta** — early access.
+
+        Lists the agent's x402 mandates with their committed spend in the current window. Committed spend counts outstanding authorizations as well as settled ones - an issued x402 signature is spendable money whether or not it has reached the chain.
+      operationId: listX402Mandates
+      parameters:
+        - name: payment_agent_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/StartingAfterParam'
+        - $ref: '#/components/parameters/EndingBeforeParam'
+      responses:
+        '200':
+          description: One page of the agent's x402 mandates, newest first
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedListResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/X402MandateResponse'
+              example:
+                data:
+                  - id: 2vWxX402Mandate000000000001
+                    agent_id: 2vWxAgent000000000000000000
+                    wallet_id: 2vWxWallet00000000000000000
+                    asset: USDC
+                    network: base-sepolia
+                    max_per_call: '500000'
+                    max_per_window: '2000000'
+                    window_seconds: 3600
+                    payee_policy:
+                      mode: domain_allowlist
+                      domains:
+                        - '*.marketpulse.example'
+                    valid_from: '2026-09-08T00:00:00Z'
+                    valid_until: '2026-10-08T00:00:00Z'
+                    window_committed: '100000'
+                    window_calls: 1
+                meta:
+                  total_count: 1
+                  has_more_after: false
+                  has_more_before: false
+        '400':
+          description: |
+            The agent id or a pagination parameter is malformed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: |
+            Missing or invalid credentials
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: |
+            The caller lacks the permission this route requires
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: |
+            Agentic payments are not enabled for the client, x402 is not enabled for the agent (enable it with POST /payment-agents/{payment_agent_id}/x402), or the agent was not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '429':
+          description: |
+            Too many requests; back off and retry
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          description: |
+            Internal error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /scheduled-payments/{scheduled_payment_id}/cancel:
     x-beta: true
     post:
@@ -15842,6 +17269,133 @@ paths:
                 title: Not Found
                 status: 404
                 detail: agentic payments are not enabled
+  /payment-agents/{payment_agent_id}/x402/signatures:
+    x-beta: true
+    post:
+      tags:
+        - Agentic Payments
+      summary: Sign an x402 payment authorization (BETA)
+      description: |
+        > **Beta** — early access.
+
+        Returns the `X-PAYMENT` header for a seller's 402 challenge, signed by the agent's Dakota-custodied wallet. The caller never holds a key.
+
+        **Supported asset: USDC only**, on Base (`base` / `eip155:8453`) and Base Sepolia (`base-sepolia` / `eip155:84532`). A seller pricing in any other token, or on any other network, is refused with a 403 naming the supported set; no signature is issued and no budget is held.
+
+        Issuing this signature IS spending money: it is an EIP-3009 `TransferWithAuthorization` that any holder can settle on-chain until `validBefore` passes, with no further approval from us. So both controls run here, before any signature exists: the seller's `payTo` is screened for sanctions and other high-risk activity, and the agent's x402 mandate is evaluated together with a hold recorded against its budget, atomically.
+
+        A refusal is a 403 naming the reason. If the payee cannot be screened the payment is refused with a 503, never signed unscreened; retry it.
+
+        Idempotent per X-Idempotency-Key: a retry with the same key and the same payment returns the SAME authorization (same nonce, same validity window), signed again - never a second one - so at most one can settle. The response is never cached: the signed header is a bearer instrument.
+      operationId: createX402Signature
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: payment_agent_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/X402SignatureRequest'
+            example:
+              resource_url: https://api.marketpulse.example/v1/reports/copper-spot
+              payment_requirements:
+                scheme: exact
+                network: base-sepolia
+                maxAmountRequired: '100000'
+                resource: https://api.marketpulse.example/v1/reports/copper-spot
+                payTo: '0x94aE0f8B9F3c2A1d5E6b7C8D9e0F1a2B3c4D5E6F'
+                asset: '0x036CbD53842c5426634e7929541eC2318f3dCF7e'
+                maxTimeoutSeconds: 120
+                extra:
+                  name: USDC
+                  version: '2'
+      responses:
+        '200':
+          description: The signed payment authorization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/X402SignatureResponse'
+              example:
+                payment_header: eyJ4NDAyVmVyc2lvbiI6MSwic2NoZW1lIjoiZXhhY3QiLCJuZXR3b3JrIjoiYmFzZS1zZXBvbGlhIn0
+                payment_header_name: X-PAYMENT
+                signature: '0x9f2b1c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b1c001c'
+                authorization_id: 2vWxX402Hold000000000000001
+                mandate_id: 2vWxX402Mandate000000000001
+                payer: '0x8f2A55949038A9610F50FB23B5883Af3B4ecB3a1'
+                pay_to: '0x94aE0f8B9F3c2A1d5E6b7C8D9e0F1a2B3c4D5E6F'
+                value: '100000'
+                nonce: '0x3f1c8a5b2d7e4906c1a3f85b2e6d04971c8a5b3f2d7e4906c1a3f85b2e6d0497'
+                valid_before: '2026-09-08T00:02:00Z'
+                window_committed: '100000'
+        '400':
+          description: |
+            Malformed agent id or payment requirements, an unsupported scheme, network or x402 version, or the agent is not active
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: |
+            Missing or invalid credentials
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: |
+            The payment was refused - the caller lacks the permission this route requires, the customer is frozen, the seller's address failed screening, or the agent's x402 mandate refused it (over a limit, outside the payee policy, expired, or absent)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: |
+            Agentic payments are not enabled for the client, x402 is not enabled for the agent (enable it with POST /payment-agents/{payment_agent_id}/x402), or the agent was not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: |
+            The X-Idempotency-Key was already used for a different payment, or the authorization issued under it has expired or was released — retry with a new key. A key whose payment already SETTLED is also refused here, and that one must not be retried: the detail names the transaction, and a new key would pay again.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '429':
+          description: |
+            Too many requests; back off and retry
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          description: |
+            Internal error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '501':
+          description: |
+            The wallet provider does not support this operation
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '503':
+          description: |
+            The seller's address could not be screened. Nothing was signed and no budget was held; retry the payment.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
 components:
   parameters:
     IdempotencyKeyHeader:
@@ -16017,8 +17571,12 @@ components:
             The rate APPLIED to this month, in monthly basis points: the annual
             contract rate charged for the days this month actually has
             (y_bps_annual x days_in_month / 365), rounded to 2 decimal places —
-            the precision it is charged and stored at. A later rate change does
-            not rewrite it.
+            the precision it is charged and stored at.
+
+            Once a month has been priced, this is the rate it was priced at and
+            a later rate change does not rewrite it. For a month not yet priced,
+            including the running month, it is a projection from your current
+            rate and moves if that rate changes.
         y_bps_annual:
           type: number
           format: double
@@ -16029,10 +17587,16 @@ components:
         owed_minor:
           type: string
           description: |-
-            What the month will pay this client, as a whole number of RD
-            minor units. ABSENT until the month is priced — absent and zero
-            are different facts, and zero means the month owes nothing
-            payable.
+            What the month currently derives to, as a whole number of RD minor
+            units. ABSENT until the month is priced — absent and zero are
+            different facts, and zero means the month owes nothing payable.
+
+            This is a derived figure, not a record of payment. It is
+            recalculated if the balance history behind the month changes, which
+            can happen after a payment has been made, so it is not necessarily
+            the amount that was paid. A month owes zero whenever Dakota's earned
+            rate for it did not exceed your contract rate; the figure is never
+            negative, and it is rounded down to a whole minor unit.
         avg_daily_balance_minor:
           type: string
           description: The mean of the month's stored daily principals. Absent while the month is incomplete.
@@ -16082,6 +17646,115 @@ components:
             all days at once until the month's Dakota rate is derived. A zero
             here would state that nothing is owed, which is a different claim
             from "not yet known".
+    DeveloperFeeStatementResponse:
+      type: object
+      required:
+        - totals
+        - months
+        - assets
+        - transactions
+      properties:
+        totals:
+          $ref: '#/components/schemas/DeveloperFeeStatementTotals'
+        months:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeveloperFeeStatementMonth'
+        assets:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeveloperFeeStatementAsset'
+        transactions:
+          $ref: '#/components/schemas/DeveloperFeeStatementTransactions'
+    DeveloperFeeStatementTotals:
+      type: object
+      required:
+        - earned
+        - paid
+        - owed
+      properties:
+        earned:
+          type: string
+          description: USD decimal string, earned in range.
+        paid:
+          type: string
+          description: USD decimal string, paid in range.
+        owed:
+          type: string
+          description: USD decimal string, owed as-of the range end (cumulative).
+    DeveloperFeeStatementMonth:
+      type: object
+      required:
+        - month
+        - earned
+        - paid
+      properties:
+        month:
+          type: string
+          description: YYYY-MM (UTC)
+        earned:
+          type: string
+          description: USD decimal string
+        paid:
+          type: string
+          description: USD decimal string
+    DeveloperFeeStatementAsset:
+      type: object
+      required:
+        - asset
+        - symbol
+        - earned
+      properties:
+        asset:
+          type: string
+          description: CAIP-19 asset id (chain-scoped) or bare fiat symbol.
+        symbol:
+          type: string
+          description: Resolved display symbol (may be empty).
+        earned:
+          type: string
+          description: Decimal string, asset units — Σ fees earned in range for this asset.
+    DeveloperFeeStatementTransactions:
+      type: object
+      required:
+        - items
+        - total
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/DeveloperFeeStatementTransaction'
+        total:
+          type: integer
+          format: int64
+    DeveloperFeeStatementTransaction:
+      type: object
+      required:
+        - id
+        - date
+        - asset
+        - symbol
+        - volume
+        - fee
+      properties:
+        id:
+          type: string
+        date:
+          type: integer
+          format: int64
+          description: Unix seconds (completed_at)
+        asset:
+          type: string
+          description: CAIP-19 asset id or bare fiat symbol of the inbound leg.
+        symbol:
+          type: string
+          description: Resolved display symbol.
+        volume:
+          type: string
+          description: decimal string, inbound leg-0 amount
+        fee:
+          type: string
+          description: decimal string, client_fee_amount
     AgenticActionDownstream:
       type: object
       properties:
@@ -16232,6 +17905,305 @@ components:
           type: string
         name:
           type: string
+    X402PayeePolicy:
+      type: object
+      description: |
+        What an x402 mandate may pay for, beyond its budget. Omit the whole object to leave the budget as the only control.
+        `mode` is required when the object is present, and the list must match it: `address_allowlist` needs `addresses` and reads no domains, `domain_allowlist` needs `domains` and reads no addresses, and `any_screened` enforces neither, so it carries no list. A policy that breaks those rules is refused with a 400 rather than stored as a restriction nothing applies.
+        `any_screened` accepts any payee that passes address screening. `address_allowlist` pins the payee address itself. `domain_allowlist` pins the RESOURCE host the caller names when it asks for a signature - the readable form, since an operator approves "any metered API under this vendor's domain" rather than a hex address. Note that it bounds the resource, not the payee: a seller who prices one resource can be paid for it whatever address it nominates.
+      required:
+        - mode
+      properties:
+        mode:
+          type: string
+          enum:
+            - any_screened
+            - address_allowlist
+            - domain_allowlist
+        addresses:
+          type: array
+          description: Payee addresses. Required for address_allowlist, and refused otherwise.
+          items:
+            type: string
+        domains:
+          type: array
+          description: |
+            Resource host patterns. Required for domain_allowlist, and refused otherwise. An exact host, or a "*.example.com" suffix.
+          items:
+            type: string
+    X402Enablement:
+      type: object
+      required:
+        - payment_agent_id
+        - status
+      properties:
+        payment_agent_id:
+          type: string
+        status:
+          type: string
+          enum:
+            - provisioning
+            - active
+          description: |
+            `active` once the wallet exists. `provisioning` means a previous enable call stopped part-way; calling enable again completes it.
+        wallet_id:
+          type: string
+          description: The x402 wallet. Present once status is `active`.
+        address:
+          type: string
+          description: |
+            The wallet's EVM address. Fund it by sending USDC here on the network the agent pays on.
+    X402MandateRequest:
+      type: object
+      required:
+        - asset
+        - network
+        - max_per_call
+      properties:
+        asset:
+          type: string
+          description: |
+            Asset symbol. Only `USDC` is supported in this release; any other value is refused with a 400, since such a mandate could never be used.
+        network:
+          type: string
+          description: Network the mandate covers, e.g. base-sepolia. Only Base and Base Sepolia are supported.
+        max_per_call:
+          type: string
+          description: Per-authorization ceiling, in atomic units.
+        max_per_window:
+          type: string
+          description: |
+            Ceiling on total committed spend across ALL payees in one rolling window, in atomic units. Omit for unbounded (discouraged).
+        window_seconds:
+          type: integer
+          description: Rolling aggregate window. Defaults to 24h.
+        max_calls_per_window:
+          type: integer
+          description: Optional cap on authorizations per window. 0 is no cap.
+        valid_for_seconds:
+          type: integer
+          description: Mandate lifetime from now. Defaults to 30 days.
+        payee_policy:
+          $ref: '#/components/schemas/X402PayeePolicy'
+    X402MandateResponse:
+      type: object
+      required:
+        - id
+        - agent_id
+        - wallet_id
+        - asset
+        - network
+        - max_per_call
+        - window_seconds
+        - payee_policy
+        - valid_from
+        - valid_until
+      properties:
+        id:
+          type: string
+        agent_id:
+          type: string
+        wallet_id:
+          type: string
+        asset:
+          type: string
+        network:
+          type: string
+        max_per_call:
+          type: string
+        max_per_window:
+          type: string
+        window_seconds:
+          type: integer
+        max_calls_per_window:
+          type: integer
+        payee_policy:
+          $ref: '#/components/schemas/X402PayeePolicy'
+        valid_from:
+          type: string
+          format: date-time
+        valid_until:
+          type: string
+          format: date-time
+        revoked_at:
+          type: string
+          format: date-time
+        window_committed:
+          type: string
+          description: |
+            Spend already committed in the current window, in atomic units. Counts outstanding holds as well as settled ones.
+        window_calls:
+          type: integer
+          description: Authorizations already issued in the current window.
+    X402PaymentRequirements:
+      type: object
+      description: |
+        One payment option from a seller's 402 response, forwarded verbatim. Field names are the x402 protocol's own, not Dakota's. Both protocol versions are accepted: v1 terms carry `maxAmountRequired`, v2 terms carry `amount` and a CAIP-2 network.
+      required:
+        - scheme
+        - network
+        - payTo
+        - asset
+      properties:
+        scheme:
+          type: string
+          description: Payment scheme. Only "exact" is supported.
+        network:
+          type: string
+          description: |
+            The seller's network, in either spelling: v1 (`base-sepolia`, `base`) or v2 CAIP-2 (`eip155:84532`, `eip155:8453`).
+        maxAmountRequired:
+          type: string
+          description: Price in atomic units (x402 v1).
+        amount:
+          type: string
+          description: Price in atomic units (x402 v2).
+        resource:
+          type: string
+        description:
+          type: string
+        mimeType:
+          type: string
+        payTo:
+          type: string
+          description: The seller's receiving address.
+        asset:
+          type: string
+          description: |
+            Token contract address. Only USDC's contract on Base or Base Sepolia is payable; any other token is refused with a 403.
+        maxTimeoutSeconds:
+          type: integer
+          description: How long the seller will accept this authorization.
+        extra:
+          $ref: '#/components/schemas/X402PaymentRequirementsExtra'
+    X402PaymentRequirementsExtra:
+      type: object
+      description: |
+        Token identity, which the EIP-712 domain is built from. A wrong name or version yields a signature that recovers to the wrong address.
+      properties:
+        name:
+          type: string
+        version:
+          type: string
+        assetTransferMethod:
+          type: string
+          description: x402 v2's transfer method, e.g. `eip3009`. Echoed back in the v2 payload.
+    X402SignatureRequest:
+      type: object
+      required:
+        - payment_requirements
+      properties:
+        payment_requirements:
+          $ref: '#/components/schemas/X402PaymentRequirements'
+        resource_url:
+          type: string
+          description: |
+            The 402-metered URL being paid for. Required when the mandate restricts payees by domain.
+        x402_version:
+          type: integer
+          enum:
+            - 1
+            - 2
+          description: |
+            The x402 version the seller spoke — `x402Version` in its 402 response. Decides how the signed payment is packaged: v1 as the `X-PAYMENT` header, v2 as `PAYMENT-SIGNATURE`. Defaults to 1.
+    X402SignatureResponse:
+      type: object
+      required:
+        - payment_header
+        - payment_header_name
+        - signature
+        - authorization_id
+        - mandate_id
+        - payer
+        - pay_to
+        - value
+        - nonce
+        - valid_before
+        - window_committed
+      properties:
+        payment_header:
+          type: string
+          description: |
+            The payment header's value — base64 of the payment payload — to send in the header named by `payment_header_name`.
+        payment_header_name:
+          type: string
+          enum:
+            - X-PAYMENT
+            - PAYMENT-SIGNATURE
+          description: |
+            The request header the seller expects the payment in: `X-PAYMENT` for x402 v1, `PAYMENT-SIGNATURE` for v2.
+        signature:
+          type: string
+        authorization_id:
+          type: string
+          description: The hold this authorization is recorded against.
+        mandate_id:
+          type: string
+        payer:
+          type: string
+        pay_to:
+          type: string
+        value:
+          type: string
+        nonce:
+          type: string
+        valid_before:
+          type: string
+          format: date-time
+        window_committed:
+          type: string
+          description: Committed spend in the mandate's window after this authorization.
+    X402HoldResponse:
+      type: object
+      required:
+        - id
+        - nonce
+        - mandate_id
+        - agent_id
+        - wallet_id
+        - pay_to
+        - value
+        - asset
+        - network
+        - state
+        - created_at
+        - valid_before
+      properties:
+        id:
+          type: string
+        nonce:
+          type: string
+        mandate_id:
+          type: string
+        agent_id:
+          type: string
+        wallet_id:
+          type: string
+        pay_to:
+          type: string
+        value:
+          type: string
+        asset:
+          type: string
+        network:
+          type: string
+        state:
+          type: string
+          enum:
+            - outstanding
+            - settled
+            - released
+        created_at:
+          type: string
+          format: date-time
+        valid_before:
+          type: string
+          format: date-time
+        tx_hash:
+          type: string
+        settled_at:
+          type: string
+          format: date-time
     AgenticProposal:
       type: object
       description: |
@@ -17514,16 +19486,29 @@ components:
       properties:
         name:
           type: string
-          description: Scenario identifier passed as `scenario` in simulate/inbound requests.
+          description: |
+            Scenario identifier. A requestable scenario is named as `scenario`
+            on a simulate/inbound request; one that is not is the value a
+            simulation of this kind reports back.
           example: success_immediate
         description:
           type: string
           description: Human-readable explanation of what this scenario simulates.
+        requestable:
+          type: boolean
+          description: |
+            Whether `POST /sandbox/simulate/inbound` accepts this scenario by
+            name. A scenario that is not requestable describes a simulation the
+            sandbox produces another way — the wallet faucet has its own
+            endpoint — and carries an empty `valid_for`, because no request
+            accepts it.
         valid_for:
           type: array
           items:
             type: string
-          description: Transaction types (`type` field) that support this scenario.
+          description: |
+            Transaction types (`type` field) this scenario may be requested
+            with. Empty when `requestable` is false.
         stateful:
           type: boolean
           description: Whether this scenario creates a paused simulation that requires POST /{id}/advance to complete.
@@ -17660,7 +19645,16 @@ components:
           description: Platform account ID (for fiat simulations)
         wallet_id:
           type: string
-          description: Platform wallet ID (for crypto simulations)
+          description: |
+            The wallet this simulation names, for the simulations that name one
+            (crypto deposits and the wallet faucet).
+
+            It carries the identifier the simulation was created with, resolved
+            to a platform wallet ID where one can be established. A faucet
+            simulation reports the platform wallet ID. A crypto deposit reports
+            the identifier its request supplied — the on-chain address sent as
+            `wallet_address`, or a platform wallet ID when the deprecated
+            `wallet_id` field was used.
         amount:
           type: string
           description: Amount as decimal string (e.g. "100.50")
@@ -17693,6 +19687,211 @@ components:
           items:
             type: string
           description: Valid advance actions when awaiting_advance is true (e.g. ["release", "reject"])
+        operational_transfer_id:
+          type: string
+          description: |
+            Identifier of the operational transfer that moved the funds, for
+            simulations that move value on-chain (the wallet faucet). Absent
+            for every other simulation.
+        card_transaction_id:
+          type: string
+          description: |
+            Identifier of the card transaction this simulation produced, for
+            card simulations. Absent for every other simulation.
+    SandboxFaucetRequest:
+      type: object
+      description: A request to fund a sandbox wallet from the testnet float.
+      required:
+        - amount
+      properties:
+        asset:
+          type: string
+          default: RD
+          description: |
+            Asset to fund. Only `RD` is served today; the field exists so a
+            second asset can be added once a float exists for it.
+          enum:
+            - RD
+          example: RD
+        amount:
+          type: string
+          description: |
+            Amount in decimal token units. Capped by the sandbox
+            per-transaction limit.
+          example: '2.00'
+    SandboxFaucetResponse:
+      type: object
+      description: An accepted faucet transfer.
+      required:
+        - simulation_id
+        - wallet_id
+        - asset
+        - amount
+        - status
+      properties:
+        simulation_id:
+          type: string
+          description: |
+            Simulation identifier. Resolve it with
+            `GET /sandbox/simulations/{simulation_id}`.
+        wallet_id:
+          $ref: '#/components/schemas/KSUID'
+        asset:
+          type: string
+          description: Asset that was sent.
+          example: RD
+        amount:
+          type: string
+          description: Amount that was sent, in decimal token units.
+          example: '2.00'
+        tx_hash:
+          type: string
+          description: |
+            Reserved for the on-chain transaction hash. The faucet answers
+            before the transfer has one, so the accepted response does not
+            carry it. Do not depend on this field; poll
+            `GET /sandbox/simulations/{simulation_id}` for the outcome.
+        status:
+          $ref: '#/components/schemas/SimulationState'
+    SandboxCardMerchant:
+      type: object
+      description: The merchant presenting a simulated card transaction.
+      required:
+        - descriptor
+      properties:
+        descriptor:
+          type: string
+          minLength: 1
+          maxLength: 40
+          description: Merchant name as it appears on the transaction.
+          example: COFFEE ROASTERS
+        mcc:
+          type: string
+          pattern: ^[0-9]{4}$
+          description: Merchant category code, four digits.
+          example: '5814'
+        acceptor_id:
+          type: string
+          maxLength: 32
+          description: Card acceptor identifier assigned by the acquirer.
+        city:
+          type: string
+          maxLength: 32
+          description: Merchant city.
+          example: BROOKLYN
+        state:
+          type: string
+          maxLength: 32
+          description: Merchant state or region.
+          example: NY
+        country:
+          type: string
+          pattern: ^[A-Za-z]{3}$
+          description: ISO 3166-1 alpha-3 country code.
+          example: USA
+    SandboxCardTransactionRequest:
+      type: object
+      description: A request to present a simulated authorization on a card.
+      required:
+        - card_id
+      properties:
+        card_id:
+          $ref: '#/components/schemas/KSUID'
+        amount:
+          type: string
+          description: |
+            Amount in decimal USD, at most two decimal places. Capped by the
+            sandbox per-transaction limit.
+
+            Required for every `type` except `balance_inquiry`, which moves no
+            funds and so takes no amount: omit it, or send `"0"`. A
+            `balance_inquiry` naming a non-zero amount is refused.
+          example: '2.00'
+        merchant:
+          $ref: '#/components/schemas/SandboxCardMerchant'
+        type:
+          type: string
+          default: authorization
+          description: |
+            Which network message the simulation opens. `authorization` is a
+            standard purchase; `financial_authorization` clears immediately;
+            `balance_inquiry` checks the spendable balance and moves no funds,
+            so it is the one type that takes no `amount`.
+          enum:
+            - authorization
+            - credit_authorization
+            - financial_authorization
+            - balance_inquiry
+          example: authorization
+        partial_approval_capable:
+          type: boolean
+          description: |
+            Whether the merchant accepts a partial approval. A merchant that
+            does gets an approval for the available balance instead of a
+            decline.
+    SandboxCardTransactionAction:
+      type: object
+      description: An action that advances a simulated card transaction.
+      required:
+        - action
+      properties:
+        action:
+          type: string
+          description: |
+            How to advance the transaction. `update_amount` and `return`
+            require an amount; `clear` and `void` take one only for a partial
+            amount; `expire` and `return_reversal` take none, and an amount
+            supplied alongside either is refused.
+          enum:
+            - clear
+            - void
+            - expire
+            - update_amount
+            - return
+            - return_reversal
+          example: clear
+        amount:
+          type: string
+          description: |
+            Amount in decimal USD, at most two decimal places. Capped by the
+            sandbox per-transaction limit.
+          example: '2.00'
+        merchant:
+          $ref: '#/components/schemas/SandboxCardMerchant'
+    SandboxCardSimulationStatus:
+      type: string
+      description: |
+        Where a card simulation stands. `completed` means the card transaction
+        exists and this response names it. `pending` means the simulation was
+        accepted but the transaction has not been materialized yet; poll
+        `GET /sandbox/simulations/{simulation_id}` for the identifier. `failed`
+        means the simulation was not accepted: a refusal the endpoint could
+        classify comes back as a problem response instead, so `failed` is what
+        an unclassified one looks like. It can still name a card transaction,
+        because the response reports whichever transaction the call resolved.
+        A declined card authorization is not a failed simulation: the
+        simulation succeeded and the decline arrives on the card transaction.
+      enum:
+        - pending
+        - completed
+        - failed
+    SandboxCardSimulationResponse:
+      type: object
+      description: An accepted card simulation.
+      required:
+        - simulation_id
+        - status
+      properties:
+        simulation_id:
+          type: string
+          description: |
+            Simulation identifier. Resolve it with
+            `GET /sandbox/simulations/{simulation_id}`.
+          example: sim_card_01J8ZQ4T7K2M9X
+        card_transaction_id:
+          $ref: '#/components/schemas/KSUID'
+        status:
+          $ref: '#/components/schemas/SandboxCardSimulationStatus'
     AssetDeployment:
       type: object
       required:
@@ -18474,6 +20673,7 @@ components:
         - wallet.transaction.updated
         - wallet.deposit
         - rd_payout_destination.updated
+        - deployment_payout_destination.updated
         - fee_payout_destination.updated
         - fee_payout_destination.deleted
         - scheduled_payment.failed
@@ -18857,9 +21057,21 @@ components:
       properties:
         type:
           type: string
+          description: |
+            What kind of thing must be satisfied. `terms_acceptance` and
+            `document` are steps the customer can take.
+            `capability_enablement` is one only an operator can, so a consumer
+            must not present it as something the customer should do. A
+            capability with a `capability_enablement` requirement is
+            `unavailable`, and lists only its `capability_enablement`
+            requirements.
+
+            The list is not closed: a newer value is carried through verbatim
+            and must be treated as unsatisfied.
           enum:
             - terms_acceptance
             - document
+            - capability_enablement
         key:
           type: string
           description: Opaque join key — a terms id (for terms_acceptance) or a document type (for document). Never a partner identifier.
@@ -19040,11 +21252,26 @@ components:
         decision_reason:
           type: string
           description: |
-            Why the application was decided. Populated for withdrawn/declined
-            applications — for example, the fixed reason recorded when an
-            applicant withdraws from an RFI resubmission email. Omitted when there
-            is no decision or no reason was recorded.
+            Why the application was decided, in words you can show. For a
+            withdrawn application it is the fixed reason recorded when the
+            applicant withdrew from an RFI email. For a declined application it
+            is the same text as `decline_message`. Omitted when there is no
+            decision, or when a declined application has no `decline_reason`.
           example: User withdrew the application from the request-for-information (RFI) email
+        decline_reason:
+          allOf:
+            - $ref: '#/components/schemas/DeclineReason'
+          description: |
+            The category of the decline, when the customer's most recent
+            application was declined and a category was recorded. Omitted
+            otherwise.
+        decline_message:
+          type: string
+          description: |
+            The fixed client-facing sentence for `decline_reason`. Present
+            exactly when `decline_reason` is. Show it as is; it is the only
+            explanation Dakota provides.
+          example: The applicant is located in a country Dakota does not support.
         status:
           allOf:
             - $ref: '#/components/schemas/CustomerStatus'
@@ -19084,7 +21311,10 @@ components:
             `/applications/{id}/resubmit?token=…` URL the applicant receives in
             the RFI email, built from the customer's existing onboarding token
             (no new token is minted on read). Present only when `status` is
-            `info_requested`, and returned alongside `application_url` rather than
+            `info_requested` AND a request with a resubmission scope was sent
+            (the page shows what that request asked for; an application moved
+            into `request_for_information` without one has nothing to resubmit
+            through it, so no link is returned). Returned alongside `application_url` rather than
             in place of it.
           example: https://onboarding.example.com/applications/abc123/resubmit?token=xyz789
         created_at:
@@ -19278,6 +21508,29 @@ components:
         - compliance_review
         - closed
       example: submitted
+    DeclineReason:
+      type: string
+      title: Decline Reason
+      description: |
+        The category of a declined application that may be shared with the
+        client and the applicant. It is the whole of what is shared: the
+        reviewer's notes and the internal decision text are never returned.
+
+        - `unsupported_region` - the applicant is located in a region Dakota does not currently support
+        - `prohibited_country` - a country of incorporation, address or nationality is not supported
+        - `prohibited_business_type` - the industry, legal structure or ownership form is not eligible
+        - `other` - the application does not meet Dakota's onboarding requirements; no further detail is available
+
+        Each value has a fixed `decline_message` you can show as is. Automatic
+        declines set the category from the rule that fired; manual declines
+        carry the category the reviewer selected, or `other` when none was.
+        Declines recorded before this field existed have no category.
+      enum:
+        - unsupported_region
+        - prohibited_country
+        - prohibited_business_type
+        - other
+      example: prohibited_country
     Family:
       type: string
       title: Family
@@ -19528,13 +21781,19 @@ components:
       description: |-
         Unified account update request for onramp/offramp/swap.
 
-        Only destination routing fields are updatable: `crypto_destination_id`,
-        `destination_network_id`, and `destination_asset` for onramp accounts,
-        and `fiat_destination_id` for offramp accounts. `capabilities` and
-        `rail` are immutable after account creation and cannot be updated
-        through this request; create a new account to change them.
-        `developer_fee_bps` is also updatable and applies to future
-        transactions only; existing transactions are unaffected.
+        **Only `developer_fee_bps` can be updated on an existing account.**
+        Routing fields (`crypto_destination_id`, `destination_network_id`,
+        `destination_asset`, and `fiat_destination_id`) are immutable after
+        creation. To change the destination asset, network, or address,
+        create a new account. A new onramp account returns new virtual account
+        (VA) details. Creating a new crypto destination alone does not update
+        an existing account's routing or preserve its VA details for new routing.
+
+        `capabilities` and `rail` cannot be changed through this request;
+        create a new account to change them.
+
+        `developer_fee_bps` applies to future transactions only; existing
+        transactions are unaffected.
       required:
         - account_type
       properties:
@@ -19558,7 +21817,8 @@ components:
           description: |-
             Developer fee (client revenue share) in basis points. When set,
             updates the fee applied to FUTURE transactions on this account;
-            existing transactions are unaffected. Routing fields remain immutable.
+            existing transactions are unaffected. This is the only updatable
+            field; routing fields remain immutable.
           example: 50
     AccountResponse:
       type: object
@@ -19828,7 +22088,7 @@ components:
               example: DEUTDEFFXXX
             intermediary_bic:
               type: string
-              description: BIC of the correspondent bank that carries the payment between Dakota's bank and `bic`. Leave it unset for destinations the sending bank can route on its own, which is nearly all of them. Set it only when a payment is refused for want of an intermediary. A destination cannot be changed after it is created, so a destination that needs one is replaced, not edited.
+              description: BIC of the correspondent bank that carries the payment between Dakota's bank and `bic`. Leave it unset for destinations the sending bank can route on its own, which is nearly all of them. Use the BIC from the recipient's USD wire instructions. The intermediary must meet the requirements of the selected payment route. Some routes require a U.S. bank BIC (US in characters 5-6). A destination cannot be changed after it is created, so a destination that needs one is replaced, not edited.
               example: CHASUS33
             account_holder_name:
               type: string
@@ -20088,7 +22348,7 @@ components:
               example: DEUTDEFFXXX
             intermediary_bic:
               type: string
-              description: BIC of the correspondent bank that carries the payment between Dakota's bank and `bic`. Leave it unset for destinations the sending bank can route on its own, which is nearly all of them. Set it only when a payment is refused for want of an intermediary. A destination cannot be changed after it is created, so a destination that needs one is replaced, not edited.
+              description: BIC of the correspondent bank that carries the payment between Dakota's bank and `bic`. Leave it unset for destinations the sending bank can route on its own, which is nearly all of them. Use the BIC from the recipient's USD wire instructions. The intermediary must meet the requirements of the selected payment route. Some routes require a U.S. bank BIC (US in characters 5-6). A destination cannot be changed after it is created, so a destination that needs one is replaced, not edited.
               example: CHASUS33
             account_holder_name:
               type: string
@@ -20470,6 +22730,58 @@ components:
         address:
           type: string
           example: '0x1234567890123456789012345678901234567890'
+    RDDeclaredWalletRequest:
+      type: object
+      description: A wallet held outside Dakota, to count toward this client's fee.
+      required:
+        - address
+      properties:
+        address:
+          type: string
+          description: An EVM address on Base.
+          example: '0x1234567890123456789012345678901234567890'
+    RDDeclaredWallet:
+      type: object
+      description: A wallet held outside Dakota that counts toward this client's fee.
+      required:
+        - chain
+        - address
+        - counting_from
+      properties:
+        chain:
+          type: string
+          description: CAIP-2 chain id. Always Base, because RD exists only there.
+          example: eip155:8453
+        address:
+          type: string
+          description: Lowercase. EVM addresses are case-insensitive.
+        counting_from:
+          type: string
+          format: date-time
+          description: |
+            The instant this wallet started counting. Normally the first instant
+            of the UTC month it was added in — a wallet added on 20 September
+            earns for all of September.
+
+            It is later than that when the address was already counting for
+            somebody earlier in the same month, either because another client
+            had declared it or because Dakota held it in custody; it then
+            resumes at the instant that ended. Never an earlier month, so a
+            priced month is unaffected.
+
+            Parse this as an instant, not as a date. It is RFC 3339 and may
+            carry a non-UTC offset, so reading the date part directly can give
+            the previous day — and, for a month boundary, the previous month.
+            Convert to UTC before comparing it to a month.
+    RDDeclaredWalletList:
+      type: object
+      required:
+        - wallets
+      properties:
+        wallets:
+          type: array
+          items:
+            $ref: '#/components/schemas/RDDeclaredWallet'
     RDPayoutDestinationRequest:
       type: object
       description: The wallet to send this client's RD marketing fee to.
@@ -20491,6 +22803,41 @@ components:
         chain:
           type: string
           description: CAIP-2 chain id. Always Base, because RD exists only there.
+          example: eip155:8453
+        address:
+          type: string
+        updated_at:
+          type: string
+          format: date-time
+    DeploymentPayoutDestinationRequest:
+      type: object
+      description: The wallet to send one deployment's payouts to.
+      required:
+        - address
+      properties:
+        address:
+          type: string
+          description: An address on the deployment's network.
+          example: '0x1234567890123456789012345678901234567890'
+    DeploymentPayoutDestination:
+      type: object
+      description: A client's registered payout destination for one deployment, an asset on a network.
+      required:
+        - asset
+        - network
+        - chain
+        - address
+        - updated_at
+      properties:
+        asset:
+          type: string
+          description: The asset the payout is made in.
+          example: RD
+        network:
+          $ref: '#/components/schemas/NetworkId'
+        chain:
+          type: string
+          description: CAIP-2 chain id of the deployment's network.
           example: eip155:8453
         address:
           type: string
@@ -22295,7 +24642,7 @@ components:
           example: source_of_wealth.pdf
     IndividualDocumentUploadRequest:
       type: object
-      description: Request to upload a document for an individual (identity or EDD document). For identity documents (passport, drivers_license_front, drivers_license_back, residence_permit_front, residence_permit_back), id_number is required.
+      description: Request to upload a document for an individual (identity or EDD document). For identity documents (passport, drivers_license_front, drivers_license_back, residence_permit_front, residence_permit_back, national_id_front, national_id_back), id_number is required.
       required:
         - type
         - file_type
@@ -22313,7 +24660,7 @@ components:
           example: JVBERi0xLjQKJeLjz9MKMw==
         id_number:
           type: string
-          description: REQUIRED for identity documents (passport, driver's license, residence permit). The ID number on the document (e.g., passport number, driver's license number). Not required for EDD documents like bank statements.
+          description: REQUIRED for identity documents (passport, driver's license, residence permit, national ID). The ID number on the document (e.g., passport number, driver's license number, national ID number). Not required for EDD documents like bank statements.
           example: AB1234567
         country:
           type: string
@@ -22341,7 +24688,7 @@ components:
           $ref: '#/components/schemas/KSUID'
     IndividualDocumentUploadUrlRequest:
       type: object
-      description: Request to generate a presigned URL for uploading an individual document (identity or EDD). For identity documents (passport, drivers_license_front, drivers_license_back, residence_permit_front, residence_permit_back), id_number is required.
+      description: Request to generate a presigned URL for uploading an individual document (identity or EDD). For identity documents (passport, drivers_license_front, drivers_license_back, residence_permit_front, residence_permit_back, national_id_front, national_id_back), id_number is required.
       required:
         - document_type
         - file_type
@@ -22351,7 +24698,7 @@ components:
           $ref: '#/components/schemas/IndividualDocumentType'
         id_number:
           type: string
-          description: REQUIRED for identity documents (passport, driver's license, residence permit). The ID number on the document (e.g., passport number, driver's license number). Not required for EDD documents like bank statements.
+          description: REQUIRED for identity documents (passport, driver's license, residence permit, national ID). The ID number on the document (e.g., passport number, driver's license number, national ID number). Not required for EDD documents like bank statements.
           example: AB1234567
         country:
           type: string
@@ -22395,13 +24742,24 @@ components:
           example: '2025-01-15T18:30:00Z'
     IndividualDocumentType:
       type: string
-      description: Type of document that can be uploaded for individuals (identity documents + EDD documents)
+      description: |
+        Type of document that can be uploaded for individuals (identity documents + EDD documents).
+
+        Identity documents: `passport` (single-sided), `drivers_license_front` + `drivers_license_back`,
+        `residence_permit_front` + `residence_permit_back`, `national_id_front` + `national_id_back`.
+        Two-sided documents need both sides before the identity requirement is met.
+
+        `national_id_front` / `national_id_back` are accepted only for national ID cards issued by
+        Colombia (`country` = `CO`); other issuing countries are rejected. An individual who submits
+        a national ID card is always reviewed by a compliance analyst and is never approved automatically.
       enum:
         - passport
         - drivers_license_front
         - drivers_license_back
         - residence_permit_front
         - residence_permit_back
+        - national_id_front
+        - national_id_back
         - proof_of_address
         - bank_statement
         - utility_bill
@@ -22501,6 +24859,8 @@ components:
             - drivers_license_back
             - residence_permit_front
             - residence_permit_back
+            - national_id_front
+            - national_id_back
             - source_of_wealth
             - bank_statement
             - regulatory_license
@@ -22578,6 +24938,8 @@ components:
               - drivers_license_back
               - residence_permit_front
               - residence_permit_back
+              - national_id_front
+              - national_id_back
               - source_of_wealth
               - bank_statement
               - regulatory_license
@@ -22948,12 +25310,16 @@ components:
         decision_reason:
           type: string
           nullable: true
-          description: Reason for the decision
+          description: |
+            Reason for the decision, as the reviewer wrote it. Compliance-facing:
+            omitted for callers without compliance review permission.
           example: All verification checks passed
         decision_by:
           type: string
           nullable: true
-          description: Email of admin who made the decision
+          description: |
+            Email of admin who made the decision. Compliance-facing: omitted
+            for callers without compliance review permission.
           example: admin@dakota.xyz
         decision_at:
           type: integer
@@ -22961,6 +25327,10 @@ components:
           nullable: true
           description: Unix timestamp when decision was made
           example: 1705315800
+        decline_reason:
+          allOf:
+            - $ref: '#/components/schemas/DeclineReason'
+          description: The client-visible category, when this entity is declined and one was recorded.
         sumsub_verification:
           $ref: '#/components/schemas/SumsubReviewData'
           description: Sumsub verification data for this business entity
@@ -23081,12 +25451,16 @@ components:
         decision_reason:
           type: string
           nullable: true
-          description: Reason for the decision
+          description: |
+            Reason for the decision, as the reviewer wrote it. Compliance-facing:
+            omitted for callers without compliance review permission.
           example: All verification checks passed
         decision_by:
           type: string
           nullable: true
-          description: Email of admin who made the decision
+          description: |
+            Email of admin who made the decision. Compliance-facing: omitted
+            for callers without compliance review permission.
           example: admin@dakota.xyz
         decision_at:
           type: integer
@@ -23094,6 +25468,10 @@ components:
           nullable: true
           description: Unix timestamp when decision was made
           example: 1705315800
+        decline_reason:
+          allOf:
+            - $ref: '#/components/schemas/DeclineReason'
+          description: The client-visible category, when this entity is declined and one was recorded.
         sumsub_verification:
           $ref: '#/components/schemas/SumsubReviewData'
           description: Sumsub verification data for this individual entity
@@ -23713,23 +26091,26 @@ components:
           nullable: true
           description: 'Decision outcome for the application (only present after decision is made). Note: auto_declined is mapped to declined in the API response.'
           example: approved
-        decision_method:
+        decline_reason:
+          allOf:
+            - $ref: '#/components/schemas/DeclineReason'
+          description: |
+            The category of the decline, when `application_decision` is
+            `declined` and a category was recorded. Omitted otherwise. This is
+            the one decision detail the applicant-token read returns.
+        decline_message:
           type: string
-          enum:
-            - manual
-            - auto
-            - override
-          nullable: true
-          description: 'How the decision was reached: ''manual'' for operator-driven decisions, ''auto'' for automated approvals, ''override'' reserved for future escalation. Null if no decision has been made.'
-          example: manual
-        decision_rule_version:
-          type: string
-          nullable: true
-          description: Version identifier of the rule set that produced an automated decision. Null for manual decisions or when no decision has been made.
-          example: v1.2
+          description: |
+            The fixed applicant-facing sentence for `decline_reason`. Present
+            exactly when `decline_reason` is.
+          example: The applicant is located in a country Dakota does not support.
         entities:
           $ref: '#/components/schemas/ApplicationEntities'
-          description: The people/businesses being onboarded
+          description: |
+            The people/businesses being onboarded. The per-entity
+            `decision_reason` and `decision_by` are compliance-facing and are
+            omitted for callers without compliance review permission (the
+            applicant-token read).
         edd:
           $ref: '#/components/schemas/EDDResponse'
           description: Enhanced Due Diligence data (if provided)
@@ -23794,12 +26175,6 @@ components:
         assignee:
           $ref: '#/components/schemas/ComplianceReviewer'
           description: The compliance reviewer this application is assigned to (its owner). Absent when unassigned.
-        assigned_at:
-          type: integer
-          format: int64
-          nullable: true
-          description: Epoch seconds when the application was assigned to its current owner. Absent/null when unassigned.
-          example: 1717423200
         outstanding_partner_attestations:
           type: array
           description: |
@@ -23847,6 +26222,13 @@ components:
             hosted onboarding URL for this application (a real redirect target). Absent
             when no usable link is resolvable.
           example: https://apply.dakota.xyz/applications/2hCjxJzUAW6JVRkZqaF9E0KpM3a/attestations
+        text_published:
+          type: boolean
+          description: |
+            Whether the declared revision is published with text the customer
+            can read. Present on the legal-acceptance context; when false the
+            page shows a labelled notice instead of the text, which happens in
+            sandbox only. Absent elsewhere.
     BusinessListItem:
       type: object
       description: Lightweight business info for list views
@@ -23916,6 +26298,10 @@ components:
             - auto_declined
             - withdrawn
           example: approved
+        decline_reason:
+          allOf:
+            - $ref: '#/components/schemas/DeclineReason'
+          description: The client-visible category, when the application is declined and one was recorded.
         business:
           $ref: '#/components/schemas/BusinessListItem'
           description: Business entity (only present for business applications)
@@ -24128,6 +26514,19 @@ components:
             otherwise ride this response.
           items:
             $ref: '#/components/schemas/OutstandingLegalDocument'
+        outstanding_disclosures:
+          type: array
+          description: |
+            Dakota-published terms a capability requires of this customer, that
+            are still outstanding, and that have no onboarding attestation type
+            - today `cards_tos`. Accept each through SubmitAttestation with the
+            `disclosure_id` and `disclosure_version` given here.
+
+            Only terms that can be collected are listed: the revision is
+            servable, or the deployment is sandbox. Empty when the customer's
+            capabilities cannot be read.
+          items:
+            $ref: '#/components/schemas/PartnerAttestationRequirement'
         attestors:
           type: array
           description: |

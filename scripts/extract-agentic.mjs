@@ -31,6 +31,17 @@ const OVERLAY = resolve(ROOT, 'openapi.agentic.yaml');
 // `tests/client/spec-guards.test.ts` fails if a beta path starts
 // referencing an agentic-only schema this list does not carry.
 const AGENTIC_SCHEMAS = new Set([
+  // x402 (ENG-3613). Owned by the beta x402 paths and referenced nowhere
+  // else, so the overlay has to carry them.
+  'X402Enablement',
+  'X402HoldResponse',
+  'X402MandateRequest',
+  'X402MandateResponse',
+  'X402PayeePolicy',
+  'X402PaymentRequirements',
+  'X402PaymentRequirementsExtra',
+  'X402SignatureRequest',
+  'X402SignatureResponse',
   'PaymentAgentResponse',
   'PaymentAgentSignerGroupRef',
   'AgenticAction',
