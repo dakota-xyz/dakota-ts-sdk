@@ -68,6 +68,14 @@ export enum WebhookEventType {
    * is sent to. The payload is {@link RdPayoutDestinationUpdatedData}.
    */
   RdPayoutDestinationUpdated = 'rd_payout_destination.updated',
+  /**
+   * Emitted when a client sets or replaces the wallet ONE non-RD deployment's
+   * payouts are sent to. The payload is
+   * {@link DeploymentPayoutDestinationUpdatedData}, which names the
+   * deployment — RD keeps its own event, so a subscriber to that one is never
+   * handed another deployment's wallet as RD's.
+   */
+  DeploymentPayoutDestinationUpdated = 'deployment_payout_destination.updated',
 
   // ─────────────────────────────────────────────────────────────────────────────
   // Auto Account events (off-ramp/on-ramp account lifecycle)
@@ -414,6 +422,31 @@ export interface RdPayoutDestinationUpdatedData {
    * treat a logged payload accordingly. Empty string when not attributable.
    */
   updated_by: string;
+}
+
+/**
+ * Event payload for {@link WebhookEventType.DeploymentPayoutDestinationUpdated}
+ * ('deployment_payout_destination.updated').
+ *
+ * Everything {@link RdPayoutDestinationUpdatedData} carries, plus the asset
+ * and network naming the deployment. The split is the point: RD's own
+ * destination keeps `rd_payout_destination.updated`, so a subscriber to that
+ * event never receives another deployment's wallet as RD's.
+ */
+export interface DeploymentPayoutDestinationUpdatedData {
+  /** The EVM address the deployment's payouts are now sent to. */
+  wallet_address: string;
+  /** The address it replaced. Empty string on a first registration. */
+  previous_address: string;
+  /**
+   * The EMAIL of the dashboard user who made the change — personal data, so
+   * treat a logged payload accordingly. Empty string when not attributable.
+   */
+  updated_by: string;
+  /** The deployment's asset, e.g. 'USDC'. */
+  asset: string;
+  /** The deployment's network. */
+  network: string;
 }
 
 /**

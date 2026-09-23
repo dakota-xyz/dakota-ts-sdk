@@ -538,6 +538,114 @@ paths:
                 title: Not Found
                 status: 404
                 detail: agent not found
+  /payment-agents/{payment_agent_id}/x402/holds:
+    x-beta: true
+    get:
+      tags:
+        - Agentic Payments
+      summary: List an agent's x402 authorization holds (BETA)
+      description: |
+        > **Beta** — early access.
+
+        Every issued x402 signature has a hold: `outstanding` while it is settleable, `settled` once the transfer is seen on-chain, `released` if its window closed unused. Outstanding and settled holds both count against the mandate's budget; a released one returns it.
+
+        This is the only record of x402 spend - an x402 authorization moves money without a Dakota-initiated transaction, so it writes no transaction row.
+      operationId: listX402Holds
+      parameters:
+        - name: payment_agent_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: false
+          description: Filter to one hold state.
+          schema:
+            type: string
+            enum:
+              - outstanding
+              - settled
+              - released
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/StartingAfterParam'
+        - $ref: '#/components/parameters/EndingBeforeParam'
+      responses:
+        '200':
+          description: One page of the agent's holds, newest first
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedListResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/X402HoldResponse'
+              example:
+                data:
+                  - id: 2vWxX402Hold000000000000001
+                    nonce: '0x3f1c8a5b2d7e4906c1a3f85b2e6d04971c8a5b3f2d7e4906c1a3f85b2e6d0497'
+                    mandate_id: 2vWxX402Mandate000000000001
+                    agent_id: 2vWxAgent000000000000000000
+                    wallet_id: 2vWxWallet00000000000000000
+                    pay_to: '0x94aE0f8B9F3c2A1d5E6b7C8D9e0F1a2B3c4D5E6F'
+                    value: '100000'
+                    asset: USDC
+                    network: base-sepolia
+                    state: settled
+                    created_at: '2026-09-08T00:00:05Z'
+                    valid_before: '2026-09-08T00:02:05Z'
+                    tx_hash: '0x05dd3a9587f41b2c6e8d0a4f7b3c95e2d18a6f40b7c29e5d3a81f64b0c7e2d95'
+                    settled_at: '2026-09-08T00:00:07Z'
+                meta:
+                  total_count: 1
+                  has_more_after: false
+                  has_more_before: false
+        '400':
+          description: |
+            The agent id, the state filter or a pagination parameter is malformed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: |
+            Missing or invalid credentials
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: |
+            The caller lacks the permission this route requires
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: |
+            Agentic payments are not enabled for the client, x402 is not enabled for the agent (enable it with POST /payment-agents/{payment_agent_id}/x402), or the agent was not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '429':
+          description: |
+            Too many requests; back off and retry
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          description: |
+            Internal error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /payment-agents/{payment_agent_id}/proposals/progress:
     x-beta: true
     get:
@@ -1471,6 +1579,169 @@ paths:
                 title: Not Found
                 status: 404
                 detail: agentic payments are not enabled
+  /payment-agents/{payment_agent_id}/x402:
+    x-beta: true
+    post:
+      tags:
+        - Agentic Payments
+      summary: Enable x402 payments for an agent (BETA)
+      description: |
+        > **Beta** — early access.
+
+        Gives the agent its x402 wallet: a new EVM wallet reserved for paying x402-metered resources. The wallet can sign x402 payments and nothing else — it can never send funds itself — which keeps it acceptable to every x402 facilitator. Fund it by transferring USDC to the returned address. Each agent has exactly one x402 wallet, so x402 signing and mandates never need a wallet id.
+        Idempotent: calling it again returns the same wallet. If a previous call failed part-way, calling it again completes the setup.
+      operationId: enableX402
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: payment_agent_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The agent's x402 wallet
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/X402Enablement'
+              example:
+                payment_agent_id: 2vWxAgent000000000000000000
+                status: active
+                wallet_id: 2vWxWallet00000000000000000
+                address: '0x8982a181fC35d5A8AcA08fD41cA4B4A432ea6E58'
+        '400':
+          description: |
+            The agent id is malformed, or the agent cannot hold an x402 wallet (it is not hosted, or not active)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: |
+            Missing or invalid credentials
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: |
+            The caller lacks the permission this route requires, or the customer is frozen
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: |
+            Agentic payments are not enabled for the client, or the agent was not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: |
+            Another enable call for this agent is in progress; retry shortly
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '429':
+          description: |
+            Too many requests
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          description: |
+            Internal error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '501':
+          description: |
+            The wallet provider does not support this operation
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '503':
+          description: |
+            A dependency (the policy engine or the wallet provider) is unavailable; retry
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+    get:
+      tags:
+        - Agentic Payments
+      summary: Get an agent's x402 wallet (BETA)
+      description: |
+        > **Beta** — early access.
+
+        Returns the agent's x402 wallet and the address to fund it at, or 404 when x402 has not been enabled for the agent.
+      operationId: getX402
+      parameters:
+        - name: payment_agent_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: The agent's x402 wallet
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/X402Enablement'
+              example:
+                payment_agent_id: 2vWxAgent000000000000000000
+                status: active
+                wallet_id: 2vWxWallet00000000000000000
+                address: '0x8982a181fC35d5A8AcA08fD41cA4B4A432ea6E58'
+        '400':
+          description: |
+            The agent id is malformed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: |
+            Missing or invalid credentials
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: |
+            The caller lacks the permission this route requires
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: |
+            Agentic payments are not enabled for the client, x402 is not enabled for the agent (enable it with POST /payment-agents/{payment_agent_id}/x402), or the agent was not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '429':
+          description: |
+            Too many requests; back off and retry
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          description: |
+            Internal error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /payment-agents/{payment_agent_id}/revoke:
     x-beta: true
     post:
@@ -1624,6 +1895,202 @@ paths:
                 title: Rate Limited
                 status: 429
                 detail: proposal rate limit reached for this customer (hour window) — retry later
+  /payment-agents/{payment_agent_id}/x402/mandates:
+    x-beta: true
+    post:
+      tags:
+        - Agentic Payments
+      summary: Create an x402 spend mandate (BETA)
+      description: |
+        > **Beta** — early access.
+
+        Creates the standing allowance an agent pays x402-metered resources under. Unlike a payment mandate this authorizes a BUDGET rather than a payee: x402 payees are discovered at request time from a seller's 402 response, so the controls are a per-call ceiling plus a rolling aggregate across every payee. Amounts are atomic units of the asset (USDC has 6 decimals, so "100000" is $0.10).
+      operationId: createX402Mandate
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: payment_agent_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/X402MandateRequest'
+            example:
+              asset: USDC
+              network: base-sepolia
+              max_per_call: '500000'
+              max_per_window: '2000000'
+              window_seconds: 3600
+              payee_policy:
+                mode: domain_allowlist
+                domains:
+                  - '*.marketpulse.example'
+      responses:
+        '201':
+          description: Mandate created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/X402MandateResponse'
+              example:
+                id: 2vWxX402Mandate000000000001
+                agent_id: 2vWxAgent000000000000000000
+                wallet_id: 2vWxWallet00000000000000000
+                asset: USDC
+                network: base-sepolia
+                max_per_call: '500000'
+                max_per_window: '2000000'
+                window_seconds: 3600
+                payee_policy:
+                  mode: domain_allowlist
+                  domains:
+                    - '*.marketpulse.example'
+                valid_from: '2026-09-08T00:00:00Z'
+                valid_until: '2026-10-08T00:00:00Z'
+                window_committed: '100000'
+                window_calls: 1
+        '400':
+          description: |
+            Malformed agent id or mandate request, an unsupported asset or network, or the agent is not active
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: |
+            Missing or invalid credentials
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: |
+            The caller lacks the permission this route requires
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: |
+            Agentic payments are not enabled for the client, x402 is not enabled for the agent (enable it with POST /payment-agents/{payment_agent_id}/x402), or the agent was not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '429':
+          description: |
+            Too many requests
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          description: |
+            Internal error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+    get:
+      tags:
+        - Agentic Payments
+      summary: List an agent's x402 spend mandates (BETA)
+      description: |
+        > **Beta** — early access.
+
+        Lists the agent's x402 mandates with their committed spend in the current window. Committed spend counts outstanding authorizations as well as settled ones - an issued x402 signature is spendable money whether or not it has reached the chain.
+      operationId: listX402Mandates
+      parameters:
+        - name: payment_agent_id
+          in: path
+          required: true
+          schema:
+            type: string
+        - $ref: '#/components/parameters/LimitParam'
+        - $ref: '#/components/parameters/StartingAfterParam'
+        - $ref: '#/components/parameters/EndingBeforeParam'
+      responses:
+        '200':
+          description: One page of the agent's x402 mandates, newest first
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedListResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/X402MandateResponse'
+              example:
+                data:
+                  - id: 2vWxX402Mandate000000000001
+                    agent_id: 2vWxAgent000000000000000000
+                    wallet_id: 2vWxWallet00000000000000000
+                    asset: USDC
+                    network: base-sepolia
+                    max_per_call: '500000'
+                    max_per_window: '2000000'
+                    window_seconds: 3600
+                    payee_policy:
+                      mode: domain_allowlist
+                      domains:
+                        - '*.marketpulse.example'
+                    valid_from: '2026-09-08T00:00:00Z'
+                    valid_until: '2026-10-08T00:00:00Z'
+                    window_committed: '100000'
+                    window_calls: 1
+                meta:
+                  total_count: 1
+                  has_more_after: false
+                  has_more_before: false
+        '400':
+          description: |
+            The agent id or a pagination parameter is malformed
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: |
+            Missing or invalid credentials
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: |
+            The caller lacks the permission this route requires
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: |
+            Agentic payments are not enabled for the client, x402 is not enabled for the agent (enable it with POST /payment-agents/{payment_agent_id}/x402), or the agent was not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '429':
+          description: |
+            Too many requests; back off and retry
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          description: |
+            Internal error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
   /scheduled-payments/{scheduled_payment_id}/cancel:
     x-beta: true
     post:
@@ -1679,8 +2146,434 @@ paths:
                 title: Not Found
                 status: 404
                 detail: agentic payments are not enabled
+  /payment-agents/{payment_agent_id}/x402/signatures:
+    x-beta: true
+    post:
+      tags:
+        - Agentic Payments
+      summary: Sign an x402 payment authorization (BETA)
+      description: |
+        > **Beta** — early access.
+
+        Returns the `X-PAYMENT` header for a seller's 402 challenge, signed by the agent's Dakota-custodied wallet. The caller never holds a key.
+
+        **Supported asset: USDC only**, on Base (`base` / `eip155:8453`) and Base Sepolia (`base-sepolia` / `eip155:84532`). A seller pricing in any other token, or on any other network, is refused with a 403 naming the supported set; no signature is issued and no budget is held.
+
+        Issuing this signature IS spending money: it is an EIP-3009 `TransferWithAuthorization` that any holder can settle on-chain until `validBefore` passes, with no further approval from us. So both controls run here, before any signature exists: the seller's `payTo` is screened for sanctions and other high-risk activity, and the agent's x402 mandate is evaluated together with a hold recorded against its budget, atomically.
+
+        A refusal is a 403 naming the reason. If the payee cannot be screened the payment is refused with a 503, never signed unscreened; retry it.
+
+        Idempotent per X-Idempotency-Key: a retry with the same key and the same payment returns the SAME authorization (same nonce, same validity window), signed again - never a second one - so at most one can settle. The response is never cached: the signed header is a bearer instrument.
+      operationId: createX402Signature
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+        - name: payment_agent_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/X402SignatureRequest'
+            example:
+              resource_url: https://api.marketpulse.example/v1/reports/copper-spot
+              payment_requirements:
+                scheme: exact
+                network: base-sepolia
+                maxAmountRequired: '100000'
+                resource: https://api.marketpulse.example/v1/reports/copper-spot
+                payTo: '0x94aE0f8B9F3c2A1d5E6b7C8D9e0F1a2B3c4D5E6F'
+                asset: '0x036CbD53842c5426634e7929541eC2318f3dCF7e'
+                maxTimeoutSeconds: 120
+                extra:
+                  name: USDC
+                  version: '2'
+      responses:
+        '200':
+          description: The signed payment authorization
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/X402SignatureResponse'
+              example:
+                payment_header: eyJ4NDAyVmVyc2lvbiI6MSwic2NoZW1lIjoiZXhhY3QiLCJuZXR3b3JrIjoiYmFzZS1zZXBvbGlhIn0
+                payment_header_name: X-PAYMENT
+                signature: '0x9f2b1c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b1c001c'
+                authorization_id: 2vWxX402Hold000000000000001
+                mandate_id: 2vWxX402Mandate000000000001
+                payer: '0x8f2A55949038A9610F50FB23B5883Af3B4ecB3a1'
+                pay_to: '0x94aE0f8B9F3c2A1d5E6b7C8D9e0F1a2B3c4D5E6F'
+                value: '100000'
+                nonce: '0x3f1c8a5b2d7e4906c1a3f85b2e6d04971c8a5b3f2d7e4906c1a3f85b2e6d0497'
+                valid_before: '2026-09-08T00:02:00Z'
+                window_committed: '100000'
+        '400':
+          description: |
+            Malformed agent id or payment requirements, an unsupported scheme, network or x402 version, or the agent is not active
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: |
+            Missing or invalid credentials
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: |
+            The payment was refused - the caller lacks the permission this route requires, the customer is frozen, the seller's address failed screening, or the agent's x402 mandate refused it (over a limit, outside the payee policy, expired, or absent)
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: |
+            Agentic payments are not enabled for the client, x402 is not enabled for the agent (enable it with POST /payment-agents/{payment_agent_id}/x402), or the agent was not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: |
+            The X-Idempotency-Key was already used for a different payment, or the authorization issued under it has expired or was released — retry with a new key. A key whose payment already SETTLED is also refused here, and that one must not be retried: the detail names the transaction, and a new key would pay again.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '429':
+          description: |
+            Too many requests; back off and retry
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          description: |
+            Internal error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '501':
+          description: |
+            The wallet provider does not support this operation
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '503':
+          description: |
+            The seller's address could not be screened. Nothing was signed and no budget was held; retry the payment.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
 components:
   schemas:
+    X402Enablement:
+      type: object
+      required:
+        - payment_agent_id
+        - status
+      properties:
+        payment_agent_id:
+          type: string
+        status:
+          type: string
+          enum:
+            - provisioning
+            - active
+          description: |
+            `active` once the wallet exists. `provisioning` means a previous enable call stopped part-way; calling enable again completes it.
+        wallet_id:
+          type: string
+          description: The x402 wallet. Present once status is `active`.
+        address:
+          type: string
+          description: |
+            The wallet's EVM address. Fund it by sending USDC here on the network the agent pays on.
+    X402HoldResponse:
+      type: object
+      required:
+        - id
+        - nonce
+        - mandate_id
+        - agent_id
+        - wallet_id
+        - pay_to
+        - value
+        - asset
+        - network
+        - state
+        - created_at
+        - valid_before
+      properties:
+        id:
+          type: string
+        nonce:
+          type: string
+        mandate_id:
+          type: string
+        agent_id:
+          type: string
+        wallet_id:
+          type: string
+        pay_to:
+          type: string
+        value:
+          type: string
+        asset:
+          type: string
+        network:
+          type: string
+        state:
+          type: string
+          enum:
+            - outstanding
+            - settled
+            - released
+        created_at:
+          type: string
+          format: date-time
+        valid_before:
+          type: string
+          format: date-time
+        tx_hash:
+          type: string
+        settled_at:
+          type: string
+          format: date-time
+    X402MandateRequest:
+      type: object
+      required:
+        - asset
+        - network
+        - max_per_call
+      properties:
+        asset:
+          type: string
+          description: |
+            Asset symbol. Only `USDC` is supported in this release; any other value is refused with a 400, since such a mandate could never be used.
+        network:
+          type: string
+          description: Network the mandate covers, e.g. base-sepolia. Only Base and Base Sepolia are supported.
+        max_per_call:
+          type: string
+          description: Per-authorization ceiling, in atomic units.
+        max_per_window:
+          type: string
+          description: |
+            Ceiling on total committed spend across ALL payees in one rolling window, in atomic units. Omit for unbounded (discouraged).
+        window_seconds:
+          type: integer
+          description: Rolling aggregate window. Defaults to 24h.
+        max_calls_per_window:
+          type: integer
+          description: Optional cap on authorizations per window. 0 is no cap.
+        valid_for_seconds:
+          type: integer
+          description: Mandate lifetime from now. Defaults to 30 days.
+        payee_policy:
+          $ref: '#/components/schemas/X402PayeePolicy'
+    X402MandateResponse:
+      type: object
+      required:
+        - id
+        - agent_id
+        - wallet_id
+        - asset
+        - network
+        - max_per_call
+        - window_seconds
+        - payee_policy
+        - valid_from
+        - valid_until
+      properties:
+        id:
+          type: string
+        agent_id:
+          type: string
+        wallet_id:
+          type: string
+        asset:
+          type: string
+        network:
+          type: string
+        max_per_call:
+          type: string
+        max_per_window:
+          type: string
+        window_seconds:
+          type: integer
+        max_calls_per_window:
+          type: integer
+        payee_policy:
+          $ref: '#/components/schemas/X402PayeePolicy'
+        valid_from:
+          type: string
+          format: date-time
+        valid_until:
+          type: string
+          format: date-time
+        revoked_at:
+          type: string
+          format: date-time
+        window_committed:
+          type: string
+          description: |
+            Spend already committed in the current window, in atomic units. Counts outstanding holds as well as settled ones.
+        window_calls:
+          type: integer
+          description: Authorizations already issued in the current window.
+    X402PayeePolicy:
+      type: object
+      description: |
+        What an x402 mandate may pay for, beyond its budget. Omit the whole object to leave the budget as the only control.
+        `mode` is required when the object is present, and the list must match it: `address_allowlist` needs `addresses` and reads no domains, `domain_allowlist` needs `domains` and reads no addresses, and `any_screened` enforces neither, so it carries no list. A policy that breaks those rules is refused with a 400 rather than stored as a restriction nothing applies.
+        `any_screened` accepts any payee that passes address screening. `address_allowlist` pins the payee address itself. `domain_allowlist` pins the RESOURCE host the caller names when it asks for a signature - the readable form, since an operator approves "any metered API under this vendor's domain" rather than a hex address. Note that it bounds the resource, not the payee: a seller who prices one resource can be paid for it whatever address it nominates.
+      required:
+        - mode
+      properties:
+        mode:
+          type: string
+          enum:
+            - any_screened
+            - address_allowlist
+            - domain_allowlist
+        addresses:
+          type: array
+          description: Payee addresses. Required for address_allowlist, and refused otherwise.
+          items:
+            type: string
+        domains:
+          type: array
+          description: |
+            Resource host patterns. Required for domain_allowlist, and refused otherwise. An exact host, or a "*.example.com" suffix.
+          items:
+            type: string
+    X402PaymentRequirements:
+      type: object
+      description: |
+        One payment option from a seller's 402 response, forwarded verbatim. Field names are the x402 protocol's own, not Dakota's. Both protocol versions are accepted: v1 terms carry `maxAmountRequired`, v2 terms carry `amount` and a CAIP-2 network.
+      required:
+        - scheme
+        - network
+        - payTo
+        - asset
+      properties:
+        scheme:
+          type: string
+          description: Payment scheme. Only "exact" is supported.
+        network:
+          type: string
+          description: |
+            The seller's network, in either spelling: v1 (`base-sepolia`, `base`) or v2 CAIP-2 (`eip155:84532`, `eip155:8453`).
+        maxAmountRequired:
+          type: string
+          description: Price in atomic units (x402 v1).
+        amount:
+          type: string
+          description: Price in atomic units (x402 v2).
+        resource:
+          type: string
+        description:
+          type: string
+        mimeType:
+          type: string
+        payTo:
+          type: string
+          description: The seller's receiving address.
+        asset:
+          type: string
+          description: |
+            Token contract address. Only USDC's contract on Base or Base Sepolia is payable; any other token is refused with a 403.
+        maxTimeoutSeconds:
+          type: integer
+          description: How long the seller will accept this authorization.
+        extra:
+          $ref: '#/components/schemas/X402PaymentRequirementsExtra'
+    X402PaymentRequirementsExtra:
+      type: object
+      description: |
+        Token identity, which the EIP-712 domain is built from. A wrong name or version yields a signature that recovers to the wrong address.
+      properties:
+        name:
+          type: string
+        version:
+          type: string
+        assetTransferMethod:
+          type: string
+          description: x402 v2's transfer method, e.g. `eip3009`. Echoed back in the v2 payload.
+    X402SignatureRequest:
+      type: object
+      required:
+        - payment_requirements
+      properties:
+        payment_requirements:
+          $ref: '#/components/schemas/X402PaymentRequirements'
+        resource_url:
+          type: string
+          description: |
+            The 402-metered URL being paid for. Required when the mandate restricts payees by domain.
+        x402_version:
+          type: integer
+          enum:
+            - 1
+            - 2
+          description: |
+            The x402 version the seller spoke — `x402Version` in its 402 response. Decides how the signed payment is packaged: v1 as the `X-PAYMENT` header, v2 as `PAYMENT-SIGNATURE`. Defaults to 1.
+    X402SignatureResponse:
+      type: object
+      required:
+        - payment_header
+        - payment_header_name
+        - signature
+        - authorization_id
+        - mandate_id
+        - payer
+        - pay_to
+        - value
+        - nonce
+        - valid_before
+        - window_committed
+      properties:
+        payment_header:
+          type: string
+          description: |
+            The payment header's value — base64 of the payment payload — to send in the header named by `payment_header_name`.
+        payment_header_name:
+          type: string
+          enum:
+            - X-PAYMENT
+            - PAYMENT-SIGNATURE
+          description: |
+            The request header the seller expects the payment in: `X-PAYMENT` for x402 v1, `PAYMENT-SIGNATURE` for v2.
+        signature:
+          type: string
+        authorization_id:
+          type: string
+          description: The hold this authorization is recorded against.
+        mandate_id:
+          type: string
+        payer:
+          type: string
+        pay_to:
+          type: string
+        value:
+          type: string
+        nonce:
+          type: string
+        valid_before:
+          type: string
+          format: date-time
+        window_committed:
+          type: string
+          description: Committed spend in the mandate's window after this authorization.
     PaymentAgentResponse:
       type: object
       properties:

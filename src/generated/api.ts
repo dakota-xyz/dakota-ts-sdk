@@ -534,10 +534,17 @@ export type paths = {
          * Update an account
          * @description Partially update an onramp, offramp, or swap account.
          *
-         *     Only the account's destination routing may be changed. For onramp
-         *     accounts these are `crypto_destination_id`, `destination_network_id`,
-         *     and `destination_asset`; for offramp accounts it is
-         *     `fiat_destination_id`.
+         *     **Only `developer_fee_bps` can be updated on an existing account.**
+         *     The updated fee applies to future transactions only; existing
+         *     transactions are unaffected. Routing is immutable after creation:
+         *     `crypto_destination_id`, `destination_network_id`, `destination_asset`,
+         *     and `fiat_destination_id` cannot be changed.
+         *
+         *     To change the destination asset, network, or address, create a new
+         *     account with the desired routing. For onramp accounts, the new account
+         *     returns new virtual account (VA) details; the existing VA details
+         *     cannot be retained for the new routing. Creating a new crypto
+         *     destination alone does not change routing on an existing account.
          *
          *     An account's `capabilities` and `rail` are fixed when the account is
          *     created and cannot be changed through this endpoint. To use a
@@ -1727,6 +1734,11 @@ export type paths = {
          *     - `proof_of_address_rejected` — emitted when compliance rejects a submitted PoA document.
          *     - `proof_of_address_approved` — emitted when compliance approves a submitted PoA, unfreezing the customer.
          *
+         *     `customer.kyb_status.created` and `customer.kyb_status.updated` events for a declined application
+         *     (`kyb_status` of `rejected` or `auto_declined`) carry the decline category as `reason_code`, one of
+         *     `unsupported_region`, `prohibited_country`, `prohibited_business_type` or `other`. See the
+         *     `DeclineReason` schema. Declines with no recorded category omit it.
+         *
          *     Other `customer.kyb_status.*` events do not include `reason_code`.
          */
         readonly get: operations["listEvents"];
@@ -1843,6 +1855,82 @@ export type paths = {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/sandbox/cards/simulate/transaction": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Simulate a card authorization
+         * @description Presents a card authorization to Dakota as if a merchant had swiped the
+         *     card. The authorization runs the production path: the authorization
+         *     service decides it, the hold lands on the wallet, and the
+         *     `card_transaction.created` webhook fires. Only the trigger is synthetic.
+         *
+         *     A decline is a normal outcome, not an HTTP error. A card with too little
+         *     spendable balance produces a `card_transaction` carrying the real
+         *     decline result, so read the transaction rather than the status code to
+         *     learn whether the authorization was approved.
+         *
+         *     An authorization holds more than its own amount. The hold carries a
+         *     buffer for network adjustments, so a 2 USD authorization needs about
+         *     2.60 USD of spendable balance. Fund the wallet with two faucet calls
+         *     before you simulate a 2 USD purchase.
+         *
+         *     The card must belong to a customer of the authenticated client.
+         *     Available in sandbox mode only.
+         */
+        readonly post: operations["simulateCardTransaction"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/sandbox/cards/simulate/transaction/{card_transaction_id}": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                /** @description Card transaction to advance. */
+                readonly card_transaction_id: components["schemas"]["KSUID"];
+            };
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        /**
+         * Advance a simulated card transaction
+         * @description Moves a simulated card transaction through the rest of its lifecycle.
+         *     Each action produces the same records and webhooks the network would
+         *     produce in production.
+         *
+         *     | Action | Effect | Amount |
+         *     | --- | --- | --- |
+         *     | `clear` | Settles the authorization. | Optional, for a partial or over-capture clearing. |
+         *     | `void` | Releases the authorization without settling it. | Optional, for a partial reversal. |
+         *     | `expire` | Lets the authorization lapse. | Not used. |
+         *     | `update_amount` | Increments or decrements the held amount. | Required. |
+         *     | `return` | Refunds the cardholder. | Required. |
+         *     | `return_reversal` | Reverses a return. | Not used. |
+         *
+         *     A return is a standalone transaction on the same card rather than a
+         *     state of the original authorization, so the response names the **new**
+         *     return transaction. Target that transaction to reverse the return.
+         *
+         *     Available in sandbox mode only.
+         */
+        readonly patch: operations["advanceCardTransaction"];
+        readonly trace?: never;
+    };
     readonly "/sandbox/simulations/{simulation_id}": {
         readonly parameters: {
             readonly query?: never;
@@ -1881,6 +1969,44 @@ export type paths = {
         readonly get: operations["listSandboxScenarios"];
         readonly put?: never;
         readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/sandbox/wallets/{wallet_id}/faucet": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                /** @description Wallet to fund. */
+                readonly wallet_id: components["schemas"]["KSUID"];
+            };
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Fund a sandbox wallet from the testnet faucet
+         * @description Sends testnet RD from Dakota's sandbox float wallet to the wallet on
+         *     Base Sepolia. The transfer is a real on-chain send, so the balance
+         *     arrives through the same deposit ingestion a customer's own deposit
+         *     takes; only the trigger is synthetic.
+         *
+         *     Accepted immediately. Poll `GET /sandbox/simulations/{simulation_id}`
+         *     for the terminal state; the simulation completes once the deposit
+         *     webhook is ingested.
+         *
+         *     The faucet draws on a shared float, so calls are metered per wallet
+         *     per day, per client per day, and against a floor the float must still
+         *     hold after the transfer. Each refusal carries a distinct problem type
+         *     so a client can tell a limit that clears on its own from one that
+         *     needs an operator.
+         *
+         *     Available in sandbox mode only.
+         */
+        readonly post: operations["faucetWallet"];
         readonly delete?: never;
         readonly options?: never;
         readonly head?: never;
@@ -1935,6 +2061,55 @@ export type paths = {
          * @description Creates a Stripe Checkout session for a valid prepaid credit tier for the authenticated self-serve client.
          */
         readonly post: operations["createSelfServeCreditsPurchase"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/rd-marketing-fee/declared-wallets": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * List the wallets you hold outside Dakota
+         * @description Returns the wallets you have declared, and which therefore count toward
+         *     your RD marketing fee.
+         *
+         *     Only wallets that count today are listed. A wallet you have removed is
+         *     not returned, though the months it counted toward keep the figures it
+         *     earned.
+         */
+        readonly get: operations["listRDDeclaredWallets"];
+        readonly put?: never;
+        /**
+         * Declare a wallet you hold outside Dakota
+         * @description Adds a wallet you hold outside Dakota, so its RD balance counts toward
+         *     your marketing fee.
+         *
+         *     The wallet counts from the first instant of the month you add it in, so
+         *     a wallet added on 20 September earns for all of September. It starts
+         *     later than that only when the address already counted for somebody
+         *     earlier in the same month, in which case it resumes where that ended.
+         *
+         *     Days earlier in the current month have usually been calculated and shown
+         *     to you already. Those figures are recalculated overnight to include the
+         *     new wallet, so they go up. A month that has already been priced is never
+         *     affected, so adding a wallet cannot change a figure you have been paid
+         *     against.
+         *
+         *     Adding a wallet registers it. Dakota then reads that wallet's RD history
+         *     on chain before its balance can count, which normally completes within a
+         *     day. Until it does, the wallet contributes nothing, and the days in
+         *     between are recalculated once the history lands. `counting_from` is when
+         *     the wallet became eligible, not when Dakota began seeing its balance.
+         *
+         *     RD exists only on Base, so the chain is not a parameter.
+         */
+        readonly post: operations["addRDDeclaredWallet"];
         readonly delete?: never;
         readonly options?: never;
         readonly head?: never;
@@ -2043,6 +2218,64 @@ export type paths = {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/rd-marketing-fee/payout-destinations/{asset}/{network}": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                /**
+                 * @description The asset the payout is made in: RD, or a branded token your client
+                 *     owns.
+                 * @example RD
+                 */
+                readonly asset: string;
+                /**
+                 * @description The network of the deployment. A deployment's payout is sent on its
+                 *     own network, so this names which deployment the destination is for
+                 *     rather than offering a choice of chain.
+                 * @example base-mainnet
+                 */
+                readonly network: components["schemas"]["NetworkId"];
+            };
+            readonly cookie?: never;
+        };
+        /**
+         * Get your payout destination for one deployment
+         * @description Returns the wallet the payouts for one deployment, an asset on a
+         *     network, are sent to.
+         *
+         *     RD's deployment is RD on base-mainnet, and reading it here returns the
+         *     same destination as `GET /rd-marketing-fee/payout-destination`. A
+         *     branded token is readable only by the client that owns it, and only
+         *     once that client has held a contract rate for the token.
+         *
+         *     A 404 means no wallet is registered for the deployment yet, or no
+         *     payout is made to your client in this asset on this network, which is
+         *     also the answer for a branded token another client owns.
+         */
+        readonly get: operations["getDeploymentPayoutDestination"];
+        /**
+         * Register your payout destination for one deployment
+         * @description Registers, or replaces, the wallet the payouts for one deployment are
+         *     sent to. Each deployment has its own destination, so replacing one
+         *     never moves another, and it is separate from your developer-fee payout
+         *     destination.
+         *
+         *     The chain is the deployment's, so it is not a parameter: the address
+         *     must be valid on the deployment's network. RD's deployment is RD on
+         *     base-mainnet, the same destination `PUT
+         *     /rd-marketing-fee/payout-destination` registers. A branded token's
+         *     destination can be registered only by the client that owns it, once
+         *     that client has held a contract rate for the token.
+         */
+        readonly put: operations["putDeploymentPayoutDestination"];
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/legal/documents/{document_key}": {
         readonly parameters: {
             readonly query?: never;
@@ -2083,6 +2316,30 @@ export type paths = {
          *     Returns the agent together with the wallets it can currently spend from. The wallet_ids are DERIVED at query time from the agent signer's live signer-group membership (recognition over the policy-engine truth mirror), so they reflect the agent's access right now — not just at creation time. Use this to read an agent back and reconcile which wallets it is authorized on. The derived state folds the same recognition in (a non-revoked agent recognized on no wallet is pending).
          */
         readonly get: operations["getPaymentAgent"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/payment-agents/{payment_agent_id}/x402/holds": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * List an agent's x402 authorization holds (BETA)
+         * @description > **Beta** — early access.
+         *
+         *     Every issued x402 signature has a hold: `outstanding` while it is settleable, `settled` once the transfer is seen on-chain, `released` if its window closed unused. Outstanding and settled holds both count against the mandate's budget; a released one returns it.
+         *
+         *     This is the only record of x402 spend - an x402 authorization moves money without a Dakota-initiated transaction, so it writes no transaction row.
+         */
+        readonly get: operations["listX402Holds"];
         readonly put?: never;
         readonly post?: never;
         readonly delete?: never;
@@ -2266,6 +2523,29 @@ export type paths = {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/rd-marketing-fee/declared-wallets/{address}": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        readonly post?: never;
+        /**
+         * Remove a wallet you hold outside Dakota
+         * @description Stops a declared wallet counting toward your marketing fee, from now on.
+         *
+         *     Months that have already counted it keep their figures. Removing a
+         *     wallet never restates a month you have already been shown or paid.
+         */
+        readonly delete: operations["removeRDDeclaredWallet"];
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/legal/documents": {
         readonly parameters: {
             readonly query?: never;
@@ -2376,6 +2656,38 @@ export type paths = {
          *     Schedule card to render the active fee structure.
          */
         readonly get: operations["getSelfServeCreditsPricing"];
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/developer-fees/statement": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Get your developer fee statement
+         * @description Returns what your developer fees came to over a date range: the totals
+         *     earned and paid in the range, the balance owed as of the range end,
+         *     per-month sub-totals, per-asset earnings, and the fee transactions the
+         *     earned figure is made of.
+         *
+         *     The statement is always your own. Nothing in a request names a client.
+         *
+         *     `owed` is cumulative and is not bounded by `from`: a balance you were
+         *     owed before the range still counts. Payouts are initiated by Dakota, so
+         *     an owed balance is what is due rather than what is scheduled.
+         *
+         *     All money figures are decimal strings. The USD totals are USD; a
+         *     per-asset `earned` is in that asset's own units.
+         */
+        readonly get: operations["getMyDeveloperFeeStatement"];
         readonly put?: never;
         readonly post?: never;
         readonly delete?: never;
@@ -2617,6 +2929,35 @@ export type paths = {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/payment-agents/{payment_agent_id}/x402": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * Get an agent's x402 wallet (BETA)
+         * @description > **Beta** — early access.
+         *
+         *     Returns the agent's x402 wallet and the address to fund it at, or 404 when x402 has not been enabled for the agent.
+         */
+        readonly get: operations["getX402"];
+        readonly put?: never;
+        /**
+         * Enable x402 payments for an agent (BETA)
+         * @description > **Beta** — early access.
+         *
+         *     Gives the agent its x402 wallet: a new EVM wallet reserved for paying x402-metered resources. The wallet can sign x402 payments and nothing else — it can never send funds itself — which keeps it acceptable to every x402 facilitator. Fund it by transferring USDC to the returned address. Each agent has exactly one x402 wallet, so x402 signing and mandates never need a wallet id.
+         *     Idempotent: calling it again returns the same wallet. If a previous call failed part-way, calling it again completes the setup.
+         */
+        readonly post: operations["enableX402"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/payment-agents/{payment_agent_id}/revoke": {
         readonly parameters: {
             readonly query?: never;
@@ -2661,6 +3002,34 @@ export type paths = {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/payment-agents/{payment_agent_id}/x402/mandates": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        /**
+         * List an agent's x402 spend mandates (BETA)
+         * @description > **Beta** — early access.
+         *
+         *     Lists the agent's x402 mandates with their committed spend in the current window. Committed spend counts outstanding authorizations as well as settled ones - an issued x402 signature is spendable money whether or not it has reached the chain.
+         */
+        readonly get: operations["listX402Mandates"];
+        readonly put?: never;
+        /**
+         * Create an x402 spend mandate (BETA)
+         * @description > **Beta** — early access.
+         *
+         *     Creates the standing allowance an agent pays x402-metered resources under. Unlike a payment mandate this authorizes a BUDGET rather than a payee: x402 payees are discovered at request time from a seller's 402 response, so the controls are a per-call ceiling plus a rolling aggregate across every payee. Amounts are atomic units of the asset (USDC has 6 decimals, so "100000" is $0.10).
+         */
+        readonly post: operations["createX402Mandate"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
     readonly "/scheduled-payments/{scheduled_payment_id}/cancel": {
         readonly parameters: {
             readonly query?: never;
@@ -2677,6 +3046,36 @@ export type paths = {
          *     Finalizes a single still-scheduled payment as cancelled. No signature is required - schedule rows are bookkeeping, not authorization (they are created by a plain API-key call); the signed grant is the MANDATE, which this does not touch. New payments can be instructed under the same mandate at any time. Executed, failed, and already-cancelled rows are not cancellable; a cancel racing the cron at the exact fire moment loses cleanly (the status guard never overwrites an executed payment).
          */
         readonly post: operations["cancelScheduledPayment"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/payment-agents/{payment_agent_id}/x402/signatures": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Sign an x402 payment authorization (BETA)
+         * @description > **Beta** — early access.
+         *
+         *     Returns the `X-PAYMENT` header for a seller's 402 challenge, signed by the agent's Dakota-custodied wallet. The caller never holds a key.
+         *
+         *     **Supported asset: USDC only**, on Base (`base` / `eip155:8453`) and Base Sepolia (`base-sepolia` / `eip155:84532`). A seller pricing in any other token, or on any other network, is refused with a 403 naming the supported set; no signature is issued and no budget is held.
+         *
+         *     Issuing this signature IS spending money: it is an EIP-3009 `TransferWithAuthorization` that any holder can settle on-chain until `validBefore` passes, with no further approval from us. So both controls run here, before any signature exists: the seller's `payTo` is screened for sanctions and other high-risk activity, and the agent's x402 mandate is evaluated together with a hold recorded against its budget, atomically.
+         *
+         *     A refusal is a 403 naming the reason. If the payee cannot be screened the payment is refused with a 503, never signed unscreened; retry it.
+         *
+         *     Idempotent per X-Idempotency-Key: a retry with the same key and the same payment returns the SAME authorization (same nonce, same validity window), signed again - never a second one - so at most one can settle. The response is never cached: the signed header is a bearer instrument.
+         */
+        readonly post: operations["createX402Signature"];
         readonly delete?: never;
         readonly options?: never;
         readonly head?: never;
@@ -2705,8 +3104,12 @@ export type components = {
              * @description The rate APPLIED to this month, in monthly basis points: the annual
              *     contract rate charged for the days this month actually has
              *     (y_bps_annual x days_in_month / 365), rounded to 2 decimal places —
-             *     the precision it is charged and stored at. A later rate change does
-             *     not rewrite it.
+             *     the precision it is charged and stored at.
+             *
+             *     Once a month has been priced, this is the rate it was priced at and
+             *     a later rate change does not rewrite it. For a month not yet priced,
+             *     including the running month, it is a projection from your current
+             *     rate and moves if that rate changes.
              */
             readonly y_bps_monthly: number;
             /**
@@ -2717,10 +3120,16 @@ export type components = {
              */
             readonly y_bps_annual: number;
             /**
-             * @description What the month will pay this client, as a whole number of RD
-             *     minor units. ABSENT until the month is priced — absent and zero
-             *     are different facts, and zero means the month owes nothing
-             *     payable.
+             * @description What the month currently derives to, as a whole number of RD minor
+             *     units. ABSENT until the month is priced — absent and zero are
+             *     different facts, and zero means the month owes nothing payable.
+             *
+             *     This is a derived figure, not a record of payment. It is
+             *     recalculated if the balance history behind the month changes, which
+             *     can happen after a payment has been made, so it is not necessarily
+             *     the amount that was paid. A month owes zero whenever Dakota's earned
+             *     rate for it did not exceed your contract rate; the figure is never
+             *     negative, and it is rounded down to a whole minor unit.
              */
             readonly owed_minor?: string;
             /** @description The mean of the month's stored daily principals. Absent while the month is incomplete. */
@@ -2763,6 +3172,57 @@ export type components = {
              *     from "not yet known".
              */
             readonly fee_minor?: string;
+        };
+        readonly DeveloperFeeStatementResponse: {
+            readonly totals: components["schemas"]["DeveloperFeeStatementTotals"];
+            readonly months: readonly components["schemas"]["DeveloperFeeStatementMonth"][];
+            readonly assets: readonly components["schemas"]["DeveloperFeeStatementAsset"][];
+            readonly transactions: components["schemas"]["DeveloperFeeStatementTransactions"];
+        };
+        readonly DeveloperFeeStatementTotals: {
+            /** @description USD decimal string, earned in range. */
+            readonly earned: string;
+            /** @description USD decimal string, paid in range. */
+            readonly paid: string;
+            /** @description USD decimal string, owed as-of the range end (cumulative). */
+            readonly owed: string;
+        };
+        readonly DeveloperFeeStatementMonth: {
+            /** @description YYYY-MM (UTC) */
+            readonly month: string;
+            /** @description USD decimal string */
+            readonly earned: string;
+            /** @description USD decimal string */
+            readonly paid: string;
+        };
+        readonly DeveloperFeeStatementAsset: {
+            /** @description CAIP-19 asset id (chain-scoped) or bare fiat symbol. */
+            readonly asset: string;
+            /** @description Resolved display symbol (may be empty). */
+            readonly symbol: string;
+            /** @description Decimal string, asset units — Σ fees earned in range for this asset. */
+            readonly earned: string;
+        };
+        readonly DeveloperFeeStatementTransactions: {
+            readonly items: readonly components["schemas"]["DeveloperFeeStatementTransaction"][];
+            /** Format: int64 */
+            readonly total: number;
+        };
+        readonly DeveloperFeeStatementTransaction: {
+            readonly id: string;
+            /**
+             * Format: int64
+             * @description Unix seconds (completed_at)
+             */
+            readonly date: number;
+            /** @description CAIP-19 asset id or bare fiat symbol of the inbound leg. */
+            readonly asset: string;
+            /** @description Resolved display symbol. */
+            readonly symbol: string;
+            /** @description decimal string, inbound leg-0 amount */
+            readonly volume: string;
+            /** @description decimal string, client_fee_amount */
+            readonly fee: string;
         };
         readonly AgenticActionDownstream: {
             readonly recipient_id?: string;
@@ -2839,6 +3299,149 @@ export type components = {
         readonly PaymentAgentSignerGroupRef: {
             readonly signer_group_id: string;
             readonly name: string;
+        };
+        /**
+         * @description What an x402 mandate may pay for, beyond its budget. Omit the whole object to leave the budget as the only control.
+         *     `mode` is required when the object is present, and the list must match it: `address_allowlist` needs `addresses` and reads no domains, `domain_allowlist` needs `domains` and reads no addresses, and `any_screened` enforces neither, so it carries no list. A policy that breaks those rules is refused with a 400 rather than stored as a restriction nothing applies.
+         *     `any_screened` accepts any payee that passes address screening. `address_allowlist` pins the payee address itself. `domain_allowlist` pins the RESOURCE host the caller names when it asks for a signature - the readable form, since an operator approves "any metered API under this vendor's domain" rather than a hex address. Note that it bounds the resource, not the payee: a seller who prices one resource can be paid for it whatever address it nominates.
+         */
+        readonly X402PayeePolicy: {
+            /** @enum {string} */
+            readonly mode: "any_screened" | "address_allowlist" | "domain_allowlist";
+            /** @description Payee addresses. Required for address_allowlist, and refused otherwise. */
+            readonly addresses?: readonly string[];
+            /** @description Resource host patterns. Required for domain_allowlist, and refused otherwise. An exact host, or a "*.example.com" suffix. */
+            readonly domains?: readonly string[];
+        };
+        readonly X402Enablement: {
+            readonly payment_agent_id: string;
+            /**
+             * @description `active` once the wallet exists. `provisioning` means a previous enable call stopped part-way; calling enable again completes it.
+             * @enum {string}
+             */
+            readonly status: "provisioning" | "active";
+            /** @description The x402 wallet. Present once status is `active`. */
+            readonly wallet_id?: string;
+            /** @description The wallet's EVM address. Fund it by sending USDC here on the network the agent pays on. */
+            readonly address?: string;
+        };
+        readonly X402MandateRequest: {
+            /** @description Asset symbol. Only `USDC` is supported in this release; any other value is refused with a 400, since such a mandate could never be used. */
+            readonly asset: string;
+            /** @description Network the mandate covers, e.g. base-sepolia. Only Base and Base Sepolia are supported. */
+            readonly network: string;
+            /** @description Per-authorization ceiling, in atomic units. */
+            readonly max_per_call: string;
+            /** @description Ceiling on total committed spend across ALL payees in one rolling window, in atomic units. Omit for unbounded (discouraged). */
+            readonly max_per_window?: string;
+            /** @description Rolling aggregate window. Defaults to 24h. */
+            readonly window_seconds?: number;
+            /** @description Optional cap on authorizations per window. 0 is no cap. */
+            readonly max_calls_per_window?: number;
+            /** @description Mandate lifetime from now. Defaults to 30 days. */
+            readonly valid_for_seconds?: number;
+            readonly payee_policy?: components["schemas"]["X402PayeePolicy"];
+        };
+        readonly X402MandateResponse: {
+            readonly id: string;
+            readonly agent_id: string;
+            readonly wallet_id: string;
+            readonly asset: string;
+            readonly network: string;
+            readonly max_per_call: string;
+            readonly max_per_window?: string;
+            readonly window_seconds: number;
+            readonly max_calls_per_window?: number;
+            readonly payee_policy: components["schemas"]["X402PayeePolicy"];
+            /** Format: date-time */
+            readonly valid_from: string;
+            /** Format: date-time */
+            readonly valid_until: string;
+            /** Format: date-time */
+            readonly revoked_at?: string;
+            /** @description Spend already committed in the current window, in atomic units. Counts outstanding holds as well as settled ones. */
+            readonly window_committed?: string;
+            /** @description Authorizations already issued in the current window. */
+            readonly window_calls?: number;
+        };
+        /** @description One payment option from a seller's 402 response, forwarded verbatim. Field names are the x402 protocol's own, not Dakota's. Both protocol versions are accepted: v1 terms carry `maxAmountRequired`, v2 terms carry `amount` and a CAIP-2 network. */
+        readonly X402PaymentRequirements: {
+            /** @description Payment scheme. Only "exact" is supported. */
+            readonly scheme: string;
+            /** @description The seller's network, in either spelling: v1 (`base-sepolia`, `base`) or v2 CAIP-2 (`eip155:84532`, `eip155:8453`). */
+            readonly network: string;
+            /** @description Price in atomic units (x402 v1). */
+            readonly maxAmountRequired?: string;
+            /** @description Price in atomic units (x402 v2). */
+            readonly amount?: string;
+            readonly resource?: string;
+            readonly description?: string;
+            readonly mimeType?: string;
+            /** @description The seller's receiving address. */
+            readonly payTo: string;
+            /** @description Token contract address. Only USDC's contract on Base or Base Sepolia is payable; any other token is refused with a 403. */
+            readonly asset: string;
+            /** @description How long the seller will accept this authorization. */
+            readonly maxTimeoutSeconds?: number;
+            readonly extra?: components["schemas"]["X402PaymentRequirementsExtra"];
+        };
+        /** @description Token identity, which the EIP-712 domain is built from. A wrong name or version yields a signature that recovers to the wrong address. */
+        readonly X402PaymentRequirementsExtra: {
+            readonly name?: string;
+            readonly version?: string;
+            /** @description x402 v2's transfer method, e.g. `eip3009`. Echoed back in the v2 payload. */
+            readonly assetTransferMethod?: string;
+        };
+        readonly X402SignatureRequest: {
+            readonly payment_requirements: components["schemas"]["X402PaymentRequirements"];
+            /** @description The 402-metered URL being paid for. Required when the mandate restricts payees by domain. */
+            readonly resource_url?: string;
+            /**
+             * @description The x402 version the seller spoke — `x402Version` in its 402 response. Decides how the signed payment is packaged: v1 as the `X-PAYMENT` header, v2 as `PAYMENT-SIGNATURE`. Defaults to 1.
+             * @enum {integer}
+             */
+            readonly x402_version?: 1 | 2;
+        };
+        readonly X402SignatureResponse: {
+            /** @description The payment header's value — base64 of the payment payload — to send in the header named by `payment_header_name`. */
+            readonly payment_header: string;
+            /**
+             * @description The request header the seller expects the payment in: `X-PAYMENT` for x402 v1, `PAYMENT-SIGNATURE` for v2.
+             * @enum {string}
+             */
+            readonly payment_header_name: "X-PAYMENT" | "PAYMENT-SIGNATURE";
+            readonly signature: string;
+            /** @description The hold this authorization is recorded against. */
+            readonly authorization_id: string;
+            readonly mandate_id: string;
+            readonly payer: string;
+            readonly pay_to: string;
+            readonly value: string;
+            readonly nonce: string;
+            /** Format: date-time */
+            readonly valid_before: string;
+            /** @description Committed spend in the mandate's window after this authorization. */
+            readonly window_committed: string;
+        };
+        readonly X402HoldResponse: {
+            readonly id: string;
+            readonly nonce: string;
+            readonly mandate_id: string;
+            readonly agent_id: string;
+            readonly wallet_id: string;
+            readonly pay_to: string;
+            readonly value: string;
+            readonly asset: string;
+            readonly network: string;
+            /** @enum {string} */
+            readonly state: "outstanding" | "settled" | "released";
+            /** Format: date-time */
+            readonly created_at: string;
+            /** Format: date-time */
+            readonly valid_before: string;
+            readonly tx_hash?: string;
+            /** Format: date-time */
+            readonly settled_at?: string;
         };
         /** @description A self-contained series of actions. Cross-action links are <entity>_id fields - empty binds to the artifact created in this proposal, a real id reuses an existing one. Every proposal must instruct a payment or draft a mandate - a mandate-only proposal is a standing authorization (sign now, schedule under it later by mandate_id with no new signature). */
         readonly AgenticProposal: {
@@ -3547,13 +4150,26 @@ export type components = {
         };
         readonly SandboxScenario: {
             /**
-             * @description Scenario identifier passed as `scenario` in simulate/inbound requests.
+             * @description Scenario identifier. A requestable scenario is named as `scenario`
+             *     on a simulate/inbound request; one that is not is the value a
+             *     simulation of this kind reports back.
              * @example success_immediate
              */
             readonly name: string;
             /** @description Human-readable explanation of what this scenario simulates. */
             readonly description: string;
-            /** @description Transaction types (`type` field) that support this scenario. */
+            /**
+             * @description Whether `POST /sandbox/simulate/inbound` accepts this scenario by
+             *     name. A scenario that is not requestable describes a simulation the
+             *     sandbox produces another way — the wallet faucet has its own
+             *     endpoint — and carries an empty `valid_for`, because no request
+             *     accepts it.
+             */
+            readonly requestable?: boolean;
+            /**
+             * @description Transaction types (`type` field) this scenario may be requested
+             *     with. Empty when `requestable` is false.
+             */
             readonly valid_for: readonly string[];
             /** @description Whether this scenario creates a paused simulation that requires POST /{id}/advance to complete. */
             readonly stateful: boolean;
@@ -3652,7 +4268,17 @@ export type components = {
             readonly organization_id: string;
             /** @description Platform account ID (for fiat simulations) */
             readonly account_id?: string;
-            /** @description Platform wallet ID (for crypto simulations) */
+            /**
+             * @description The wallet this simulation names, for the simulations that name one
+             *     (crypto deposits and the wallet faucet).
+             *
+             *     It carries the identifier the simulation was created with, resolved
+             *     to a platform wallet ID where one can be established. A faucet
+             *     simulation reports the platform wallet ID. A crypto deposit reports
+             *     the identifier its request supplied — the on-chain address sent as
+             *     `wallet_address`, or a platform wallet ID when the deprecated
+             *     `wallet_id` field was used.
+             */
             readonly wallet_id?: string;
             /** @description Amount as decimal string (e.g. "100.50") */
             readonly amount: string;
@@ -3678,6 +4304,166 @@ export type components = {
             readonly callbacks?: readonly components["schemas"]["SimulationCallbackRecord"][];
             /** @description Valid advance actions when awaiting_advance is true (e.g. ["release", "reject"]) */
             readonly advance_actions_available?: readonly string[];
+            /**
+             * @description Identifier of the operational transfer that moved the funds, for
+             *     simulations that move value on-chain (the wallet faucet). Absent
+             *     for every other simulation.
+             */
+            readonly operational_transfer_id?: string;
+            /**
+             * @description Identifier of the card transaction this simulation produced, for
+             *     card simulations. Absent for every other simulation.
+             */
+            readonly card_transaction_id?: string;
+        };
+        /** @description A request to fund a sandbox wallet from the testnet float. */
+        readonly SandboxFaucetRequest: {
+            /**
+             * @description Asset to fund. Only `RD` is served today; the field exists so a
+             *     second asset can be added once a float exists for it.
+             * @default RD
+             * @example RD
+             * @enum {string}
+             */
+            readonly asset: "RD";
+            /**
+             * @description Amount in decimal token units. Capped by the sandbox
+             *     per-transaction limit.
+             * @example 2.00
+             */
+            readonly amount: string;
+        };
+        /** @description An accepted faucet transfer. */
+        readonly SandboxFaucetResponse: {
+            /**
+             * @description Simulation identifier. Resolve it with
+             *     `GET /sandbox/simulations/{simulation_id}`.
+             */
+            readonly simulation_id: string;
+            readonly wallet_id: components["schemas"]["KSUID"];
+            /**
+             * @description Asset that was sent.
+             * @example RD
+             */
+            readonly asset: string;
+            /**
+             * @description Amount that was sent, in decimal token units.
+             * @example 2.00
+             */
+            readonly amount: string;
+            /**
+             * @description Reserved for the on-chain transaction hash. The faucet answers
+             *     before the transfer has one, so the accepted response does not
+             *     carry it. Do not depend on this field; poll
+             *     `GET /sandbox/simulations/{simulation_id}` for the outcome.
+             */
+            readonly tx_hash?: string;
+            readonly status: components["schemas"]["SimulationState"];
+        };
+        /** @description The merchant presenting a simulated card transaction. */
+        readonly SandboxCardMerchant: {
+            /**
+             * @description Merchant name as it appears on the transaction.
+             * @example COFFEE ROASTERS
+             */
+            readonly descriptor: string;
+            /**
+             * @description Merchant category code, four digits.
+             * @example 5814
+             */
+            readonly mcc?: string;
+            /** @description Card acceptor identifier assigned by the acquirer. */
+            readonly acceptor_id?: string;
+            /**
+             * @description Merchant city.
+             * @example BROOKLYN
+             */
+            readonly city?: string;
+            /**
+             * @description Merchant state or region.
+             * @example NY
+             */
+            readonly state?: string;
+            /**
+             * @description ISO 3166-1 alpha-3 country code.
+             * @example USA
+             */
+            readonly country?: string;
+        };
+        /** @description A request to present a simulated authorization on a card. */
+        readonly SandboxCardTransactionRequest: {
+            readonly card_id: components["schemas"]["KSUID"];
+            /**
+             * @description Amount in decimal USD, at most two decimal places. Capped by the
+             *     sandbox per-transaction limit.
+             *
+             *     Required for every `type` except `balance_inquiry`, which moves no
+             *     funds and so takes no amount: omit it, or send `"0"`. A
+             *     `balance_inquiry` naming a non-zero amount is refused.
+             * @example 2.00
+             */
+            readonly amount?: string;
+            readonly merchant?: components["schemas"]["SandboxCardMerchant"];
+            /**
+             * @description Which network message the simulation opens. `authorization` is a
+             *     standard purchase; `financial_authorization` clears immediately;
+             *     `balance_inquiry` checks the spendable balance and moves no funds,
+             *     so it is the one type that takes no `amount`.
+             * @default authorization
+             * @example authorization
+             * @enum {string}
+             */
+            readonly type: "authorization" | "credit_authorization" | "financial_authorization" | "balance_inquiry";
+            /**
+             * @description Whether the merchant accepts a partial approval. A merchant that
+             *     does gets an approval for the available balance instead of a
+             *     decline.
+             */
+            readonly partial_approval_capable?: boolean;
+        };
+        /** @description An action that advances a simulated card transaction. */
+        readonly SandboxCardTransactionAction: {
+            /**
+             * @description How to advance the transaction. `update_amount` and `return`
+             *     require an amount; `clear` and `void` take one only for a partial
+             *     amount; `expire` and `return_reversal` take none, and an amount
+             *     supplied alongside either is refused.
+             * @example clear
+             * @enum {string}
+             */
+            readonly action: "clear" | "void" | "expire" | "update_amount" | "return" | "return_reversal";
+            /**
+             * @description Amount in decimal USD, at most two decimal places. Capped by the
+             *     sandbox per-transaction limit.
+             * @example 2.00
+             */
+            readonly amount?: string;
+            readonly merchant?: components["schemas"]["SandboxCardMerchant"];
+        };
+        /**
+         * @description Where a card simulation stands. `completed` means the card transaction
+         *     exists and this response names it. `pending` means the simulation was
+         *     accepted but the transaction has not been materialized yet; poll
+         *     `GET /sandbox/simulations/{simulation_id}` for the identifier. `failed`
+         *     means the simulation was not accepted: a refusal the endpoint could
+         *     classify comes back as a problem response instead, so `failed` is what
+         *     an unclassified one looks like. It can still name a card transaction,
+         *     because the response reports whichever transaction the call resolved.
+         *     A declined card authorization is not a failed simulation: the
+         *     simulation succeeded and the decline arrives on the card transaction.
+         * @enum {string}
+         */
+        readonly SandboxCardSimulationStatus: "pending" | "completed" | "failed";
+        /** @description An accepted card simulation. */
+        readonly SandboxCardSimulationResponse: {
+            /**
+             * @description Simulation identifier. Resolve it with
+             *     `GET /sandbox/simulations/{simulation_id}`.
+             * @example sim_card_01J8ZQ4T7K2M9X
+             */
+            readonly simulation_id: string;
+            readonly card_transaction_id?: components["schemas"]["KSUID"];
+            readonly status: components["schemas"]["SandboxCardSimulationStatus"];
         };
         readonly AssetDeployment: {
             /**
@@ -4269,7 +5055,7 @@ export type components = {
          * @example transaction.auto.updated
          * @enum {string}
          */
-        readonly EventType: "user.created" | "user.updated" | "user.deleted" | "api_key.created" | "api_key.deleted" | "customer.created" | "customer.updated" | "customer.kyb_link.created" | "customer.kyb_link.updated" | "customer.kyb_status.created" | "customer.kyb_status.updated" | "customer.kyb_application.submitted" | "customer.capability_status.updated" | "customer.rfi.requested" | "customer.rfi.responded" | "customer.application.withdrawn" | "auto_account.created" | "auto_account.updated" | "auto_account.deleted" | "transaction.auto.created" | "transaction.auto.updated" | "transaction.one_off.created" | "transaction.one_off.updated" | "recipient.created" | "recipient.updated" | "recipient.deleted" | "destination.created" | "destination.deleted" | "target.created" | "target.updated" | "target.deleted" | "exception.created" | "exception.cleared" | "wallet.created" | "wallet.updated" | "wallet.signer_group.created" | "wallet.signer_group.updated" | "wallet.policy.created" | "wallet.policy.updated" | "wallet.transaction.created" | "wallet.transaction.updated" | "wallet.deposit" | "rd_payout_destination.updated" | "fee_payout_destination.updated" | "fee_payout_destination.deleted" | "scheduled_payment.failed";
+        readonly EventType: "user.created" | "user.updated" | "user.deleted" | "api_key.created" | "api_key.deleted" | "customer.created" | "customer.updated" | "customer.kyb_link.created" | "customer.kyb_link.updated" | "customer.kyb_status.created" | "customer.kyb_status.updated" | "customer.kyb_application.submitted" | "customer.capability_status.updated" | "customer.rfi.requested" | "customer.rfi.responded" | "customer.application.withdrawn" | "auto_account.created" | "auto_account.updated" | "auto_account.deleted" | "transaction.auto.created" | "transaction.auto.updated" | "transaction.one_off.created" | "transaction.one_off.updated" | "recipient.created" | "recipient.updated" | "recipient.deleted" | "destination.created" | "destination.deleted" | "target.created" | "target.updated" | "target.deleted" | "exception.created" | "exception.cleared" | "wallet.created" | "wallet.updated" | "wallet.signer_group.created" | "wallet.signer_group.updated" | "wallet.policy.created" | "wallet.policy.updated" | "wallet.transaction.created" | "wallet.transaction.updated" | "wallet.deposit" | "rd_payout_destination.updated" | "deployment_payout_destination.updated" | "fee_payout_destination.updated" | "fee_payout_destination.deleted" | "scheduled_payment.failed";
         /** @description Request metadata for the original operation that emitted the event, when available. */
         readonly EventRequest: {
             /**
@@ -4543,8 +5329,20 @@ export type components = {
         };
         /** @description A single outstanding requirement, keyed by an opaque join key (terms id or document type) — never a partner. */
         readonly CapabilityRequirement: {
-            /** @enum {string} */
-            readonly type: "terms_acceptance" | "document";
+            /**
+             * @description What kind of thing must be satisfied. `terms_acceptance` and
+             *     `document` are steps the customer can take.
+             *     `capability_enablement` is one only an operator can, so a consumer
+             *     must not present it as something the customer should do. A
+             *     capability with a `capability_enablement` requirement is
+             *     `unavailable`, and lists only its `capability_enablement`
+             *     requirements.
+             *
+             *     The list is not closed: a newer value is carried through verbatim
+             *     and must be treated as unsatisfied.
+             * @enum {string}
+             */
+            readonly type: "terms_acceptance" | "document" | "capability_enablement";
             /**
              * @description Opaque join key — a terms id (for terms_acceptance) or a document type (for document). Never a partner identifier.
              * @example partner_disclosures
@@ -4689,13 +5487,27 @@ export type components = {
              */
             readonly decision?: "approved" | "declined" | "auto_declined" | "withdrawn";
             /**
-             * @description Why the application was decided. Populated for withdrawn/declined
-             *     applications — for example, the fixed reason recorded when an
-             *     applicant withdraws from an RFI resubmission email. Omitted when there
-             *     is no decision or no reason was recorded.
+             * @description Why the application was decided, in words you can show. For a
+             *     withdrawn application it is the fixed reason recorded when the
+             *     applicant withdrew from an RFI email. For a declined application it
+             *     is the same text as `decline_message`. Omitted when there is no
+             *     decision, or when a declined application has no `decline_reason`.
              * @example User withdrew the application from the request-for-information (RFI) email
              */
             readonly decision_reason?: string;
+            /**
+             * @description The category of the decline, when the customer's most recent
+             *     application was declined and a category was recorded. Omitted
+             *     otherwise.
+             */
+            readonly decline_reason?: components["schemas"]["DeclineReason"];
+            /**
+             * @description The fixed client-facing sentence for `decline_reason`. Present
+             *     exactly when `decline_reason` is. Show it as is; it is the only
+             *     explanation Dakota provides.
+             * @example The applicant is located in a country Dakota does not support.
+             */
+            readonly decline_message?: string;
             /**
              * @description The single client-facing status for this customer, derived
              *     server-side. It collapses three signals into one badge so a client
@@ -4732,7 +5544,10 @@ export type components = {
              *     `/applications/{id}/resubmit?token=…` URL the applicant receives in
              *     the RFI email, built from the customer's existing onboarding token
              *     (no new token is minted on read). Present only when `status` is
-             *     `info_requested`, and returned alongside `application_url` rather than
+             *     `info_requested` AND a request with a resubmission scope was sent
+             *     (the page shows what that request asked for; an application moved
+             *     into `request_for_information` without one has nothing to resubmit
+             *     through it, so no link is returned). Returned alongside `application_url` rather than
              *     in place of it.
              * @example https://onboarding.example.com/applications/abc123/resubmit?token=xyz789
              */
@@ -4887,6 +5702,25 @@ export type components = {
          * @enum {string}
          */
         readonly ApplicationStatus: "pending" | "submitted" | "under_review" | "request_for_information" | "admin_revision" | "approved" | "declined" | "completed" | "compliance_review" | "closed";
+        /**
+         * Decline Reason
+         * @description The category of a declined application that may be shared with the
+         *     client and the applicant. It is the whole of what is shared: the
+         *     reviewer's notes and the internal decision text are never returned.
+         *
+         *     - `unsupported_region` - the applicant is located in a region Dakota does not currently support
+         *     - `prohibited_country` - a country of incorporation, address or nationality is not supported
+         *     - `prohibited_business_type` - the industry, legal structure or ownership form is not eligible
+         *     - `other` - the application does not meet Dakota's onboarding requirements; no further detail is available
+         *
+         *     Each value has a fixed `decline_message` you can show as is. Automatic
+         *     declines set the category from the rule that fired; manual declines
+         *     carry the category the reviewer selected, or `other` when none was.
+         *     Declines recorded before this field existed have no category.
+         * @example prohibited_country
+         * @enum {string}
+         */
+        readonly DeclineReason: "unsupported_region" | "prohibited_country" | "prohibited_business_type" | "other";
         /**
          * Family
          * @description Blockchain family for the crypto account.
@@ -5094,13 +5928,19 @@ export type components = {
          * Account Update Request
          * @description Unified account update request for onramp/offramp/swap.
          *
-         *     Only destination routing fields are updatable: `crypto_destination_id`,
-         *     `destination_network_id`, and `destination_asset` for onramp accounts,
-         *     and `fiat_destination_id` for offramp accounts. `capabilities` and
-         *     `rail` are immutable after account creation and cannot be updated
-         *     through this request; create a new account to change them.
-         *     `developer_fee_bps` is also updatable and applies to future
-         *     transactions only; existing transactions are unaffected.
+         *     **Only `developer_fee_bps` can be updated on an existing account.**
+         *     Routing fields (`crypto_destination_id`, `destination_network_id`,
+         *     `destination_asset`, and `fiat_destination_id`) are immutable after
+         *     creation. To change the destination asset, network, or address,
+         *     create a new account. A new onramp account returns new virtual account
+         *     (VA) details. Creating a new crypto destination alone does not update
+         *     an existing account's routing or preserve its VA details for new routing.
+         *
+         *     `capabilities` and `rail` cannot be changed through this request;
+         *     create a new account to change them.
+         *
+         *     `developer_fee_bps` applies to future transactions only; existing
+         *     transactions are unaffected.
          */
         readonly AccountUpdateRequest: {
             readonly account_type: components["schemas"]["AccountType"];
@@ -5116,7 +5956,8 @@ export type components = {
              * Format: int32
              * @description Developer fee (client revenue share) in basis points. When set,
              *     updates the fee applied to FUTURE transactions on this account;
-             *     existing transactions are unaffected. Routing fields remain immutable.
+             *     existing transactions are unaffected. This is the only updatable
+             *     field; routing fields remain immutable.
              * @example 50
              */
             readonly developer_fee_bps?: number;
@@ -5346,7 +6187,7 @@ export type components = {
              */
             readonly bic?: string;
             /**
-             * @description BIC of the correspondent bank that carries the payment between Dakota's bank and `bic`. Leave it unset for destinations the sending bank can route on its own, which is nearly all of them. Set it only when a payment is refused for want of an intermediary. A destination cannot be changed after it is created, so a destination that needs one is replaced, not edited.
+             * @description BIC of the correspondent bank that carries the payment between Dakota's bank and `bic`. Leave it unset for destinations the sending bank can route on its own, which is nearly all of them. Use the BIC from the recipient's USD wire instructions. The intermediary must meet the requirements of the selected payment route. Some routes require a U.S. bank BIC (US in characters 5-6). A destination cannot be changed after it is created, so a destination that needs one is replaced, not edited.
              * @example CHASUS33
              */
             readonly intermediary_bic?: string;
@@ -5575,7 +6416,7 @@ export type components = {
              */
             readonly bic?: string;
             /**
-             * @description BIC of the correspondent bank that carries the payment between Dakota's bank and `bic`. Leave it unset for destinations the sending bank can route on its own, which is nearly all of them. Set it only when a payment is refused for want of an intermediary. A destination cannot be changed after it is created, so a destination that needs one is replaced, not edited.
+             * @description BIC of the correspondent bank that carries the payment between Dakota's bank and `bic`. Leave it unset for destinations the sending bank can route on its own, which is nearly all of them. Use the BIC from the recipient's USD wire instructions. The intermediary must meet the requirements of the selected payment route. Some routes require a U.S. bank BIC (US in characters 5-6). A destination cannot be changed after it is created, so a destination that needs one is replaced, not edited.
              * @example CHASUS33
              */
             readonly intermediary_bic?: string;
@@ -5833,6 +6674,45 @@ export type components = {
             /** @example 0x1234567890123456789012345678901234567890 */
             readonly address: string;
         };
+        /** @description A wallet held outside Dakota, to count toward this client's fee. */
+        readonly RDDeclaredWalletRequest: {
+            /**
+             * @description An EVM address on Base.
+             * @example 0x1234567890123456789012345678901234567890
+             */
+            readonly address: string;
+        };
+        /** @description A wallet held outside Dakota that counts toward this client's fee. */
+        readonly RDDeclaredWallet: {
+            /**
+             * @description CAIP-2 chain id. Always Base, because RD exists only there.
+             * @example eip155:8453
+             */
+            readonly chain: string;
+            /** @description Lowercase. EVM addresses are case-insensitive. */
+            readonly address: string;
+            /**
+             * Format: date-time
+             * @description The instant this wallet started counting. Normally the first instant
+             *     of the UTC month it was added in — a wallet added on 20 September
+             *     earns for all of September.
+             *
+             *     It is later than that when the address was already counting for
+             *     somebody earlier in the same month, either because another client
+             *     had declared it or because Dakota held it in custody; it then
+             *     resumes at the instant that ended. Never an earlier month, so a
+             *     priced month is unaffected.
+             *
+             *     Parse this as an instant, not as a date. It is RFC 3339 and may
+             *     carry a non-UTC offset, so reading the date part directly can give
+             *     the previous day — and, for a month boundary, the previous month.
+             *     Convert to UTC before comparing it to a month.
+             */
+            readonly counting_from: string;
+        };
+        readonly RDDeclaredWalletList: {
+            readonly wallets: readonly components["schemas"]["RDDeclaredWallet"][];
+        };
         /** @description The wallet to send this client's RD marketing fee to. */
         readonly RDPayoutDestinationRequest: {
             /**
@@ -5845,6 +6725,31 @@ export type components = {
         readonly RDPayoutDestination: {
             /**
              * @description CAIP-2 chain id. Always Base, because RD exists only there.
+             * @example eip155:8453
+             */
+            readonly chain: string;
+            readonly address: string;
+            /** Format: date-time */
+            readonly updated_at: string;
+        };
+        /** @description The wallet to send one deployment's payouts to. */
+        readonly DeploymentPayoutDestinationRequest: {
+            /**
+             * @description An address on the deployment's network.
+             * @example 0x1234567890123456789012345678901234567890
+             */
+            readonly address: string;
+        };
+        /** @description A client's registered payout destination for one deployment, an asset on a network. */
+        readonly DeploymentPayoutDestination: {
+            /**
+             * @description The asset the payout is made in.
+             * @example RD
+             */
+            readonly asset: string;
+            readonly network: components["schemas"]["NetworkId"];
+            /**
+             * @description CAIP-2 chain id of the deployment's network.
              * @example eip155:8453
              */
             readonly chain: string;
@@ -7171,7 +8076,7 @@ export type components = {
              */
             readonly filename?: string;
         };
-        /** @description Request to upload a document for an individual (identity or EDD document). For identity documents (passport, drivers_license_front, drivers_license_back, residence_permit_front, residence_permit_back), id_number is required. */
+        /** @description Request to upload a document for an individual (identity or EDD document). For identity documents (passport, drivers_license_front, drivers_license_back, residence_permit_front, residence_permit_back, national_id_front, national_id_back), id_number is required. */
         readonly IndividualDocumentUploadRequest: {
             readonly type: components["schemas"]["IndividualDocumentType"];
             readonly file_type: components["schemas"]["FileType"];
@@ -7182,7 +8087,7 @@ export type components = {
              */
             readonly file_content: string;
             /**
-             * @description REQUIRED for identity documents (passport, driver's license, residence permit). The ID number on the document (e.g., passport number, driver's license number). Not required for EDD documents like bank statements.
+             * @description REQUIRED for identity documents (passport, driver's license, residence permit, national ID). The ID number on the document (e.g., passport number, driver's license number, national ID number). Not required for EDD documents like bank statements.
              * @example AB1234567
              */
             readonly id_number?: string;
@@ -7207,11 +8112,11 @@ export type components = {
         readonly DocumentUploadResponse: {
             readonly document_id: components["schemas"]["KSUID"];
         };
-        /** @description Request to generate a presigned URL for uploading an individual document (identity or EDD). For identity documents (passport, drivers_license_front, drivers_license_back, residence_permit_front, residence_permit_back), id_number is required. */
+        /** @description Request to generate a presigned URL for uploading an individual document (identity or EDD). For identity documents (passport, drivers_license_front, drivers_license_back, residence_permit_front, residence_permit_back, national_id_front, national_id_back), id_number is required. */
         readonly IndividualDocumentUploadUrlRequest: {
             readonly document_type: components["schemas"]["IndividualDocumentType"];
             /**
-             * @description REQUIRED for identity documents (passport, driver's license, residence permit). The ID number on the document (e.g., passport number, driver's license number). Not required for EDD documents like bank statements.
+             * @description REQUIRED for identity documents (passport, driver's license, residence permit, national ID). The ID number on the document (e.g., passport number, driver's license number, national ID number). Not required for EDD documents like bank statements.
              * @example AB1234567
              */
             readonly id_number?: string;
@@ -7253,11 +8158,19 @@ export type components = {
             readonly expires_at: string;
         };
         /**
-         * @description Type of document that can be uploaded for individuals (identity documents + EDD documents)
+         * @description Type of document that can be uploaded for individuals (identity documents + EDD documents).
+         *
+         *     Identity documents: `passport` (single-sided), `drivers_license_front` + `drivers_license_back`,
+         *     `residence_permit_front` + `residence_permit_back`, `national_id_front` + `national_id_back`.
+         *     Two-sided documents need both sides before the identity requirement is met.
+         *
+         *     `national_id_front` / `national_id_back` are accepted only for national ID cards issued by
+         *     Colombia (`country` = `CO`); other issuing countries are rejected. An individual who submits
+         *     a national ID card is always reviewed by a compliance analyst and is never approved automatically.
          * @example passport
          * @enum {string}
          */
-        readonly IndividualDocumentType: "passport" | "drivers_license_front" | "drivers_license_back" | "residence_permit_front" | "residence_permit_back" | "proof_of_address" | "bank_statement" | "utility_bill" | "source_of_wealth" | "payslip" | "employment_contract" | "income_verification_letter" | "savings_statement" | "crypto_statement" | "investment_statement";
+        readonly IndividualDocumentType: "passport" | "drivers_license_front" | "drivers_license_back" | "residence_permit_front" | "residence_permit_back" | "national_id_front" | "national_id_back" | "proof_of_address" | "bank_statement" | "utility_bill" | "source_of_wealth" | "payslip" | "employment_contract" | "income_verification_letter" | "savings_statement" | "crypto_statement" | "investment_statement";
         /** @description Metadata about a document */
         readonly UploadedDocumentMetadata: {
             /** @description Unique document identifier */
@@ -7323,7 +8236,7 @@ export type components = {
              * @example passport
              * @enum {string}
              */
-            readonly document_type: "articles_of_incorporation" | "certificate_of_good_standing" | "corporate_registry_extract" | "shareholder_registry" | "source_of_funds" | "bank_reference_letter" | "operating_agreement" | "certificate_of_incorporation" | "passport" | "drivers_license_front" | "drivers_license_back" | "residence_permit_front" | "residence_permit_back" | "source_of_wealth" | "bank_statement" | "regulatory_license" | "aml_audit_report";
+            readonly document_type: "articles_of_incorporation" | "certificate_of_good_standing" | "corporate_registry_extract" | "shareholder_registry" | "source_of_funds" | "bank_reference_letter" | "operating_agreement" | "certificate_of_incorporation" | "passport" | "drivers_license_front" | "drivers_license_back" | "residence_permit_front" | "residence_permit_back" | "national_id_front" | "national_id_back" | "source_of_wealth" | "bank_statement" | "regulatory_license" | "aml_audit_report";
             /**
              * @description Upload/verification status
              * @example uploaded
@@ -7351,7 +8264,7 @@ export type components = {
              *       "articles_of_incorporation"
              *     ]
              */
-            readonly accepted_types: readonly ("articles_of_incorporation" | "certificate_of_good_standing" | "corporate_registry_extract" | "shareholder_registry" | "source_of_funds" | "bank_reference_letter" | "operating_agreement" | "certificate_of_incorporation" | "proof_of_address" | "utility_bill" | "pitch_deck" | "marketing_material" | "business_plan" | "memorandum" | "articles_of_association" | "crypto_statement" | "investment_statement" | "subscription_agreement" | "safe_agreement" | "convertible_note" | "loan_agreement" | "promissory_note" | "passport" | "drivers_license_front" | "drivers_license_back" | "residence_permit_front" | "residence_permit_back" | "source_of_wealth" | "bank_statement" | "regulatory_license" | "aml_audit_report" | "payslip" | "employment_contract" | "shareholders_agreement" | "income_verification_letter" | "savings_statement")[];
+            readonly accepted_types: readonly ("articles_of_incorporation" | "certificate_of_good_standing" | "corporate_registry_extract" | "shareholder_registry" | "source_of_funds" | "bank_reference_letter" | "operating_agreement" | "certificate_of_incorporation" | "proof_of_address" | "utility_bill" | "pitch_deck" | "marketing_material" | "business_plan" | "memorandum" | "articles_of_association" | "crypto_statement" | "investment_statement" | "subscription_agreement" | "safe_agreement" | "convertible_note" | "loan_agreement" | "promissory_note" | "passport" | "drivers_license_front" | "drivers_license_back" | "residence_permit_front" | "residence_permit_back" | "national_id_front" | "national_id_back" | "source_of_wealth" | "bank_statement" | "regulatory_license" | "aml_audit_report" | "payslip" | "employment_contract" | "shareholders_agreement" | "income_verification_letter" | "savings_statement")[];
             /**
              * @description Human-readable description of the document requirement
              * @example Articles of Incorporation or equivalent formation document
@@ -7661,12 +8574,14 @@ export type components = {
              */
             readonly decision?: "approved" | "declined" | "auto_declined" | "withdrawn" | null;
             /**
-             * @description Reason for the decision
+             * @description Reason for the decision, as the reviewer wrote it. Compliance-facing:
+             *     omitted for callers without compliance review permission.
              * @example All verification checks passed
              */
             readonly decision_reason?: string | null;
             /**
-             * @description Email of admin who made the decision
+             * @description Email of admin who made the decision. Compliance-facing: omitted
+             *     for callers without compliance review permission.
              * @example admin@dakota.xyz
              */
             readonly decision_by?: string | null;
@@ -7676,6 +8591,8 @@ export type components = {
              * @example 1705315800
              */
             readonly decision_at?: number | null;
+            /** @description The client-visible category, when this entity is declined and one was recorded. */
+            readonly decline_reason?: components["schemas"]["DeclineReason"];
             /** @description Sumsub verification data for this business entity */
             readonly sumsub_verification?: components["schemas"]["SumsubReviewData"];
         };
@@ -7756,12 +8673,14 @@ export type components = {
              */
             readonly decision?: "approved" | "declined" | "auto_declined" | "withdrawn" | null;
             /**
-             * @description Reason for the decision
+             * @description Reason for the decision, as the reviewer wrote it. Compliance-facing:
+             *     omitted for callers without compliance review permission.
              * @example All verification checks passed
              */
             readonly decision_reason?: string | null;
             /**
-             * @description Email of admin who made the decision
+             * @description Email of admin who made the decision. Compliance-facing: omitted
+             *     for callers without compliance review permission.
              * @example admin@dakota.xyz
              */
             readonly decision_by?: string | null;
@@ -7771,6 +8690,8 @@ export type components = {
              * @example 1705315800
              */
             readonly decision_at?: number | null;
+            /** @description The client-visible category, when this entity is declined and one was recorded. */
+            readonly decline_reason?: components["schemas"]["DeclineReason"];
             /** @description Sumsub verification data for this individual entity */
             readonly sumsub_verification?: components["schemas"]["SumsubReviewData"];
         };
@@ -8251,17 +9172,23 @@ export type components = {
              */
             readonly application_decision?: "approved" | "declined" | "withdrawn" | null;
             /**
-             * @description How the decision was reached: 'manual' for operator-driven decisions, 'auto' for automated approvals, 'override' reserved for future escalation. Null if no decision has been made.
-             * @example manual
-             * @enum {string|null}
+             * @description The category of the decline, when `application_decision` is
+             *     `declined` and a category was recorded. Omitted otherwise. This is
+             *     the one decision detail the applicant-token read returns.
              */
-            readonly decision_method?: "manual" | "auto" | "override" | null;
+            readonly decline_reason?: components["schemas"]["DeclineReason"];
             /**
-             * @description Version identifier of the rule set that produced an automated decision. Null for manual decisions or when no decision has been made.
-             * @example v1.2
+             * @description The fixed applicant-facing sentence for `decline_reason`. Present
+             *     exactly when `decline_reason` is.
+             * @example The applicant is located in a country Dakota does not support.
              */
-            readonly decision_rule_version?: string | null;
-            /** @description The people/businesses being onboarded */
+            readonly decline_message?: string;
+            /**
+             * @description The people/businesses being onboarded. The per-entity
+             *     `decision_reason` and `decision_by` are compliance-facing and are
+             *     omitted for callers without compliance review permission (the
+             *     applicant-token read).
+             */
             readonly entities?: components["schemas"]["ApplicationEntities"];
             /** @description Enhanced Due Diligence data (if provided) */
             readonly edd?: components["schemas"]["EDDResponse"];
@@ -8319,12 +9246,6 @@ export type components = {
             /** @description The compliance reviewer this application is assigned to (its owner). Absent when unassigned. */
             readonly assignee?: components["schemas"]["ComplianceReviewer"];
             /**
-             * Format: int64
-             * @description Epoch seconds when the application was assigned to its current owner. Absent/null when unassigned.
-             * @example 1717423200
-             */
-            readonly assigned_at?: number | null;
-            /**
              * @description Outstanding partner disclosure attestations the customer must accept
              *     to unlock a partner-gated capability (e.g. international wires), surfaced
              *     so the hosted onboarding flow can present them in the same attestations
@@ -8368,6 +9289,13 @@ export type components = {
              * @example https://apply.dakota.xyz/applications/2hCjxJzUAW6JVRkZqaF9E0KpM3a/attestations
              */
             readonly url?: string;
+            /**
+             * @description Whether the declared revision is published with text the customer
+             *     can read. Present on the legal-acceptance context; when false the
+             *     page shows a labelled notice instead of the text, which happens in
+             *     sandbox only. Absent elsewhere.
+             */
+            readonly text_published?: boolean;
         };
         /** @description Lightweight business info for list views */
         readonly BusinessListItem: {
@@ -8421,6 +9349,8 @@ export type components = {
              * @enum {string}
              */
             readonly application_decision?: "approved" | "declined" | "auto_declined" | "withdrawn";
+            /** @description The client-visible category, when the application is declined and one was recorded. */
+            readonly decline_reason?: components["schemas"]["DeclineReason"];
             /** @description Business entity (only present for business applications) */
             readonly business?: components["schemas"]["BusinessListItem"];
             /** @description Individual entities associated with this application */
@@ -8607,6 +9537,17 @@ export type components = {
              *     otherwise ride this response.
              */
             readonly outstanding_documents: readonly components["schemas"]["OutstandingLegalDocument"][];
+            /**
+             * @description Dakota-published terms a capability requires of this customer, that
+             *     are still outstanding, and that have no onboarding attestation type
+             *     - today `cards_tos`. Accept each through SubmitAttestation with the
+             *     `disclosure_id` and `disclosure_version` given here.
+             *
+             *     Only terms that can be collected are listed: the revision is
+             *     servable, or the deployment is sandbox. Empty when the customer's
+             *     capabilities cannot be read.
+             */
+            readonly outstanding_disclosures?: readonly components["schemas"]["PartnerAttestationRequirement"][];
             /**
              * @description People permitted to record an acceptance for this application. For a
              *     business this is its control persons; the API enforces the same rule
@@ -13345,10 +14286,7 @@ export interface operations {
                 /**
                  * @example {
                  *       "account_type": "onramp",
-                 *       "crypto_destination_id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi",
-                 *       "fiat_destination_id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi",
-                 *       "destination_network_id": "ethereum-mainnet",
-                 *       "destination_asset": "USDC"
+                 *       "developer_fee_bps": 50
                  *     }
                  */
                 readonly "application/json": components["schemas"]["AccountUpdateRequest"];
@@ -24342,6 +25280,468 @@ export interface operations {
             };
         };
     };
+    readonly simulateCardTransaction: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header: {
+                /** @description Unique key to ensure request idempotency. If the same key is used within a certain time window, the original response will be returned instead of executing the request again. */
+                readonly "x-idempotency-key": components["parameters"]["IdempotencyKeyHeader"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                /**
+                 * @example {
+                 *       "card_id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi",
+                 *       "amount": "2.00",
+                 *       "merchant": {
+                 *         "descriptor": "COFFEE ROASTERS",
+                 *         "mcc": "5814",
+                 *         "city": "BROOKLYN",
+                 *         "state": "NY",
+                 *         "country": "USA"
+                 *       },
+                 *       "type": "authorization"
+                 *     }
+                 */
+                readonly "application/json": components["schemas"]["SandboxCardTransactionRequest"];
+            };
+        };
+        readonly responses: {
+            /** @description Card simulation accepted */
+            readonly 202: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "simulation_id": "sim_card_01J8ZQ4T7K2M9X",
+                     *       "card_transaction_id": "2ZFHrqBHb3cTfLVkFSGmHZqdDPi",
+                     *       "status": "completed"
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["SandboxCardSimulationResponse"];
+                };
+            };
+            /** @description Invalid request */
+            readonly 400: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#invalid-request",
+                     *       "title": "Invalid request",
+                     *       "status": 400,
+                     *       "detail": "amount must be a positive decimal with at most two decimal places",
+                     *       "instance": "https://api.platform.dakota.xyz/sandbox/cards/simulate/transaction",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not available outside sandbox mode */
+            readonly 403: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#forbidden",
+                     *       "title": "Forbidden",
+                     *       "status": 403,
+                     *       "detail": "Endpoint only available in sandbox mode",
+                     *       "instance": "https://api.platform.dakota.xyz/sandbox/cards/simulate/transaction",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Card not found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#not-found",
+                     *       "title": "Card not found",
+                     *       "status": 404,
+                     *       "detail": "Card not found",
+                     *       "instance": "https://api.platform.dakota.xyz/sandbox/cards/simulate/transaction",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /**
+             * @description The card cannot present a transaction, the idempotency key was
+             *     reused with different parameters, or the simulation under this
+             *     idempotency key was abandoned before it recorded a result. The last
+             *     one never resolves under the same key: retry it with a new
+             *     `X-Idempotency-Key`.
+             */
+            readonly 409: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#card-not-active",
+                     *       "title": "Card Not Active",
+                     *       "status": 409,
+                     *       "detail": "The card must be active to present a simulated transaction.",
+                     *       "instance": "https://api.platform.dakota.xyz/sandbox/cards/simulate/transaction",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /**
+             * @description Amount over the sandbox per-transaction cap, or a client that is not
+             *     provisioned at the provider yet.
+             */
+            readonly 422: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#sandbox-amount-cap-exceeded",
+                     *       "title": "Sandbox Amount Cap Exceeded",
+                     *       "status": 422,
+                     *       "detail": "amount 25 exceeds sandbox cap of 2; reduce the amount and retry",
+                     *       "instance": "https://api.platform.dakota.xyz/sandbox/cards/simulate/transaction",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /**
+             * @description The client has used its card-simulation allowance for the day. The
+             *     allowance restores itself within 24 hours.
+             */
+            readonly 429: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#sandbox-card-simulation-daily-limit",
+                     *       "title": "Sandbox Card Simulation Daily Limit",
+                     *       "status": 429,
+                     *       "detail": "This client has used its card-simulation allowance for the day. Retry within 24 hours.",
+                     *       "instance": "https://api.platform.dakota.xyz/sandbox/cards/simulate/transaction",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Platform failed to process the request */
+            readonly 500: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#internal-error",
+                     *       "title": "Internal Error",
+                     *       "status": 500,
+                     *       "detail": "An internal error occurred",
+                     *       "instance": "https://api.platform.dakota.xyz/sandbox/cards/simulate/transaction",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Card simulation is not enabled in this deployment */
+            readonly 501: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#not-implemented",
+                     *       "title": "Not Implemented",
+                     *       "status": 501,
+                     *       "detail": "card simulation is not available in this deployment yet",
+                     *       "instance": "https://api.platform.dakota.xyz/sandbox/cards/simulate/transaction",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Provider gRPC call failed */
+            readonly 502: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#provider-error",
+                     *       "title": "Provider Error",
+                     *       "status": 502,
+                     *       "detail": "provider sandbox service returned an error",
+                     *       "instance": "https://api.platform.dakota.xyz/sandbox/cards/simulate/transaction",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    readonly advanceCardTransaction: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header: {
+                /** @description Unique key to ensure request idempotency. If the same key is used within a certain time window, the original response will be returned instead of executing the request again. */
+                readonly "x-idempotency-key": components["parameters"]["IdempotencyKeyHeader"];
+            };
+            readonly path: {
+                /** @description Card transaction to advance. */
+                readonly card_transaction_id: components["schemas"]["KSUID"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                /**
+                 * @example {
+                 *       "action": "clear",
+                 *       "amount": "2.00"
+                 *     }
+                 */
+                readonly "application/json": components["schemas"]["SandboxCardTransactionAction"];
+            };
+        };
+        readonly responses: {
+            /** @description Card simulation accepted */
+            readonly 202: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "simulation_id": "sim_card_01J8ZQ4T7K2M9Y",
+                     *       "card_transaction_id": "2ZFHrqBHb3cTfLVkFSGmHZqdDPi",
+                     *       "status": "completed"
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["SandboxCardSimulationResponse"];
+                };
+            };
+            /** @description Invalid request */
+            readonly 400: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#invalid-request",
+                     *       "title": "Invalid request",
+                     *       "status": 400,
+                     *       "detail": "amount must be a positive decimal with at most two decimal places",
+                     *       "instance": "https://api.platform.dakota.xyz/sandbox/cards/simulate/transaction/2ZFHrqBHb3cTfLVkFSGmHZqdDPi",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not available outside sandbox mode */
+            readonly 403: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#forbidden",
+                     *       "title": "Forbidden",
+                     *       "status": 403,
+                     *       "detail": "Endpoint only available in sandbox mode",
+                     *       "instance": "https://api.platform.dakota.xyz/sandbox/cards/simulate/transaction/2ZFHrqBHb3cTfLVkFSGmHZqdDPi",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Card transaction not found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#not-found",
+                     *       "title": "Card Transaction not found",
+                     *       "status": 404,
+                     *       "detail": "Card Transaction not found",
+                     *       "instance": "https://api.platform.dakota.xyz/sandbox/cards/simulate/transaction/2ZFHrqBHb3cTfLVkFSGmHZqdDPi",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /**
+             * @description The idempotency key was reused with different parameters, or on
+             *     another sandbox simulation, or the simulation under this key was
+             *     abandoned before it recorded a result. Neither of the last two
+             *     resolves under the same key: retry with a new
+             *     `X-Idempotency-Key`.
+             */
+            readonly 409: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#conflict",
+                     *       "title": "Conflict",
+                     *       "status": 409,
+                     *       "detail": "idempotency key already used with different parameters or on another sandbox simulation",
+                     *       "instance": "https://api.platform.dakota.xyz/sandbox/cards/simulate/transaction/2ZFHrqBHb3cTfLVkFSGmHZqdDPi",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /**
+             * @description The amount is over the sandbox cap, the client is not provisioned
+             *     at the provider yet, or the action does not fit the transaction.
+             *     `#sandbox-invalid-action-for-transaction` covers every way the last
+             *     two disagree: an action whose required amount is missing, an amount
+             *     supplied to `expire` or `return_reversal`, which take none, and an
+             *     action the target transaction cannot take, such as
+             *     `return_reversal` on a transaction that is not a return.
+             */
+            readonly 422: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#sandbox-invalid-action-for-transaction",
+                     *       "title": "Sandbox Invalid Action For Transaction",
+                     *       "status": 422,
+                     *       "detail": "action update_amount requires an amount",
+                     *       "instance": "https://api.platform.dakota.xyz/sandbox/cards/simulate/transaction/2ZFHrqBHb3cTfLVkFSGmHZqdDPi",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /**
+             * @description The client has used its card-simulation allowance for the day. The
+             *     allowance restores itself within 24 hours.
+             */
+            readonly 429: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#sandbox-card-simulation-daily-limit",
+                     *       "title": "Sandbox Card Simulation Daily Limit",
+                     *       "status": 429,
+                     *       "detail": "This client has used its card-simulation allowance for the day. Retry within 24 hours.",
+                     *       "instance": "https://api.platform.dakota.xyz/sandbox/cards/simulate/transaction/2ZFHrqBHb3cTfLVkFSGmHZqdDPi",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Platform failed to process the request */
+            readonly 500: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#internal-error",
+                     *       "title": "Internal Error",
+                     *       "status": 500,
+                     *       "detail": "An internal error occurred",
+                     *       "instance": "https://api.platform.dakota.xyz/sandbox/cards/simulate/transaction/2ZFHrqBHb3cTfLVkFSGmHZqdDPi",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Card simulation is not enabled in this deployment */
+            readonly 501: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#not-implemented",
+                     *       "title": "Not Implemented",
+                     *       "status": 501,
+                     *       "detail": "card simulation is not available in this deployment yet",
+                     *       "instance": "https://api.platform.dakota.xyz/sandbox/cards/simulate/transaction/2ZFHrqBHb3cTfLVkFSGmHZqdDPi",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Provider gRPC call failed */
+            readonly 502: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#provider-error",
+                     *       "title": "Provider Error",
+                     *       "status": 502,
+                     *       "detail": "provider sandbox service returned an error",
+                     *       "instance": "https://api.platform.dakota.xyz/sandbox/cards/simulate/transaction/2ZFHrqBHb3cTfLVkFSGmHZqdDPi",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     readonly getSimulation: {
         readonly parameters: {
             readonly query?: never;
@@ -24499,6 +25899,208 @@ export interface operations {
                      *       "status": 403,
                      *       "detail": "Endpoint only available in sandbox mode",
                      *       "instance": "https://api.platform.dakota.xyz/sandbox/scenarios",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    readonly faucetWallet: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header: {
+                /** @description Unique key to ensure request idempotency. If the same key is used within a certain time window, the original response will be returned instead of executing the request again. */
+                readonly "x-idempotency-key": components["parameters"]["IdempotencyKeyHeader"];
+            };
+            readonly path: {
+                /** @description Wallet to fund. */
+                readonly wallet_id: components["schemas"]["KSUID"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                /**
+                 * @example {
+                 *       "asset": "RD",
+                 *       "amount": "2.00"
+                 *     }
+                 */
+                readonly "application/json": components["schemas"]["SandboxFaucetRequest"];
+            };
+        };
+        readonly responses: {
+            /** @description Faucet transfer accepted */
+            readonly 202: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "simulation_id": "sim_faucet_01J8ZQ4T7K2M9X",
+                     *       "wallet_id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi",
+                     *       "asset": "RD",
+                     *       "amount": "2.00",
+                     *       "status": "accepted"
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["SandboxFaucetResponse"];
+                };
+            };
+            /** @description Invalid request */
+            readonly 400: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#invalid-request",
+                     *       "title": "Invalid Request",
+                     *       "status": 400,
+                     *       "detail": "amount must be a positive decimal",
+                     *       "instance": "https://api.platform.dakota.xyz/sandbox/wallets/1NFHrqBHb3cTfLVkFSGmHZqdDPi/faucet",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not available outside sandbox mode */
+            readonly 403: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#forbidden",
+                     *       "title": "Forbidden",
+                     *       "status": 403,
+                     *       "detail": "Endpoint only available in sandbox mode",
+                     *       "instance": "https://api.platform.dakota.xyz/sandbox/wallets/1NFHrqBHb3cTfLVkFSGmHZqdDPi/faucet",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Wallet not found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#not-found",
+                     *       "title": "Wallet Not Found",
+                     *       "status": 404,
+                     *       "detail": "Wallet 1NFHrqBHb3cTfLVkFSGmHZqdDPi was not found",
+                     *       "instance": "https://api.platform.dakota.xyz/sandbox/wallets/1NFHrqBHb3cTfLVkFSGmHZqdDPi/faucet",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /**
+             * @description The idempotency key cannot serve this request. The key was
+             *     already used with different parameters, or on another sandbox
+             *     simulation, or an earlier request with this key failed. A failed
+             *     request is not replayed, and a key belongs to one simulation:
+             *     retry with a new idempotency key.
+             */
+            readonly 409: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /**
+             * @description Amount over the sandbox cap, a wallet the faucet asset cannot reach,
+             *     or a client that is not provisioned at the provider yet.
+             */
+            readonly 422: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#sandbox-amount-cap-exceeded",
+                     *       "title": "Sandbox Amount Cap Exceeded",
+                     *       "status": 422,
+                     *       "detail": "amount 25 exceeds sandbox cap of 2; reduce the amount and retry",
+                     *       "instance": "https://api.platform.dakota.xyz/sandbox/wallets/1NFHrqBHb3cTfLVkFSGmHZqdDPi/faucet",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /**
+             * @description A faucet limit refused the call. The problem `type` says which one:
+             *     `#sandbox-faucet-wallet-daily-limit` and
+             *     `#sandbox-faucet-client-daily-limit` clear on their own within 24
+             *     hours; `#sandbox-faucet-float-floor` means the shared float is low
+             *     and needs an operator to replenish it.
+             */
+            readonly 429: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#sandbox-faucet-wallet-daily-limit",
+                     *       "title": "Sandbox Faucet Wallet Daily Limit",
+                     *       "status": 429,
+                     *       "detail": "This wallet has used its faucet allowance for the day. Retry within 24 hours.",
+                     *       "instance": "https://api.platform.dakota.xyz/sandbox/wallets/1NFHrqBHb3cTfLVkFSGmHZqdDPi/faucet",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Platform failed to process the request */
+            readonly 500: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#internal-error",
+                     *       "title": "Internal Server Error",
+                     *       "status": 500,
+                     *       "detail": "An unexpected error occurred.",
+                     *       "instance": "https://api.platform.dakota.xyz/sandbox/wallets/1NFHrqBHb3cTfLVkFSGmHZqdDPi/faucet",
+                     *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
+                     *     }
+                     */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Provider gRPC call failed */
+            readonly 502: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "type": "https://docs.dakota.xyz/api-reference/errors#provider-error",
+                     *       "title": "Provider Error",
+                     *       "status": 502,
+                     *       "detail": "provider sandbox service returned an error",
+                     *       "instance": "https://api.platform.dakota.xyz/sandbox/wallets/1NFHrqBHb3cTfLVkFSGmHZqdDPi/faucet",
                      *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
                      *     }
                      */
@@ -24749,6 +26351,137 @@ export interface operations {
                     readonly [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    readonly listRDDeclaredWallets: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The wallets that count today. */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "wallets": [
+                     *         {
+                     *           "chain": "eip155:8453",
+                     *           "address": "0x1234567890123456789012345678901234567890",
+                     *           "counting_from": "2026-09-01T00:00:00Z"
+                     *         }
+                     *       ]
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["RDDeclaredWalletList"];
+                };
+            };
+            /** @description Unauthorized */
+            readonly 401: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description The client is not in the RD marketing-fee programme. */
+            readonly 403: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    readonly addRDDeclaredWallet: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header: {
+                /** @description Unique key to ensure request idempotency. If the same key is used within a certain time window, the original response will be returned instead of executing the request again. */
+                readonly "x-idempotency-key": components["parameters"]["IdempotencyKeyHeader"];
+            };
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                /**
+                 * @example {
+                 *       "address": "0x1234567890123456789012345678901234567890"
+                 *     }
+                 */
+                readonly "application/json": components["schemas"]["RDDeclaredWalletRequest"];
+            };
+        };
+        readonly responses: {
+            /** @description The wallet now counts. */
+            readonly 201: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "chain": "eip155:8453",
+                     *       "address": "0x1234567890123456789012345678901234567890",
+                     *       "counting_from": "2026-09-01T00:00:00Z"
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["RDDeclaredWallet"];
+                };
+            };
+            /** @description Unauthorized */
+            readonly 401: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description The client is not in the RD marketing-fee programme. */
+            readonly 403: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /**
+             * @description The address cannot be declared. Either another client has declared
+             *     it, or it is already a wallet Dakota holds.
+             *
+             *     An address Dakota holds is not necessarily earning a marketing fee:
+             *     only wallets held for one of your customers do. Contact support if
+             *     you believe this address should be counting.
+             */
+            readonly 409: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description The address is not a usable Base address. */
+            readonly 422: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
             };
         };
     };
@@ -25343,6 +27076,170 @@ export interface operations {
             };
         };
     };
+    readonly getDeploymentPayoutDestination: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                /**
+                 * @description The asset the payout is made in: RD, or a branded token your client
+                 *     owns.
+                 * @example RD
+                 */
+                readonly asset: string;
+                /**
+                 * @description The network of the deployment. A deployment's payout is sent on its
+                 *     own network, so this names which deployment the destination is for
+                 *     rather than offering a choice of chain.
+                 * @example base-mainnet
+                 */
+                readonly network: components["schemas"]["NetworkId"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The registered destination. */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "asset": "RD",
+                     *       "network": "base-mainnet",
+                     *       "chain": "eip155:8453",
+                     *       "address": "0x1234567890123456789012345678901234567890",
+                     *       "updated_at": "2026-09-22T12:00:00Z"
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["DeploymentPayoutDestination"];
+                };
+            };
+            /** @description Unauthorized */
+            readonly 401: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Your client has never held a contract rate for this asset. */
+            readonly 403: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /**
+             * @description No destination is registered for the deployment, or no payout is
+             *     made to your client in this asset on this network.
+             */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    readonly putDeploymentPayoutDestination: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header: {
+                /** @description Unique key to ensure request idempotency. If the same key is used within a certain time window, the original response will be returned instead of executing the request again. */
+                readonly "x-idempotency-key": components["parameters"]["IdempotencyKeyHeader"];
+            };
+            readonly path: {
+                /**
+                 * @description The asset the payout is made in: RD, or a branded token your client
+                 *     owns.
+                 * @example RD
+                 */
+                readonly asset: string;
+                /**
+                 * @description The network of the deployment. A deployment's payout is sent on its
+                 *     own network, so this names which deployment the destination is for
+                 *     rather than offering a choice of chain.
+                 * @example base-mainnet
+                 */
+                readonly network: components["schemas"]["NetworkId"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                /**
+                 * @example {
+                 *       "address": "0x1234567890123456789012345678901234567890"
+                 *     }
+                 */
+                readonly "application/json": components["schemas"]["DeploymentPayoutDestinationRequest"];
+            };
+        };
+        readonly responses: {
+            /** @description The registered destination. */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "asset": "RD",
+                     *       "network": "base-mainnet",
+                     *       "chain": "eip155:8453",
+                     *       "address": "0x1234567890123456789012345678901234567890",
+                     *       "updated_at": "2026-09-22T12:00:00Z"
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["DeploymentPayoutDestination"];
+                };
+            };
+            /** @description Unauthorized */
+            readonly 401: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Your client has never held a contract rate for this asset. */
+            readonly 403: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description No payout is made to your client in this asset on this network. */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description The address is not a usable destination on the deployment's network. */
+            readonly 422: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     readonly getLegalDocument: {
         readonly parameters: {
             readonly query?: {
@@ -25470,6 +27367,120 @@ export interface operations {
                      *       "detail": "agent not found"
                      *     }
                      */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    readonly listX402Holds: {
+        readonly parameters: {
+            readonly query?: {
+                /** @description Filter to one hold state. */
+                readonly state?: "outstanding" | "settled" | "released";
+                /** @description A limit on the number of objects to be returned. Limit can range between 1 and 100, and the default is 20. */
+                readonly limit?: components["parameters"]["LimitParam"];
+                /** @description A cursor for use in pagination. `starting_after` is a KSUID for the object you are listing that defines your place in the list. For instance, if you make a list request and receive 100 objects, ending with ID `2B5J8KZ9N7M1K3P6Q8R4T7V9`, your subsequent call can include `starting_after=2B5J8KZ9N7M1K3P6Q8R4T7V9` in order to fetch the next page of the list. */
+                readonly starting_after?: components["parameters"]["StartingAfterParam"];
+                /** @description A cursor for use in pagination. `ending_before` is a KSUID for the object you are listing that defines your place in the list. For instance, if you make a list request and receive 100 objects, starting with ID `2B5J8KZ9N7M1K3P6Q8R4T7V9`, your subsequent call can include `ending_before=2B5J8KZ9N7M1K3P6Q8R4T7V9` in order to fetch the previous page of the list. */
+                readonly ending_before?: components["parameters"]["EndingBeforeParam"];
+            };
+            readonly header?: never;
+            readonly path: {
+                readonly payment_agent_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description One page of the agent's holds, newest first */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "id": "2vWxX402Hold000000000000001",
+                     *           "nonce": "0x3f1c8a5b2d7e4906c1a3f85b2e6d04971c8a5b3f2d7e4906c1a3f85b2e6d0497",
+                     *           "mandate_id": "2vWxX402Mandate000000000001",
+                     *           "agent_id": "2vWxAgent000000000000000000",
+                     *           "wallet_id": "2vWxWallet00000000000000000",
+                     *           "pay_to": "0x94aE0f8B9F3c2A1d5E6b7C8D9e0F1a2B3c4D5E6F",
+                     *           "value": "100000",
+                     *           "asset": "USDC",
+                     *           "network": "base-sepolia",
+                     *           "state": "settled",
+                     *           "created_at": "2026-09-08T00:00:05Z",
+                     *           "valid_before": "2026-09-08T00:02:05Z",
+                     *           "tx_hash": "0x05dd3a9587f41b2c6e8d0a4f7b3c95e2d18a6f40b7c29e5d3a81f64b0c7e2d95",
+                     *           "settled_at": "2026-09-08T00:00:07Z"
+                     *         }
+                     *       ],
+                     *       "meta": {
+                     *         "total_count": 1,
+                     *         "has_more_after": false,
+                     *         "has_more_before": false
+                     *       }
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["PaginatedListResponse"] & {
+                        readonly data?: readonly components["schemas"]["X402HoldResponse"][];
+                    };
+                };
+            };
+            /** @description The agent id, the state filter or a pagination parameter is malformed */
+            readonly 400: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Missing or invalid credentials */
+            readonly 401: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description The caller lacks the permission this route requires */
+            readonly 403: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Agentic payments are not enabled for the client, x402 is not enabled for the agent (enable it with POST /payment-agents/{payment_agent_id}/x402), or the agent was not found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too many requests; back off and retry */
+            readonly 429: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal error */
+            readonly 500: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
                     readonly "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
@@ -26054,6 +28065,54 @@ export interface operations {
             };
         };
     };
+    readonly removeRDDeclaredWallet: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                /** @description The address to stop counting. */
+                readonly address: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The wallet no longer counts. */
+            readonly 204: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unauthorized */
+            readonly 401: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description The client is not in the RD marketing-fee programme. */
+            readonly 403: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description You have no such wallet counting today. */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     readonly listLegalDocuments: {
         readonly parameters: {
             readonly query?: never;
@@ -26456,6 +28515,104 @@ export interface operations {
                     readonly [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    readonly getMyDeveloperFeeStatement: {
+        readonly parameters: {
+            readonly query?: {
+                /** @description Unix seconds lower bound on the fee's completion time (inclusive). */
+                readonly from?: number;
+                /**
+                 * @description Unix seconds upper bound on the fee's completion time (inclusive).
+                 *     Also the as-of date for the owed balance.
+                 */
+                readonly to?: number;
+                /**
+                 * @description 1-based page of the fee transactions list. The page size is 250;
+                 *     `transactions.total` reports the full count so you can tell when a
+                 *     range runs past one page.
+                 */
+                readonly page?: number;
+            };
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description Your developer fee statement over the range. */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "totals": {
+                     *         "earned": "12480.55",
+                     *         "paid": "9200.00",
+                     *         "owed": "3280.55"
+                     *       },
+                     *       "months": [
+                     *         {
+                     *           "month": "2026-09",
+                     *           "earned": "2140.20",
+                     *           "paid": "0"
+                     *         },
+                     *         {
+                     *           "month": "2026-08",
+                     *           "earned": "3510.80",
+                     *           "paid": "3510.80"
+                     *         }
+                     *       ],
+                     *       "assets": [
+                     *         {
+                     *           "asset": "eip155:8453/erc20:0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+                     *           "symbol": "USDC",
+                     *           "earned": "10204.30"
+                     *         },
+                     *         {
+                     *           "asset": "eip155:8453/erc20:0x3788806ff15b639146a0309218190572ff365059",
+                     *           "symbol": "RD",
+                     *           "earned": "1890.25"
+                     *         }
+                     *       ],
+                     *       "transactions": {
+                     *         "items": [
+                     *           {
+                     *             "id": "3JSAEmeRoI3MYTxJR43kVc1kQ82",
+                     *             "date": 1789603200,
+                     *             "asset": "eip155:8453/erc20:0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+                     *             "symbol": "USDC",
+                     *             "volume": "40000.00",
+                     *             "fee": "40.00"
+                     *           }
+                     *         ],
+                     *         "total": 1284
+                     *       }
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["DeveloperFeeStatementResponse"];
+                };
+            };
+            /** @description Unauthorized. */
+            readonly 401: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description The figures could not be retrieved. */
+            readonly 502: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
             };
         };
     };
@@ -27536,6 +29693,204 @@ export interface operations {
             };
         };
     };
+    readonly getX402: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path: {
+                readonly payment_agent_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The agent's x402 wallet */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "payment_agent_id": "2vWxAgent000000000000000000",
+                     *       "status": "active",
+                     *       "wallet_id": "2vWxWallet00000000000000000",
+                     *       "address": "0x8982a181fC35d5A8AcA08fD41cA4B4A432ea6E58"
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["X402Enablement"];
+                };
+            };
+            /** @description The agent id is malformed */
+            readonly 400: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Missing or invalid credentials */
+            readonly 401: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description The caller lacks the permission this route requires */
+            readonly 403: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Agentic payments are not enabled for the client, x402 is not enabled for the agent (enable it with POST /payment-agents/{payment_agent_id}/x402), or the agent was not found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too many requests; back off and retry */
+            readonly 429: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal error */
+            readonly 500: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    readonly enableX402: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header: {
+                /** @description Unique key to ensure request idempotency. If the same key is used within a certain time window, the original response will be returned instead of executing the request again. */
+                readonly "x-idempotency-key": components["parameters"]["IdempotencyKeyHeader"];
+            };
+            readonly path: {
+                readonly payment_agent_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description The agent's x402 wallet */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "payment_agent_id": "2vWxAgent000000000000000000",
+                     *       "status": "active",
+                     *       "wallet_id": "2vWxWallet00000000000000000",
+                     *       "address": "0x8982a181fC35d5A8AcA08fD41cA4B4A432ea6E58"
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["X402Enablement"];
+                };
+            };
+            /** @description The agent id is malformed, or the agent cannot hold an x402 wallet (it is not hosted, or not active) */
+            readonly 400: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Missing or invalid credentials */
+            readonly 401: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description The caller lacks the permission this route requires, or the customer is frozen */
+            readonly 403: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Agentic payments are not enabled for the client, or the agent was not found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Another enable call for this agent is in progress; retry shortly */
+            readonly 409: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too many requests */
+            readonly 429: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal error */
+            readonly 500: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description The wallet provider does not support this operation */
+            readonly 501: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description A dependency (the policy engine or the wallet provider) is unavailable; retry */
+            readonly 503: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     readonly revokePaymentAgent: {
         readonly parameters: {
             readonly query?: never;
@@ -27740,6 +30095,242 @@ export interface operations {
             };
         };
     };
+    readonly listX402Mandates: {
+        readonly parameters: {
+            readonly query?: {
+                /** @description A limit on the number of objects to be returned. Limit can range between 1 and 100, and the default is 20. */
+                readonly limit?: components["parameters"]["LimitParam"];
+                /** @description A cursor for use in pagination. `starting_after` is a KSUID for the object you are listing that defines your place in the list. For instance, if you make a list request and receive 100 objects, ending with ID `2B5J8KZ9N7M1K3P6Q8R4T7V9`, your subsequent call can include `starting_after=2B5J8KZ9N7M1K3P6Q8R4T7V9` in order to fetch the next page of the list. */
+                readonly starting_after?: components["parameters"]["StartingAfterParam"];
+                /** @description A cursor for use in pagination. `ending_before` is a KSUID for the object you are listing that defines your place in the list. For instance, if you make a list request and receive 100 objects, starting with ID `2B5J8KZ9N7M1K3P6Q8R4T7V9`, your subsequent call can include `ending_before=2B5J8KZ9N7M1K3P6Q8R4T7V9` in order to fetch the previous page of the list. */
+                readonly ending_before?: components["parameters"]["EndingBeforeParam"];
+            };
+            readonly header?: never;
+            readonly path: {
+                readonly payment_agent_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody?: never;
+        readonly responses: {
+            /** @description One page of the agent's x402 mandates, newest first */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "data": [
+                     *         {
+                     *           "id": "2vWxX402Mandate000000000001",
+                     *           "agent_id": "2vWxAgent000000000000000000",
+                     *           "wallet_id": "2vWxWallet00000000000000000",
+                     *           "asset": "USDC",
+                     *           "network": "base-sepolia",
+                     *           "max_per_call": "500000",
+                     *           "max_per_window": "2000000",
+                     *           "window_seconds": 3600,
+                     *           "payee_policy": {
+                     *             "mode": "domain_allowlist",
+                     *             "domains": [
+                     *               "*.marketpulse.example"
+                     *             ]
+                     *           },
+                     *           "valid_from": "2026-09-08T00:00:00Z",
+                     *           "valid_until": "2026-10-08T00:00:00Z",
+                     *           "window_committed": "100000",
+                     *           "window_calls": 1
+                     *         }
+                     *       ],
+                     *       "meta": {
+                     *         "total_count": 1,
+                     *         "has_more_after": false,
+                     *         "has_more_before": false
+                     *       }
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["PaginatedListResponse"] & {
+                        readonly data?: readonly components["schemas"]["X402MandateResponse"][];
+                    };
+                };
+            };
+            /** @description The agent id or a pagination parameter is malformed */
+            readonly 400: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Missing or invalid credentials */
+            readonly 401: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description The caller lacks the permission this route requires */
+            readonly 403: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Agentic payments are not enabled for the client, x402 is not enabled for the agent (enable it with POST /payment-agents/{payment_agent_id}/x402), or the agent was not found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too many requests; back off and retry */
+            readonly 429: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal error */
+            readonly 500: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    readonly createX402Mandate: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header: {
+                /** @description Unique key to ensure request idempotency. If the same key is used within a certain time window, the original response will be returned instead of executing the request again. */
+                readonly "x-idempotency-key": components["parameters"]["IdempotencyKeyHeader"];
+            };
+            readonly path: {
+                readonly payment_agent_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                /**
+                 * @example {
+                 *       "asset": "USDC",
+                 *       "network": "base-sepolia",
+                 *       "max_per_call": "500000",
+                 *       "max_per_window": "2000000",
+                 *       "window_seconds": 3600,
+                 *       "payee_policy": {
+                 *         "mode": "domain_allowlist",
+                 *         "domains": [
+                 *           "*.marketpulse.example"
+                 *         ]
+                 *       }
+                 *     }
+                 */
+                readonly "application/json": components["schemas"]["X402MandateRequest"];
+            };
+        };
+        readonly responses: {
+            /** @description Mandate created */
+            readonly 201: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "id": "2vWxX402Mandate000000000001",
+                     *       "agent_id": "2vWxAgent000000000000000000",
+                     *       "wallet_id": "2vWxWallet00000000000000000",
+                     *       "asset": "USDC",
+                     *       "network": "base-sepolia",
+                     *       "max_per_call": "500000",
+                     *       "max_per_window": "2000000",
+                     *       "window_seconds": 3600,
+                     *       "payee_policy": {
+                     *         "mode": "domain_allowlist",
+                     *         "domains": [
+                     *           "*.marketpulse.example"
+                     *         ]
+                     *       },
+                     *       "valid_from": "2026-09-08T00:00:00Z",
+                     *       "valid_until": "2026-10-08T00:00:00Z",
+                     *       "window_committed": "100000",
+                     *       "window_calls": 1
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["X402MandateResponse"];
+                };
+            };
+            /** @description Malformed agent id or mandate request, an unsupported asset or network, or the agent is not active */
+            readonly 400: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Missing or invalid credentials */
+            readonly 401: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description The caller lacks the permission this route requires */
+            readonly 403: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Agentic payments are not enabled for the client, x402 is not enabled for the agent (enable it with POST /payment-agents/{payment_agent_id}/x402), or the agent was not found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too many requests */
+            readonly 429: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal error */
+            readonly 500: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
     readonly cancelScheduledPayment: {
         readonly parameters: {
             readonly query?: never;
@@ -27803,6 +30394,149 @@ export interface operations {
                      *       "detail": "agentic payments are not enabled"
                      *     }
                      */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    readonly createX402Signature: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header: {
+                /** @description Unique key to ensure request idempotency. If the same key is used within a certain time window, the original response will be returned instead of executing the request again. */
+                readonly "x-idempotency-key": components["parameters"]["IdempotencyKeyHeader"];
+            };
+            readonly path: {
+                readonly payment_agent_id: string;
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                /**
+                 * @example {
+                 *       "resource_url": "https://api.marketpulse.example/v1/reports/copper-spot",
+                 *       "payment_requirements": {
+                 *         "scheme": "exact",
+                 *         "network": "base-sepolia",
+                 *         "maxAmountRequired": "100000",
+                 *         "resource": "https://api.marketpulse.example/v1/reports/copper-spot",
+                 *         "payTo": "0x94aE0f8B9F3c2A1d5E6b7C8D9e0F1a2B3c4D5E6F",
+                 *         "asset": "0x036CbD53842c5426634e7929541eC2318f3dCF7e",
+                 *         "maxTimeoutSeconds": 120,
+                 *         "extra": {
+                 *           "name": "USDC",
+                 *           "version": "2"
+                 *         }
+                 *       }
+                 *     }
+                 */
+                readonly "application/json": components["schemas"]["X402SignatureRequest"];
+            };
+        };
+        readonly responses: {
+            /** @description The signed payment authorization */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "payment_header": "eyJ4NDAyVmVyc2lvbiI6MSwic2NoZW1lIjoiZXhhY3QiLCJuZXR3b3JrIjoiYmFzZS1zZXBvbGlhIn0",
+                     *       "payment_header_name": "X-PAYMENT",
+                     *       "signature": "0x9f2b1c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b1c001c",
+                     *       "authorization_id": "2vWxX402Hold000000000000001",
+                     *       "mandate_id": "2vWxX402Mandate000000000001",
+                     *       "payer": "0x8f2A55949038A9610F50FB23B5883Af3B4ecB3a1",
+                     *       "pay_to": "0x94aE0f8B9F3c2A1d5E6b7C8D9e0F1a2B3c4D5E6F",
+                     *       "value": "100000",
+                     *       "nonce": "0x3f1c8a5b2d7e4906c1a3f85b2e6d04971c8a5b3f2d7e4906c1a3f85b2e6d0497",
+                     *       "valid_before": "2026-09-08T00:02:00Z",
+                     *       "window_committed": "100000"
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["X402SignatureResponse"];
+                };
+            };
+            /** @description Malformed agent id or payment requirements, an unsupported scheme, network or x402 version, or the agent is not active */
+            readonly 400: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Missing or invalid credentials */
+            readonly 401: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description The payment was refused - the caller lacks the permission this route requires, the customer is frozen, the seller's address failed screening, or the agent's x402 mandate refused it (over a limit, outside the payee policy, expired, or absent) */
+            readonly 403: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Agentic payments are not enabled for the client, x402 is not enabled for the agent (enable it with POST /payment-agents/{payment_agent_id}/x402), or the agent was not found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description The X-Idempotency-Key was already used for a different payment, or the authorization issued under it has expired or was released — retry with a new key. A key whose payment already SETTLED is also refused here, and that one must not be retried: the detail names the transaction, and a new key would pay again. */
+            readonly 409: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Too many requests; back off and retry */
+            readonly 429: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal error */
+            readonly 500: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description The wallet provider does not support this operation */
+            readonly 501: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description The seller's address could not be screened. Nothing was signed and no budget was held; retry the payment. */
+            readonly 503: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
                     readonly "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
