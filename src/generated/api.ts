@@ -3221,7 +3221,7 @@ export type components = {
             readonly symbol: string;
             /** @description decimal string, inbound leg-0 amount */
             readonly volume: string;
-            /** @description decimal string, client_fee_amount */
+            /** @description decimal string, developer fee charged on this transaction */
             readonly fee: string;
         };
         readonly AgenticActionDownstream: {
@@ -3783,14 +3783,48 @@ export type components = {
             readonly routing_preference?: "fastest" | "cheapest";
             /**
              * Format: int32
-             * @description Optional developer fee in basis points (0–10000).
+             * @description Optional developer fee for this auto-account, in basis points (0–10000). An explicit override: it wins over `developer_fee_defaults` for either payout type. Replaces the deprecated `fee_bps`; send one or the other, not both.
+             */
+            readonly developer_fee_bps?: number;
+            /**
+             * Format: int32
+             * @deprecated
+             * @description Deprecated: use `developer_fee_bps`. Same meaning (basis points, 0–10000); still accepted during the rename and removed in a later release. Sending both `fee_bps` and `developer_fee_bps` is a 400.
              */
             readonly fee_bps?: number;
         };
         /**
-         * @description Your developer fee, declared per payout type. A conversion is charged the rate for the kind of payout it funds: `swap_bps` for a crypto payout, `offramp_bps` for a bank payout. Omit a rate, or send zero, and that payout type carries no fee at all — nothing is charged, nothing is added to the amount, and the agent is told nothing about a fee it could mention. The two are independent, so one conversation can charge a swap and stay silent about a bank payout in the same turn.
+         * @description Your default developer fee, declared per payout type. A conversion is charged the rate for the kind of payout it funds: `swap` for a crypto payout, `offramp` for a bank payout. Omit a payout type, or set its `developer_fee_bps` to zero, and that payout type carries no fee at all — nothing is charged, nothing is added to the amount, and the agent is told nothing about a fee it could mention. The two are independent, so one conversation can charge a swap and stay silent about a bank payout in the same turn.
          *
-         *     Both rates are DEFAULTS for the auto-accounts a request creates. An action-level `fee_bps` is an explicit override and still wins outright, for either type.
+         *     Both are DEFAULTS for the auto-accounts a request creates. An action-level `developer_fee_bps` on `create_auto_account` is an explicit override and still wins outright, for either type.
+         *
+         *     Replaces the deprecated `developer_fee` object: `swap_bps` is now `swap.developer_fee_bps` and `offramp_bps` is now `offramp.developer_fee_bps`.
+         * @example {
+         *       "swap": {
+         *         "developer_fee_bps": 50
+         *       },
+         *       "offramp": {
+         *         "developer_fee_bps": 25
+         *       }
+         *     }
+         */
+        readonly DeveloperFeeDefaults: {
+            readonly swap?: components["schemas"]["DeveloperFeeRate"];
+            readonly offramp?: components["schemas"]["DeveloperFeeRate"];
+        };
+        /** @description The developer fee for one payout type. `swap` applies to a `create_auto_account` naming no `rail` (a crypto payout); `offramp` applies to one naming a `rail` (a bank payout — an offramp converts too, so charging it is a pricing decision that belongs to you). */
+        readonly DeveloperFeeRate: {
+            /**
+             * Format: int32
+             * @description Rate in basis points (1 bp = 0.01%), 0–10000. Zero or omitted means this payout type carries no developer fee.
+             */
+            readonly developer_fee_bps?: number;
+        };
+        /**
+         * @deprecated
+         * @description Deprecated: use `developer_fee_defaults`. `swap_bps` is now `developer_fee_defaults.swap.developer_fee_bps` and `offramp_bps` is now `developer_fee_defaults.offramp.developer_fee_bps`. Still accepted during the rename and removed in a later release; sending both `developer_fee` and `developer_fee_defaults` is a 400.
+         *
+         *     Your developer fee, declared per payout type. A conversion is charged the rate for the kind of payout it funds: `swap_bps` for a crypto payout, `offramp_bps` for a bank payout. Omit a rate, or send zero, and that payout type carries no fee at all. Both rates are DEFAULTS for the auto-accounts a request creates; an action-level fee is an explicit override and still wins outright, for either type.
          */
         readonly DeveloperFee: {
             /**
@@ -3807,6 +3841,11 @@ export type components = {
         readonly CreateInstructionsRequest: {
             readonly payment_agent_id: string;
             readonly proposals: readonly components["schemas"]["AgenticProposal"][];
+            readonly developer_fee_defaults?: components["schemas"]["DeveloperFeeDefaults"];
+            /**
+             * @deprecated
+             * @description Deprecated: use `developer_fee_defaults`. Still accepted; sending both is a 400.
+             */
             readonly developer_fee?: components["schemas"]["DeveloperFee"];
         };
         readonly AgenticInstructionsResult: {
@@ -3820,6 +3859,11 @@ export type components = {
             readonly prompt?: string;
             /** @description The conversation so far, oldest first. */
             readonly messages?: readonly components["schemas"]["AgenticChatMessage"][];
+            readonly developer_fee_defaults?: components["schemas"]["DeveloperFeeDefaults"];
+            /**
+             * @deprecated
+             * @description Deprecated: use `developer_fee_defaults`. Still accepted; sending both is a 400.
+             */
             readonly developer_fee?: components["schemas"]["DeveloperFee"];
             /**
              * @description The customer's IANA timezone (e.g. "America/Los_Angeles"). When present, the agent resolves every relative date ("tomorrow", "Friday") and clock time ("10 am") in THIS timezone; a date without a time is drafted for the first working hours of the local day (10:00) and the draft summary states the resolved local time; a time without a date means its next local occurrence. Absent or unrecognized ⇒ times resolve as UTC and the agent says so when a specific clock time matters. Send it on EVERY turn — the server is stateless. Note: the zone's UTC offset is captured at drafting time, so a DST transition before a far-future fire date shifts the fire time by the DST delta.
@@ -5990,6 +6034,12 @@ export type components = {
             readonly destination_asset?: string;
             readonly rail?: components["schemas"]["PaymentCapability"];
             readonly destination_rail?: components["schemas"]["PaymentCapability"];
+            /**
+             * Format: int32
+             * @description Developer fee charged on each deposit to this account, in basis points (1 bp = 0.01%). 0 when the account charges no developer fee.
+             * @example 50
+             */
+            readonly developer_fee_bps: number;
         };
         readonly PaginatedAccountResponse: components["schemas"]["PaginatedListResponse"] & {
             readonly data?: readonly components["schemas"]["AccountResponse"][];
@@ -6939,8 +6989,20 @@ export type components = {
             readonly external_fee?: components["schemas"]["AmountDetails"];
             /** @description Dakota fee amount details */
             readonly dakota_fee?: components["schemas"]["AmountDetails"];
-            /** @description Client fee amount details */
-            readonly client_fee?: components["schemas"]["AmountDetails"];
+            /**
+             * @deprecated
+             * @description Deprecated: use `developer_fee`. Same value; will be removed in the next major version.
+             */
+            readonly client_fee?: {
+                /** @description Amount as a string representation of a decimal number */
+                readonly amount: string;
+                /** @description Asset code */
+                readonly asset: string;
+                /** @description Network identifier for the token if it is a crypto asset */
+                readonly network?: string;
+            };
+            /** @description Developer fee charged on this transaction. Always equal to the deprecated `client_fee`. */
+            readonly developer_fee?: components["schemas"]["AmountDetails"];
             /** @description Gas fee amount details for blockchain transactions */
             readonly gas_fee?: components["schemas"]["AmountDetails"];
             /**
@@ -7041,7 +7103,7 @@ export type components = {
             readonly payment_reference?: string;
             /**
              * Format: int32
-             * @description Developer fee in basis points (1 bp = 0.01%). Overrides the default client fee for this transaction.
+             * @description Developer fee for this transaction in basis points (1 bp = 0.01%). Omitted means no developer fee.
              * @example 50
              */
             readonly developer_fee_bps?: number;
@@ -7079,6 +7141,12 @@ export type components = {
             readonly source_asset: string;
             readonly destination_id: components["schemas"]["KSUID"];
             readonly destination_asset: components["schemas"]["Asset"];
+            /**
+             * Format: int32
+             * @description Developer fee for this transaction in basis points (1 bp = 0.01%), as set by `developer_fee_bps` on the request. 0 when no developer fee was set. One-off transactions created before this field was introduced also report 0, whatever fee they were created with.
+             * @example 50
+             */
+            readonly developer_fee_bps: number;
             /** @description Reason for failure if status is failed */
             readonly failure_reason?: string;
             readonly receipt?: components["schemas"]["TransactionReceipt"];
@@ -11706,6 +11774,7 @@ export interface operations {
                      *           "source_asset": "USDC",
                      *           "destination_id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi",
                      *           "destination_asset": "USD",
+                     *           "developer_fee_bps": 50,
                      *           "receipt": {
                      *             "imad": "string",
                      *             "omad": "string",
@@ -11741,6 +11810,11 @@ export interface operations {
                      *               "network": "string"
                      *             },
                      *             "client_fee": {
+                     *               "amount": "string",
+                     *               "asset": "string",
+                     *               "network": "string"
+                     *             },
+                     *             "developer_fee": {
                      *               "amount": "string",
                      *               "asset": "string",
                      *               "network": "string"
@@ -11956,6 +12030,7 @@ export interface operations {
                      *       "source_asset": "USDC",
                      *       "destination_id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi",
                      *       "destination_asset": "USD",
+                     *       "developer_fee_bps": 50,
                      *       "receipt": {
                      *         "imad": "string",
                      *         "omad": "string",
@@ -11991,6 +12066,11 @@ export interface operations {
                      *           "network": "string"
                      *         },
                      *         "client_fee": {
+                     *           "amount": "string",
+                     *           "asset": "string",
+                     *           "network": "string"
+                     *         },
+                     *         "developer_fee": {
                      *           "amount": "string",
                      *           "asset": "string",
                      *           "network": "string"
@@ -12186,6 +12266,7 @@ export interface operations {
                      *       "source_asset": "USDC",
                      *       "destination_id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi",
                      *       "destination_asset": "USD",
+                     *       "developer_fee_bps": 50,
                      *       "receipt": {
                      *         "imad": "string",
                      *         "omad": "string",
@@ -12221,6 +12302,11 @@ export interface operations {
                      *           "network": "string"
                      *         },
                      *         "client_fee": {
+                     *           "amount": "string",
+                     *           "asset": "string",
+                     *           "network": "string"
+                     *         },
+                     *         "developer_fee": {
                      *           "amount": "string",
                      *           "asset": "string",
                      *           "network": "string"
@@ -13600,7 +13686,8 @@ export interface operations {
                      *           "source_asset": "USDC",
                      *           "destination_asset": "USDC",
                      *           "rail": "ach",
-                     *           "destination_rail": "ach"
+                     *           "destination_rail": "ach",
+                     *           "developer_fee_bps": 50
                      *         }
                      *       ],
                      *       "meta": {
@@ -13786,7 +13873,8 @@ export interface operations {
                      *       "source_asset": "USDC",
                      *       "destination_asset": "USDC",
                      *       "rail": "ach",
-                     *       "destination_rail": "ach"
+                     *       "destination_rail": "ach",
+                     *       "developer_fee_bps": 50
                      *     }
                      */
                     readonly "application/json": components["schemas"]["AccountResponse"];
@@ -14013,7 +14101,8 @@ export interface operations {
                      *       "source_asset": "USDC",
                      *       "destination_asset": "USDC",
                      *       "rail": "ach",
-                     *       "destination_rail": "ach"
+                     *       "destination_rail": "ach",
+                     *       "developer_fee_bps": 50
                      *     }
                      */
                     readonly "application/json": components["schemas"]["AccountResponse"];
@@ -14352,7 +14441,8 @@ export interface operations {
                      *       "source_asset": "USDC",
                      *       "destination_asset": "USDC",
                      *       "rail": "ach",
-                     *       "destination_rail": "ach"
+                     *       "destination_rail": "ach",
+                     *       "developer_fee_bps": 50
                      *     }
                      */
                     readonly "application/json": components["schemas"]["AccountResponse"];
@@ -14577,6 +14667,11 @@ export interface operations {
                      *           "asset": "string",
                      *           "network": "string"
                      *         },
+                     *         "developer_fee": {
+                     *           "amount": "string",
+                     *           "asset": "string",
+                     *           "network": "string"
+                     *         },
                      *         "gas_fee": {
                      *           "amount": "string",
                      *           "asset": "string",
@@ -14789,6 +14884,11 @@ export interface operations {
                      *               "network": "string"
                      *             },
                      *             "client_fee": {
+                     *               "amount": "string",
+                     *               "asset": "string",
+                     *               "network": "string"
+                     *             },
+                     *             "developer_fee": {
                      *               "amount": "string",
                      *               "asset": "string",
                      *               "network": "string"

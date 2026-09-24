@@ -932,14 +932,20 @@ Your developer fee is separate, and belongs in **both** places:
 ```typescript
 // The drafting turn — this is what lets the agent MENTION the fee.
 const conv = client.newAgentConversation(agentId, {
-  developerFee: { swap_bps: 50, offramp_bps: 25 },
+  developerFeeDefaults: {
+    swap: { developer_fee_bps: 50 },
+    offramp: { developer_fee_bps: 25 },
+  },
 });
 
 // The accept — this is what CHARGES it.
 await client.instructions.create({
   payment_agent_id: agentId,
   proposals: turn.proposals,
-  developer_fee: { swap_bps: 50, offramp_bps: 25 },
+  developer_fee_defaults: {
+    swap: { developer_fee_bps: 50 },
+    offramp: { developer_fee_bps: 25 },
+  },
 });
 ```
 

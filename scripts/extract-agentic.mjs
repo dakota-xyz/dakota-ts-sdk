@@ -70,6 +70,9 @@ const AGENTIC_SCHEMAS = new Set([
   'CreateAutoAccountAction',
   'CreateScheduledPaymentRequest',
   'DeveloperFee',
+  // ENG-3900: replace the deprecated DeveloperFee on the agentic requests.
+  'DeveloperFeeDefaults',
+  'DeveloperFeeRate',
   'MandateBudget',
   'MandateBudgetLine',
   'MandateVersion',

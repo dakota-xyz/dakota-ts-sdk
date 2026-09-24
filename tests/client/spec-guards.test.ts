@@ -161,6 +161,30 @@ describe('openapi spec guards', () => {
     expect(missing).toEqual([]);
   });
 
+  /**
+   * Both guards above, and `scripts/extract-agentic.mjs`, select the beta
+   * surface by the maturity marker spelled into the extension NAME
+   * (`x-beta`). If upstream renames it again (it was `x-alpha` until
+   * ENG-3168), every selector matches nothing and those guards pass
+   * vacuously while the overlay goes empty. Pin the selection to the paths
+   * that define the agentic surface so a rename fails here instead.
+   */
+  for (const spec of ['openapi.yaml', 'openapi.agentic.yaml']) {
+    it(`${spec}: the x-beta marker still selects the agentic surface`, () => {
+      const { beta } = partitionPaths(loadSpec(spec));
+
+      for (const route of [
+        '/payment-agents',
+        '/instructions',
+        '/mandates',
+        '/scheduled-payments',
+        '/agentic-policy',
+      ]) {
+        expect(beta[route], route).toBeDefined();
+      }
+    });
+  }
+
   it('the agentic overlay carries every x-beta path', () => {
     const base = loadSpec('openapi.yaml');
     const overlay = loadSpec('openapi.agentic.yaml');
