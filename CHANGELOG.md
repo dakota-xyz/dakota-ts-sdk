@@ -4,6 +4,60 @@ All notable changes to the Dakota TypeScript SDK are documented in this file.
 
 ## [Unreleased]
 
+### Developer-fee naming (ENG-3956)
+
+A partial spec sync. `openapi.yaml` was a copy of platform `openapi.public.yaml`
+at `a75e4fba`. This applies only platform `ae739649` (ENG-3899) and `9e438daa`
+(ENG-3900), both in Platform `v0.3.76`. The base spec and the agentic overlay
+are both updated, and the types are regenerated. Other platform changes since
+`a75e4fba` are left for a later full sync.
+
+#### Added
+
+- `developer_fee` (`AmountDetails`) on transaction receipts.
+- `developer_fee_bps` on `Account` and `OneOffTransaction` responses. It is
+  `0` when no developer fee applies, and also `0` on one-offs created before
+  the field existed. The spec marks it **required**, so any object literal
+  typed as `Account` (or `OnrampAccount` / `OfframpAccount` / `SwapAccount`)
+  or `OneOffTransaction`, such as a test fixture or a fake, now needs the
+  field. Servers older than Platform `v0.3.76` do not send it.
+- Agentic: `developer_fee_defaults` on `instructions.create()` and on the
+  proposals request, typed `DeveloperFeeDefaults`, with a `swap` and an
+  `offramp` `DeveloperFeeRate` of `{ developer_fee_bps }`. There is also
+  `developer_fee_bps` on the `create_auto_account` action. Both types are
+  exported.
+- `AgentConversation` takes a `developerFeeDefaults` option and sends it as
+  `developer_fee_defaults` on every turn.
+
+#### Deprecated
+
+These are still present, still sent or accepted by the platform, and marked
+`@deprecated`. Existing code that uses them compiles and works unchanged.
+
+- Receipt `client_fee`: use `developer_fee`, which carries the same value.
+  `client_fee` keeps the `AmountDetails` shape.
+- Agentic `developer_fee` and the `DeveloperFee` type: use
+  `developer_fee_defaults`. `swap_bps` becomes `swap.developer_fee_bps` and
+  `offramp_bps` becomes `offramp.developer_fee_bps`.
+- `AgentConversation`'s `developerFee` option: use `developerFeeDefaults`.
+- The `create_auto_account` action's `fee_bps`: use `developer_fee_bps`.
+
+The platform returns a 400 if a request sends both an old field and its
+replacement. The SDK passes both through if you set both, so you see that
+error instead of having one of them dropped without notice.
+
+The description of the one-off request's `developer_fee_bps` now reads
+"omitted means no developer fee". This is a wording correction only. The
+platform did not change how it charges one-offs.
+
+Webhook transaction receipts now carry `developer_fee` next to `client_fee`,
+as a flat decimal string. The SDK does not type transaction webhook payloads,
+so nothing changes in the SDK for them.
+
+`tests/client/spec-guards.test.ts` now checks that the `x-beta` marker still
+selects the agentic paths. Before this, a renamed marker left the overlay
+guards passing on an empty selection.
+
 ## [3.1.0] — x402, and the 2026-09-23 spec sync
 
 `openapi.yaml` is refreshed from platform `openapi.public.yaml` at `fef7169e`,

@@ -14,6 +14,7 @@ import type {
   AgenticProposal,
   AgenticProposalsResult,
   DeveloperFee,
+  DeveloperFeeDefaults,
 } from '../client/types.js';
 
 /**
@@ -146,9 +147,10 @@ export interface AgentConversationOptions {
   timeout?: number;
 
   /**
-   * Your developer fee, declared PER PAYOUT TYPE — `swap_bps` for a crypto
-   * payout, `offramp_bps` for a bank one. The two are independent, so one
-   * conversation can charge a swap and stay silent about a bank payout.
+   * Your default developer fee, declared PER PAYOUT TYPE — `swap` for a
+   * crypto payout, `offramp` for a bank one, each as `{ developer_fee_bps }`.
+   * The two are independent, so one conversation can charge a swap and stay
+   * silent about a bank payout.
    *
    * Set it here as well as on `instructions.create()`, not instead of it.
    * The accept is what CHARGES the fee; declaring it on the drafting turn is
@@ -157,6 +159,15 @@ export interface AgentConversationOptions {
    * disclosed one and then gets charged it.
    *
    * Resent on every turn, since the endpoint is stateless.
+   */
+  developerFeeDefaults?: DeveloperFeeDefaults;
+
+  /**
+   * @deprecated Use {@link developerFeeDefaults}: `swap_bps` is now
+   * `swap.developer_fee_bps` and `offramp_bps` is now
+   * `offramp.developer_fee_bps`. Still sent as `developer_fee` while the
+   * platform accepts it. Set one or the other — the SDK forwards both if
+   * both are set, and the platform rejects that with a 400.
    */
   developerFee?: DeveloperFee;
 }
@@ -178,6 +189,7 @@ export class AgentConversation {
   private readonly paymentAgentId: string;
   private readonly timezone?: string;
   private readonly timeout?: number;
+  private readonly developerFeeDefaults?: DeveloperFeeDefaults;
   private readonly developerFee?: DeveloperFee;
   private history: ChatMessage[] = [];
 
@@ -191,6 +203,7 @@ export class AgentConversation {
     this.paymentAgentId = paymentAgentId;
     this.timezone = options?.timezone;
     this.timeout = options?.timeout;
+    this.developerFeeDefaults = options?.developerFeeDefaults;
     this.developerFee = options?.developerFee;
     if (history && history.length > 0) {
       this.history = history.map(cloneMessage);
@@ -251,6 +264,9 @@ export class AgentConversation {
           // Resent on EVERY turn — the endpoint is stateless, so a value
           // given once would be forgotten on the next one.
           ...(this.timezone ? { timezone: this.timezone } : {}),
+          ...(this.developerFeeDefaults
+            ? { developer_fee_defaults: this.developerFeeDefaults }
+            : {}),
           ...(this.developerFee ? { developer_fee: this.developerFee } : {}),
         },
         this.timeout !== undefined ? { timeout: this.timeout } : undefined

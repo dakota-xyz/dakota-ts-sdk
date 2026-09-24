@@ -1570,13 +1570,24 @@ export type AgenticClientPolicy = components['schemas']['AgenticClientPolicy'];
 export type RegisteredAgenticClientPolicy = components['schemas']['RegisteredAgenticClientPolicy'];
 
 /**
- * Your developer fee, declared per payout type: `swap_bps` for a crypto
- * payout, `offramp_bps` for a bank payout.
+ * Your default developer fee, declared per payout type: `swap` for a crypto
+ * payout, `offramp` for a bank payout, each a {@link DeveloperFeeRate}.
  *
- * The two are independent — omit one (or send zero) and that payout type
- * carries no fee at all, and the agent is told nothing about a fee it could
- * mention. Both are DEFAULTS for the auto-accounts a request creates; an
- * action-level `fee_bps` still wins outright.
+ * The two are independent — omit one (or set its `developer_fee_bps` to zero)
+ * and that payout type carries no fee at all, and the agent is told nothing
+ * about a fee it could mention. Both are DEFAULTS for the auto-accounts a
+ * request creates; an action-level `developer_fee_bps` still wins outright.
+ */
+export type DeveloperFeeDefaults = components['schemas']['DeveloperFeeDefaults'];
+
+/** The developer fee for one payout type, in basis points (0–10000). */
+export type DeveloperFeeRate = components['schemas']['DeveloperFeeRate'];
+
+/**
+ * @deprecated Use {@link DeveloperFeeDefaults}: `swap_bps` is now
+ * `swap.developer_fee_bps` and `offramp_bps` is now
+ * `offramp.developer_fee_bps`. Still accepted by the platform during the
+ * rename; sending both `developer_fee` and `developer_fee_defaults` is a 400.
  */
 export type DeveloperFee = components['schemas']['DeveloperFee'];
 

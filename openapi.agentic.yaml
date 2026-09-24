@@ -3023,8 +3023,12 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/AgenticProposal'
+        developer_fee_defaults:
+          $ref: '#/components/schemas/DeveloperFeeDefaults'
         developer_fee:
           $ref: '#/components/schemas/DeveloperFee'
+          deprecated: true
+          description: 'Deprecated: use `developer_fee_defaults`. Still accepted; sending both is a 400.'
     CreateMandateAction:
       type: object
       required:
@@ -3078,8 +3082,12 @@ components:
           description: The conversation so far, oldest first.
           items:
             $ref: '#/components/schemas/AgenticChatMessage'
+        developer_fee_defaults:
+          $ref: '#/components/schemas/DeveloperFeeDefaults'
         developer_fee:
           $ref: '#/components/schemas/DeveloperFee'
+          deprecated: true
+          description: 'Deprecated: use `developer_fee_defaults`. Still accepted; sending both is a 400.'
         timezone:
           type: string
           maxLength: 64
@@ -3175,10 +3183,18 @@ components:
           enum:
             - fastest
             - cheapest
+        developer_fee_bps:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 10000
+          description: 'Optional developer fee for this auto-account, in basis points (0–10000). An explicit override: it wins over `developer_fee_defaults` for either payout type. Replaces the deprecated `fee_bps`; send one or the other, not both.'
         fee_bps:
           type: integer
           format: int32
-          description: Optional developer fee in basis points (0–10000).
+          deprecated: true
+          x-deprecated-reason: Renamed to developer_fee_bps, which carries the same value.
+          description: 'Deprecated: use `developer_fee_bps`. Same meaning (basis points, 0–10000); still accepted during the rename and removed in a later release. Sending both `fee_bps` and `developer_fee_bps` is a 400.'
     CreateScheduledPaymentRequest:
       type: object
       required:
@@ -3231,10 +3247,12 @@ components:
           description: First due time (0 ⇒ now).
     DeveloperFee:
       type: object
+      deprecated: true
+      x-deprecated-reason: Renamed to developer_fee_defaults (DeveloperFeeDefaults).
       description: |
-        Your developer fee, declared per payout type. A conversion is charged the rate for the kind of payout it funds: `swap_bps` for a crypto payout, `offramp_bps` for a bank payout. Omit a rate, or send zero, and that payout type carries no fee at all — nothing is charged, nothing is added to the amount, and the agent is told nothing about a fee it could mention. The two are independent, so one conversation can charge a swap and stay silent about a bank payout in the same turn.
+        Deprecated: use `developer_fee_defaults`. `swap_bps` is now `developer_fee_defaults.swap.developer_fee_bps` and `offramp_bps` is now `developer_fee_defaults.offramp.developer_fee_bps`. Still accepted during the rename and removed in a later release; sending both `developer_fee` and `developer_fee_defaults` is a 400.
 
-        Both rates are DEFAULTS for the auto-accounts a request creates. An action-level `fee_bps` is an explicit override and still wins outright, for either type.
+        Your developer fee, declared per payout type. A conversion is charged the rate for the kind of payout it funds: `swap_bps` for a crypto payout, `offramp_bps` for a bank payout. Omit a rate, or send zero, and that payout type carries no fee at all. Both rates are DEFAULTS for the auto-accounts a request creates; an action-level fee is an explicit override and still wins outright, for either type.
       properties:
         swap_bps:
           type: integer
@@ -3250,6 +3268,35 @@ components:
           maximum: 10000
           description: |
             Rate for a bank payout — a `create_auto_account` naming a `rail`. An offramp converts too (it just settles on a rail instead of a chain), so charging it is a pricing decision that belongs to you. Zero or omitted means the payout is free of a conversion fee.
+    DeveloperFeeDefaults:
+      type: object
+      description: |
+        Your default developer fee, declared per payout type. A conversion is charged the rate for the kind of payout it funds: `swap` for a crypto payout, `offramp` for a bank payout. Omit a payout type, or set its `developer_fee_bps` to zero, and that payout type carries no fee at all — nothing is charged, nothing is added to the amount, and the agent is told nothing about a fee it could mention. The two are independent, so one conversation can charge a swap and stay silent about a bank payout in the same turn.
+
+        Both are DEFAULTS for the auto-accounts a request creates. An action-level `developer_fee_bps` on `create_auto_account` is an explicit override and still wins outright, for either type.
+
+        Replaces the deprecated `developer_fee` object: `swap_bps` is now `swap.developer_fee_bps` and `offramp_bps` is now `offramp.developer_fee_bps`.
+      properties:
+        swap:
+          $ref: '#/components/schemas/DeveloperFeeRate'
+        offramp:
+          $ref: '#/components/schemas/DeveloperFeeRate'
+      example:
+        swap:
+          developer_fee_bps: 50
+        offramp:
+          developer_fee_bps: 25
+    DeveloperFeeRate:
+      type: object
+      description: |
+        The developer fee for one payout type. `swap` applies to a `create_auto_account` naming no `rail` (a crypto payout); `offramp` applies to one naming a `rail` (a bank payout — an offramp converts too, so charging it is a pricing decision that belongs to you).
+      properties:
+        developer_fee_bps:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 10000
+          description: Rate in basis points (1 bp = 0.01%), 0–10000. Zero or omitted means this payout type carries no developer fee.
     MandateBudget:
       type: object
       required:

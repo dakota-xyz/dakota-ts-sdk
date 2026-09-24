@@ -203,6 +203,46 @@ describe('AgentConversation.send', () => {
     expect(developerFeeOf(requests[2])).toBeUndefined();
   });
 
+  it('resends developer_fee_defaults on EVERY turn, and omits it when unset', async () => {
+    const { fetch, requests } = createRoutedFetch({
+      [`POST ${PROPOSALS_PATH}`]: () => ({ status: 200, body: { reply: 'ok' } }),
+    });
+    const client = makeClient(fetch as unknown as typeof globalThis.fetch);
+    const defaults = { swap: { developer_fee_bps: 50 }, offramp: { developer_fee_bps: 25 } };
+
+    const priced = client.newAgentConversation(AGENT_ID, { developerFeeDefaults: defaults });
+    await priced.send('pay alice');
+    await priced.send('and bob');
+    expect(developerFeeDefaultsOf(requests[0])).toEqual(defaults);
+    expect(developerFeeDefaultsOf(requests[1])).toEqual(defaults);
+    // The new option never also sends the deprecated field.
+    expect(developerFeeOf(requests[0])).toBeUndefined();
+
+    const plain = client.newAgentConversation(AGENT_ID);
+    await plain.send('pay alice');
+    expect(developerFeeDefaultsOf(requests[2])).toBeUndefined();
+  });
+
+  it('forwards both fee options when both are set, leaving the 400 to the platform', async () => {
+    const { fetch, requests } = createRoutedFetch({
+      [`POST ${PROPOSALS_PATH}`]: () => ({ status: 200, body: { reply: 'ok' } }),
+    });
+    const client = makeClient(fetch as unknown as typeof globalThis.fetch);
+    const defaults = { swap: { developer_fee_bps: 50 } };
+    const legacy = { swap_bps: 50 };
+
+    // Neither is silently preferred: the platform rejects the pair, and that
+    // error is the one the caller should see.
+    const conv = client.newAgentConversation(AGENT_ID, {
+      developerFeeDefaults: defaults,
+      developerFee: legacy,
+    });
+    await conv.send('pay alice');
+
+    expect(developerFeeDefaultsOf(requests[0])).toEqual(defaults);
+    expect(developerFeeOf(requests[0])).toEqual(legacy);
+  });
+
   it('a resumed conversation keeps sending the fee it was rebuilt with', async () => {
     const { fetch, requests } = createRoutedFetch({
       [`POST ${PROPOSALS_PATH}`]: () => ({ status: 200, body: { reply: 'ok' } }),
@@ -352,4 +392,9 @@ function messagesOf(req: RecordedRequest | undefined): { role: string; content: 
   if (!req || !req.body || typeof req.body !== 'object') return [];
   const messages = (req.body as { messages?: { role: string; content: string }[] }).messages ?? [];
   return messages.map(({ role, content }) => ({ role, content }));
+}
+
+function developerFeeDefaultsOf(req: RecordedRequest | undefined): unknown {
+  if (!req || !req.body || typeof req.body !== 'object') return undefined;
+  return (req.body as { developer_fee_defaults?: unknown }).developer_fee_defaults;
 }

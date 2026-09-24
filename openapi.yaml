@@ -1602,6 +1602,7 @@ paths:
                 source_asset: USDC
                 destination_id: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
                 destination_asset: USD
+                developer_fee_bps: 50
                 receipt:
                   imad: string
                   omad: string
@@ -1631,6 +1632,10 @@ paths:
                     asset: string
                     network: string
                   client_fee:
+                    amount: string
+                    asset: string
+                    network: string
+                  developer_fee:
                     amount: string
                     asset: string
                     network: string
@@ -1931,6 +1936,7 @@ paths:
                     source_asset: USDC
                     destination_id: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
                     destination_asset: USD
+                    developer_fee_bps: 50
                     receipt:
                       imad: string
                       omad: string
@@ -1960,6 +1966,10 @@ paths:
                         asset: string
                         network: string
                       client_fee:
+                        amount: string
+                        asset: string
+                        network: string
+                      developer_fee:
                         amount: string
                         asset: string
                         network: string
@@ -2092,6 +2102,7 @@ paths:
                 source_asset: USDC
                 destination_id: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
                 destination_asset: USD
+                developer_fee_bps: 50
                 receipt:
                   imad: string
                   omad: string
@@ -2121,6 +2132,10 @@ paths:
                     asset: string
                     network: string
                   client_fee:
+                    amount: string
+                    asset: string
+                    network: string
+                  developer_fee:
                     amount: string
                     asset: string
                     network: string
@@ -3186,6 +3201,7 @@ paths:
                 destination_asset: USDC
                 rail: ach
                 destination_rail: ach
+                developer_fee_bps: 50
         '400':
           description: Invalid request
           content:
@@ -3436,6 +3452,7 @@ paths:
                     destination_asset: USDC
                     rail: ach
                     destination_rail: ach
+                    developer_fee_bps: 50
                 meta:
                   total_count: 100
                   has_more_after: true
@@ -3591,6 +3608,7 @@ paths:
                 destination_asset: USDC
                 rail: ach
                 destination_rail: ach
+                developer_fee_bps: 50
         '400':
           description: Invalid request
           content:
@@ -3781,6 +3799,7 @@ paths:
                 destination_asset: USDC
                 rail: ach
                 destination_rail: ach
+                developer_fee_bps: 50
         '400':
           description: Invalid request
           content:
@@ -4010,6 +4029,10 @@ paths:
                     asset: string
                     network: string
                   client_fee:
+                    amount: string
+                    asset: string
+                    network: string
+                  developer_fee:
                     amount: string
                     asset: string
                     network: string
@@ -4267,6 +4290,10 @@ paths:
                         asset: string
                         network: string
                       client_fee:
+                        amount: string
+                        asset: string
+                        network: string
+                      developer_fee:
                         amount: string
                         asset: string
                         network: string
@@ -17754,7 +17781,7 @@ components:
           description: decimal string, inbound leg-0 amount
         fee:
           type: string
-          description: decimal string, client_fee_amount
+          description: decimal string, developer fee charged on this transaction
     AgenticActionDownstream:
       type: object
       properties:
@@ -18892,16 +18919,55 @@ components:
           enum:
             - fastest
             - cheapest
+        developer_fee_bps:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 10000
+          description: 'Optional developer fee for this auto-account, in basis points (0–10000). An explicit override: it wins over `developer_fee_defaults` for either payout type. Replaces the deprecated `fee_bps`; send one or the other, not both.'
         fee_bps:
           type: integer
           format: int32
-          description: Optional developer fee in basis points (0–10000).
-    DeveloperFee:
+          deprecated: true
+          x-deprecated-reason: Renamed to developer_fee_bps, which carries the same value.
+          description: 'Deprecated: use `developer_fee_bps`. Same meaning (basis points, 0–10000); still accepted during the rename and removed in a later release. Sending both `fee_bps` and `developer_fee_bps` is a 400.'
+    DeveloperFeeDefaults:
       type: object
       description: |
-        Your developer fee, declared per payout type. A conversion is charged the rate for the kind of payout it funds: `swap_bps` for a crypto payout, `offramp_bps` for a bank payout. Omit a rate, or send zero, and that payout type carries no fee at all — nothing is charged, nothing is added to the amount, and the agent is told nothing about a fee it could mention. The two are independent, so one conversation can charge a swap and stay silent about a bank payout in the same turn.
+        Your default developer fee, declared per payout type. A conversion is charged the rate for the kind of payout it funds: `swap` for a crypto payout, `offramp` for a bank payout. Omit a payout type, or set its `developer_fee_bps` to zero, and that payout type carries no fee at all — nothing is charged, nothing is added to the amount, and the agent is told nothing about a fee it could mention. The two are independent, so one conversation can charge a swap and stay silent about a bank payout in the same turn.
 
-        Both rates are DEFAULTS for the auto-accounts a request creates. An action-level `fee_bps` is an explicit override and still wins outright, for either type.
+        Both are DEFAULTS for the auto-accounts a request creates. An action-level `developer_fee_bps` on `create_auto_account` is an explicit override and still wins outright, for either type.
+
+        Replaces the deprecated `developer_fee` object: `swap_bps` is now `swap.developer_fee_bps` and `offramp_bps` is now `offramp.developer_fee_bps`.
+      properties:
+        swap:
+          $ref: '#/components/schemas/DeveloperFeeRate'
+        offramp:
+          $ref: '#/components/schemas/DeveloperFeeRate'
+      example:
+        swap:
+          developer_fee_bps: 50
+        offramp:
+          developer_fee_bps: 25
+    DeveloperFeeRate:
+      type: object
+      description: |
+        The developer fee for one payout type. `swap` applies to a `create_auto_account` naming no `rail` (a crypto payout); `offramp` applies to one naming a `rail` (a bank payout — an offramp converts too, so charging it is a pricing decision that belongs to you).
+      properties:
+        developer_fee_bps:
+          type: integer
+          format: int32
+          minimum: 0
+          maximum: 10000
+          description: Rate in basis points (1 bp = 0.01%), 0–10000. Zero or omitted means this payout type carries no developer fee.
+    DeveloperFee:
+      type: object
+      deprecated: true
+      x-deprecated-reason: Renamed to developer_fee_defaults (DeveloperFeeDefaults).
+      description: |
+        Deprecated: use `developer_fee_defaults`. `swap_bps` is now `developer_fee_defaults.swap.developer_fee_bps` and `offramp_bps` is now `developer_fee_defaults.offramp.developer_fee_bps`. Still accepted during the rename and removed in a later release; sending both `developer_fee` and `developer_fee_defaults` is a 400.
+
+        Your developer fee, declared per payout type. A conversion is charged the rate for the kind of payout it funds: `swap_bps` for a crypto payout, `offramp_bps` for a bank payout. Omit a rate, or send zero, and that payout type carries no fee at all. Both rates are DEFAULTS for the auto-accounts a request creates; an action-level fee is an explicit override and still wins outright, for either type.
       properties:
         swap_bps:
           type: integer
@@ -18929,8 +18995,12 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/AgenticProposal'
+        developer_fee_defaults:
+          $ref: '#/components/schemas/DeveloperFeeDefaults'
         developer_fee:
           $ref: '#/components/schemas/DeveloperFee'
+          deprecated: true
+          description: 'Deprecated: use `developer_fee_defaults`. Still accepted; sending both is a 400.'
     AgenticInstructionsResult:
       type: object
       properties:
@@ -18956,8 +19026,12 @@ components:
           description: The conversation so far, oldest first.
           items:
             $ref: '#/components/schemas/AgenticChatMessage'
+        developer_fee_defaults:
+          $ref: '#/components/schemas/DeveloperFeeDefaults'
         developer_fee:
           $ref: '#/components/schemas/DeveloperFee'
+          deprecated: true
+          description: 'Deprecated: use `developer_fee_defaults`. Still accepted; sending both is a 400.'
         timezone:
           type: string
           maxLength: 64
@@ -21827,6 +21901,7 @@ components:
       required:
         - id
         - account_type
+        - developer_fee_bps
       properties:
         id:
           $ref: '#/components/schemas/KSUID'
@@ -21856,6 +21931,11 @@ components:
           $ref: '#/components/schemas/PaymentCapability'
         destination_rail:
           $ref: '#/components/schemas/PaymentCapability'
+        developer_fee_bps:
+          type: integer
+          format: int32
+          description: Developer fee charged on each deposit to this account, in basis points (1 bp = 0.01%). 0 when the account charges no developer fee.
+          example: 50
     PaginatedAccountResponse:
       allOf:
         - $ref: '#/components/schemas/PaginatedListResponse'
@@ -23058,8 +23138,27 @@ components:
           $ref: '#/components/schemas/AmountDetails'
           description: Dakota fee amount details
         client_fee:
+          type: object
+          x-go-type: AmountDetails
+          required:
+            - amount
+            - asset
+          properties:
+            amount:
+              type: string
+              description: Amount as a string representation of a decimal number
+            asset:
+              type: string
+              description: Asset code
+            network:
+              type: string
+              description: Network identifier for the token if it is a crypto asset
+          deprecated: true
+          x-deprecated-reason: Use developer_fee, which carries the same value.
+          description: 'Deprecated: use `developer_fee`. Same value; will be removed in the next major version.'
+        developer_fee:
           $ref: '#/components/schemas/AmountDetails'
-          description: Client fee amount details
+          description: Developer fee charged on this transaction. Always equal to the deprecated `client_fee`.
         gas_fee:
           $ref: '#/components/schemas/AmountDetails'
           description: Gas fee amount details for blockchain transactions
@@ -23196,7 +23295,7 @@ components:
         developer_fee_bps:
           type: integer
           format: int32
-          description: Developer fee in basis points (1 bp = 0.01%). Overrides the default client fee for this transaction.
+          description: Developer fee for this transaction in basis points (1 bp = 0.01%). Omitted means no developer fee.
           example: 50
           minimum: 0
           maximum: 10000
@@ -23213,6 +23312,7 @@ components:
         - source_asset
         - destination_id
         - destination_asset
+        - developer_fee_bps
         - created_at
         - updated_at
       properties:
@@ -23249,6 +23349,11 @@ components:
           $ref: '#/components/schemas/KSUID'
         destination_asset:
           $ref: '#/components/schemas/Asset'
+        developer_fee_bps:
+          type: integer
+          format: int32
+          description: Developer fee for this transaction in basis points (1 bp = 0.01%), as set by `developer_fee_bps` on the request. 0 when no developer fee was set. One-off transactions created before this field was introduced also report 0, whatever fee they were created with.
+          example: 50
         failure_reason:
           type: string
           description: Reason for failure if status is failed

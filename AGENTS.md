@@ -862,13 +862,19 @@ await client.agenticPolicy.set({
 // on the accept and the customer approves a summary that never disclosed a
 // fee and is then charged it.
 const priced = client.newAgentConversation(agent.id!, {
-  developerFee: { swap_bps: 50, offramp_bps: 25 },
+  developerFeeDefaults: {
+    swap: { developer_fee_bps: 50 },
+    offramp: { developer_fee_bps: 25 },
+  },
 });
 
 await client.instructions.create({
   payment_agent_id: agent.id!,
   proposals: turn.proposals,
-  developer_fee: { swap_bps: 50, offramp_bps: 25 },
+  developer_fee_defaults: {
+    swap: { developer_fee_bps: 50 },
+    offramp: { developer_fee_bps: 25 },
+  },
 });
 
 // Read-only account insights.

@@ -25,14 +25,19 @@ export class InstructionsResource extends BaseResource {
    *
    * One optional field shapes the actuation:
    *
-   * - `developer_fee` declares your fee PER PAYOUT TYPE — `swap_bps` for a
-   *   crypto payout, `offramp_bps` for a bank payout. They are independent,
+   * - `developer_fee_defaults` declares your fee PER PAYOUT TYPE —
+   *   `swap.developer_fee_bps` for a crypto payout,
+   *   `offramp.developer_fee_bps` for a bank payout. They are independent,
    *   so one conversation can charge a swap and stay silent about a bank
-   *   payout in the same turn. Omit a rate (or send zero) and that payout
-   *   type carries no fee: nothing is charged, nothing is added to the
-   *   amount, and the agent is told nothing about a fee it could mention.
-   *   Both are DEFAULTS for the auto-accounts this request creates — an
-   *   action-level `fee_bps` still wins outright.
+   *   payout in the same turn. Omit a payout type (or send zero) and it
+   *   carries no fee: nothing is charged, nothing is added to the amount,
+   *   and the agent is told nothing about a fee it could mention. Both are
+   *   DEFAULTS for the auto-accounts this request creates — an action-level
+   *   `developer_fee_bps` still wins outright.
+   *
+   *   It replaces the deprecated `developer_fee` (`swap_bps` /
+   *   `offramp_bps`), which the platform still accepts. Send one or the
+   *   other: both is a 400.
    *
    * The vocabulary the actuation is judged against comes from the policy
    * registered with `client.agenticPolicy.set()` — the same one the drafting
