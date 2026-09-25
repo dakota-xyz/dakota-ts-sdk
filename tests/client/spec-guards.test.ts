@@ -185,6 +185,35 @@ describe('openapi spec guards', () => {
     });
   }
 
+  /**
+   * The fixed developer fee (ENG-3918) is a decimal STRING in units of the
+   * deposited asset, and is omitted (never null) when unset. A sync that
+   * turned it into a number would round away the cents the platform
+   * validates; a nullable one would type every read as `string | null`.
+   */
+  it('the fixed developer fee fields stay non-nullable strings', () => {
+    const schemas = loadSpec('openapi.yaml').components?.schemas ?? {};
+    const fields: Array<[string, string]> = [
+      ['AccountCreateRequest', 'developer_fee_fixed'],
+      ['AccountUpdateRequest', 'developer_fee_fixed'],
+      ['OneOffTransactionRequest', 'developer_fee_fixed'],
+      ['AccountResponse', 'developer_fee_fixed'],
+      ['AccountResponse', 'minimum_deposit'],
+      ['OneOffTransaction', 'developer_fee_fixed'],
+    ];
+
+    for (const [schema, field] of fields) {
+      const def = schemas[schema] as {
+        properties?: Record<string, { type?: unknown; nullable?: unknown }>;
+        required?: string[];
+      };
+      const prop = def.properties?.[field];
+      expect(prop?.type, `${schema}.${field}`).toBe('string');
+      expect(prop?.nullable, `${schema}.${field}`).toBeUndefined();
+      expect(def.required ?? [], `${schema}.${field}`).not.toContain(field);
+    }
+  });
+
   it('the agentic overlay carries every x-beta path', () => {
     const base = loadSpec('openapi.yaml');
     const overlay = loadSpec('openapi.agentic.yaml');

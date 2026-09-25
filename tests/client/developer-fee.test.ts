@@ -1,5 +1,6 @@
 /**
- * Developer-fee naming (ENG-3956, platform ENG-3899 / ENG-3900).
+ * Developer-fee naming (ENG-3956, platform ENG-3899 / ENG-3900) and the fixed
+ * developer fee (ENG-3918, platform ENG-3916 / ENG-4029).
  *
  * Receipts carry `developer_fee`, with `client_fee` deprecated but still sent
  * with the same value; accounts and one-offs report `developer_fee_bps`. The
@@ -14,6 +15,11 @@ import { describe, it, expect, expectTypeOf } from 'vitest';
 import { DakotaClient } from '../../src/client/client.js';
 import type { components } from '../../src/generated/api.js';
 import type {
+  Account,
+  AccountCreateRequest,
+  AccountUpdateRequest,
+  OneOffTransaction,
+  OneOffTransactionRequest,
   CreateInstructionsRequest,
   DeveloperFee,
   DeveloperFeeDefaults,
@@ -75,6 +81,132 @@ describe('developer fee on REST responses', () => {
     const account = await client.accounts.get('acc_1');
 
     expect(account.developer_fee_bps).toBe(0);
+  });
+});
+
+/**
+ * Fixed developer fee (ENG-3918, platform ENG-3916 / ENG-4029). The fee is a
+ * decimal STRING in units of the deposited asset: a number would lose the
+ * two-decimal precision the platform validates, so the type must reject one
+ * and the wire must carry a JSON string.
+ */
+describe('fixed developer fee', () => {
+  /** A fetch that keeps the raw request body, so the wire bytes can be asserted. */
+  function rawCapture(responseBody: unknown) {
+    const bodies: string[] = [];
+    const fetchImpl = async (_input: unknown, init?: RequestInit): Promise<Response> => {
+      bodies.push(String(init?.body));
+      return new Response(JSON.stringify(responseBody), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      });
+    };
+    return { fetch: fetchImpl as unknown as typeof globalThis.fetch, bodies };
+  }
+
+  it('the request and response fields are typed string, never number', () => {
+    expectTypeOf<AccountCreateRequest['developer_fee_fixed']>().toEqualTypeOf<string | undefined>();
+    expectTypeOf<AccountUpdateRequest['developer_fee_fixed']>().toEqualTypeOf<string | undefined>();
+    expectTypeOf<OneOffTransactionRequest['developer_fee_fixed']>().toEqualTypeOf<
+      string | undefined
+    >();
+    expectTypeOf<Account['developer_fee_fixed']>().toEqualTypeOf<string | undefined>();
+    expectTypeOf<Account['minimum_deposit']>().toEqualTypeOf<string | undefined>();
+    expectTypeOf<OneOffTransaction['developer_fee_fixed']>().toEqualTypeOf<string | undefined>();
+
+    // @ts-expect-error a number is not a fixed fee
+    const numeric: AccountUpdateRequest['developer_fee_fixed'] = 10;
+    expect(numeric).toBeDefined();
+  });
+
+  it('accounts.create sends developer_fee_fixed as a JSON string', async () => {
+    const { fetch, bodies } = rawCapture({ id: 'acc_1', account_type: 'onramp' });
+    const client = makeClient(fetch);
+
+    await client.accounts.create({ account_type: 'onramp', developer_fee_fixed: '10.00' });
+
+    expect(bodies[0]).toContain('"developer_fee_fixed":"10.00"');
+  });
+
+  it('accounts.update sends developer_fee_fixed as a JSON string', async () => {
+    const { fetch, bodies } = rawCapture({ id: 'acc_1', account_type: 'onramp' });
+    const client = makeClient(fetch);
+
+    await client.accounts.update('acc_1', {
+      account_type: 'onramp',
+      developer_fee_fixed: '10.00',
+    });
+
+    expect(bodies[0]).toContain('"developer_fee_fixed":"10.00"');
+  });
+
+  it('transactions.create sends developer_fee_fixed as a JSON string', async () => {
+    const { fetch, bodies } = rawCapture({ id: 'tx_1' });
+    const client = makeClient(fetch);
+
+    await client.transactions.create({
+      customer_id: 'cus_1',
+      source_network_id: 'ethereum-mainnet',
+      source_asset: 'USDC',
+      destination_id: 'dst_1',
+      destination_asset: 'USD',
+      developer_fee_fixed: '10.00',
+    });
+
+    expect(bodies[0]).toContain('"developer_fee_fixed":"10.00"');
+  });
+
+  it('a fixed-fee account exposes developer_fee_fixed and minimum_deposit', async () => {
+    const { fetch } = createRoutedFetch({
+      'GET /accounts/acc_1': () => ({
+        status: 200,
+        body: {
+          id: 'acc_1',
+          account_type: 'onramp',
+          developer_fee_bps: 0,
+          developer_fee_fixed: '10.00',
+          minimum_deposit: '10.01',
+        },
+      }),
+    });
+    const client = makeClient(fetch as unknown as typeof globalThis.fetch);
+
+    const account = await client.accounts.get('acc_1');
+
+    expect(account.developer_fee_fixed).toBe('10.00');
+    expect(account.minimum_deposit).toBe('10.01');
+  });
+
+  it('a bps account omits developer_fee_fixed and minimum_deposit', async () => {
+    const { fetch } = createRoutedFetch({
+      'GET /accounts/acc_2': () => ({
+        status: 200,
+        body: { id: 'acc_2', account_type: 'onramp', developer_fee_bps: 50 },
+      }),
+    });
+    const client = makeClient(fetch as unknown as typeof globalThis.fetch);
+
+    const account = await client.accounts.get('acc_2');
+
+    expect(account.developer_fee_fixed).toBeUndefined();
+    expect(account.minimum_deposit).toBeUndefined();
+  });
+
+  it('a one-off exposes developer_fee_fixed, and omits it when unset', async () => {
+    const { fetch } = createRoutedFetch({
+      'GET /transactions/tx_fixed': () => ({
+        status: 200,
+        body: { id: 'tx_fixed', developer_fee_bps: 0, developer_fee_fixed: '10.00' },
+      }),
+      'GET /transactions/tx_bps': () => ({
+        status: 200,
+        body: { id: 'tx_bps', developer_fee_bps: 50 },
+      }),
+    });
+    const client = makeClient(fetch as unknown as typeof globalThis.fetch);
+
+    expect((await client.transactions.get('tx_fixed')).developer_fee_fixed).toBe('10.00');
+    expect((await client.transactions.get('tx_bps')).developer_fee_fixed).toBeUndefined();
   });
 });
 

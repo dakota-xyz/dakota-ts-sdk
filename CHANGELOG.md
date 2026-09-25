@@ -4,6 +4,34 @@ All notable changes to the Dakota TypeScript SDK are documented in this file.
 
 ## [Unreleased]
 
+### Fixed developer fee (ENG-3918)
+
+A partial spec sync. It applies only the `openapi.public.yaml` hunks of
+platform `76b510fb` (ENG-3916) and `ec4d623a` (ENG-4029), both in Platform
+`v0.3.79`, and regenerates the types. The agentic overlay was regenerated
+and is unchanged, because none of these schemas are agentic. Other platform
+changes since the last sync are left for a later full sync.
+
+#### Added
+
+- `developer_fee_fixed` on `accounts.create()`, `accounts.update()` and
+  `transactions.create()`. It is a decimal **string** in units of the asset
+  deposited (for example `'10.00'` is 10.00 USDC on a USDC deposit, or
+  10.00 EUR on a EUR bank deposit). It must be greater than 0 with at most 2
+  decimals, and there is no cap. You send `developer_fee_bps` or
+  `developer_fee_fixed`. A request that carries both keys is a 400, even
+  with `developer_fee_bps: 0`. On update, setting one replaces the other.
+  Routes that do not support a fixed fee also answer with a 400. On a
+  one-off, the depositor must send the destination amount plus the fee. A
+  deposit that does not cover the fee is not converted.
+- `developer_fee_fixed` and `minimum_deposit` (the fee plus 0.01) on
+  `Account` responses, and `developer_fee_fixed` on `OneOffTransaction`.
+  All are optional strings. They are omitted when no fixed fee is set, and
+  are never `null`. Servers older than Platform `v0.3.79` do not send them.
+
+The platform's admin developer-fee `PATCH` also accepts `developer_fee_fixed`,
+but that endpoint is not in the public spec and is not part of the SDK.
+
 ### Developer-fee naming (ENG-3956)
 
 A partial spec sync. `openapi.yaml` was a copy of platform `openapi.public.yaml`

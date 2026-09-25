@@ -130,11 +130,18 @@ export class AccountsResource extends BaseResource {
    * @param data - Update data
    * @returns Updated account
    *
+   * Only the developer fee can be updated, and setting one kind replaces the
+   * other. `developer_fee_fixed` is a decimal string in units of the asset
+   * deposited (at most 2 decimals, greater than 0); it applies to future
+   * deposits only.
+   *
    * @example
    * ```typescript
    * const account = await client.accounts.update(accountId, {
-   *   status: 'inactive',
+   *   account_type: 'onramp',
+   *   developer_fee_fixed: '10.00',
    * });
+   * console.log(account.minimum_deposit); // '10.01'
    * ```
    */
   async update(

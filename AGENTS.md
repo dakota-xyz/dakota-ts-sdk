@@ -240,8 +240,15 @@ const accounts = await client.accounts.list({ customer_id: customerId }).toArray
 // Get account
 const account = await client.accounts.get(accountId);
 
-// Update account
-const updated = await client.accounts.update(accountId, { status: 'inactive' });
+// Update the developer fee (the only updatable field). Setting one kind
+// replaces the other: basis points, or a fixed fee as a decimal STRING in
+// units of the deposited asset (at most 2 decimals, > 0).
+const updated = await client.accounts.update(accountId, {
+  account_type: 'onramp',
+  developer_fee_fixed: '10.00',
+});
+// Fixed-fee accounts report the smallest deposit that will be converted
+console.log(updated.developer_fee_fixed, updated.minimum_deposit); // '10.00', '10.01'
 ```
 
 ### Transactions

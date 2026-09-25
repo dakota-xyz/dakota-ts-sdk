@@ -169,6 +169,10 @@ console.log(`Send ${tx.send_amount} USDC to: ${tx.crypto_address}`);
 console.log(`Status: ${tx.status}`);
 ```
 
+A one-off also takes `developer_fee_fixed` (a decimal string in units of the
+asset deposited). The depositor must then send the destination amount plus
+the fee, and a deposit that does not cover it is not converted.
+
 ## Agentic Payments (Beta)
 
 > ⚠️ **Beta.** The hosted payment-agent surface is `x-beta` and flag-gated on the platform (endpoints return `404` unless enabled for your key). The SDK helpers below may change — or be removed — without a major-version bump. Not recommended for production.
@@ -616,7 +620,17 @@ Manage on-ramp, off-ramp, and swap accounts.
 | `accounts.create(data)` | Create account (onramp/offramp/swap) |
 | `accounts.list(params?)` | List accounts |
 | `accounts.get(id)` | Get account by ID |
-| `accounts.update(id, data)` | Update account |
+| `accounts.update(id, data)` | Update account (developer fee only) |
+
+A developer fee is either `developer_fee_bps` or `developer_fee_fixed`. The
+platform returns a 400 if a request carries both keys, even with
+`developer_fee_bps: 0`, so leave out the one you are not using. On update,
+setting one replaces the other. `developer_fee_fixed` is a decimal **string**
+such as `'10.00'`, in units of the asset deposited (at most 2 decimals,
+greater than 0). Fixed-fee accounts return `developer_fee_fixed` and
+`minimum_deposit` (the fee plus 0.01); both are omitted otherwise. Some
+routes do not support a fixed fee, and the platform answers those with a 400
+that asks for `developer_fee_bps` instead.
 
 ### Transactions
 
