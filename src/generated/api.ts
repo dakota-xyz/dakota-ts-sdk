@@ -534,9 +534,11 @@ export type paths = {
          * Update an account
          * @description Partially update an onramp, offramp, or swap account.
          *
-         *     **Only `developer_fee_bps` can be updated on an existing account.**
-         *     The updated fee applies to future transactions only; existing
-         *     transactions are unaffected. Routing is immutable after creation:
+         *     **Only the developer fee (`developer_fee_bps` or
+         *     `developer_fee_fixed`) can be updated on an existing account.** Setting
+         *     one replaces the other. The updated fee applies to future transactions
+         *     only; existing transactions are unaffected. Routing is immutable after
+         *     creation:
          *     `crypto_destination_id`, `destination_network_id`, `destination_asset`,
          *     and `fiat_destination_id` cannot be changed.
          *
@@ -5891,6 +5893,17 @@ export type components = {
              */
             readonly developer_fee_bps?: number;
             /**
+             * @description Fixed developer fee charged on every deposit to this account, **in
+             *     units of the asset deposited** (for example 10.00 USDC on a USDC
+             *     deposit, 10.00 USD on a USD bank deposit, 10.00 EUR on a EUR bank
+             *     deposit). A decimal string such as "10.00", with at most 2 decimal
+             *     places. Must be greater than 0. Cannot be combined with
+             *     `developer_fee_bps`: send one or the other. Setting it on update
+             *     replaces an existing `developer_fee_bps`.
+             * @example 10.00
+             */
+            readonly developer_fee_fixed?: string;
+            /**
              * Format: int32
              * @description Hard cap on how many transactions this account may ever create. A
              *     transaction is one convert-and-forward of funds received at the
@@ -5972,8 +5985,9 @@ export type components = {
          * Account Update Request
          * @description Unified account update request for onramp/offramp/swap.
          *
-         *     **Only `developer_fee_bps` can be updated on an existing account.**
-         *     Routing fields (`crypto_destination_id`, `destination_network_id`,
+         *     **Only the developer fee (`developer_fee_bps` or
+         *     `developer_fee_fixed`) can be updated on an existing account.** Setting
+         *     one replaces the other. Routing fields (`crypto_destination_id`, `destination_network_id`,
          *     `destination_asset`, and `fiat_destination_id`) are immutable after
          *     creation. To change the destination asset, network, or address,
          *     create a new account. A new onramp account returns new virtual account
@@ -6000,11 +6014,23 @@ export type components = {
              * Format: int32
              * @description Developer fee (client revenue share) in basis points. When set,
              *     updates the fee applied to FUTURE transactions on this account;
-             *     existing transactions are unaffected. This is the only updatable
-             *     field; routing fields remain immutable.
+             *     existing transactions are unaffected. Setting it replaces an
+             *     existing `developer_fee_fixed`. The developer fee is the only
+             *     updatable field; routing fields remain immutable.
              * @example 50
              */
             readonly developer_fee_bps?: number;
+            /**
+             * @description Fixed developer fee charged on every deposit to this account, **in
+             *     units of the asset deposited** (for example 10.00 USDC on a USDC
+             *     deposit, 10.00 USD on a USD bank deposit, 10.00 EUR on a EUR bank
+             *     deposit). A decimal string such as "10.00", with at most 2 decimal
+             *     places. Must be greater than 0. Cannot be combined with
+             *     `developer_fee_bps`: send one or the other. Setting it on update
+             *     replaces an existing `developer_fee_bps`.
+             * @example 10.00
+             */
+            readonly developer_fee_fixed?: string;
         };
         /**
          * Account Response
@@ -6040,6 +6066,16 @@ export type components = {
              * @example 50
              */
             readonly developer_fee_bps: number;
+            /**
+             * @description Fixed developer fee charged on every deposit to this account, in units of the asset deposited. Absent when the account charges `developer_fee_bps` instead.
+             * @example 10.00
+             */
+            readonly developer_fee_fixed?: string;
+            /**
+             * @description Smallest deposit that will be processed, in units of the asset deposited: `developer_fee_fixed` + 0.01. Smaller deposits are not converted. Returned for fixed-fee accounts only.
+             * @example 10.01
+             */
+            readonly minimum_deposit?: string;
         };
         readonly PaginatedAccountResponse: components["schemas"]["PaginatedListResponse"] & {
             readonly data?: readonly components["schemas"]["AccountResponse"][];
@@ -7107,6 +7143,17 @@ export type components = {
              * @example 50
              */
             readonly developer_fee_bps?: number;
+            /**
+             * @description Fixed developer fee for this transaction, **in units of the asset
+             *     deposited** (for example 10.00 USDC on a USDC deposit). A decimal
+             *     string such as "10.00", with at most 2 decimal places. Must be
+             *     greater than 0. Cannot be combined with `developer_fee_bps`: send
+             *     one or the other. The depositor must send the destination amount
+             *     plus this fee; a deposit that does not cover the fee is not
+             *     converted.
+             * @example 10.00
+             */
+            readonly developer_fee_fixed?: string;
         };
         /** @description A one-off transaction response. Used for single-use offramp (crypto-to-fiat) and swap (crypto-to-crypto) transfers; the destination type determines which. */
         readonly OneOffTransaction: {
@@ -7147,6 +7194,11 @@ export type components = {
              * @example 50
              */
             readonly developer_fee_bps: number;
+            /**
+             * @description Fixed developer fee for this transaction, in units of the asset deposited, as set by `developer_fee_fixed` on the request. Absent when no fixed fee was set.
+             * @example 10.00
+             */
+            readonly developer_fee_fixed?: string;
             /** @description Reason for failure if status is failed */
             readonly failure_reason?: string;
             readonly receipt?: components["schemas"]["TransactionReceipt"];
