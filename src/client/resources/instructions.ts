@@ -26,14 +26,17 @@ export class InstructionsResource extends BaseResource {
    * One optional field shapes the actuation:
    *
    * - `developer_fee_defaults` declares your fee PER PAYOUT TYPE —
-   *   `swap.developer_fee_bps` for a crypto payout,
-   *   `offramp.developer_fee_bps` for a bank payout. They are independent,
-   *   so one conversation can charge a swap and stay silent about a bank
-   *   payout in the same turn. Omit a payout type (or send zero) and it
-   *   carries no fee: nothing is charged, nothing is added to the amount,
-   *   and the agent is told nothing about a fee it could mention. Both are
+   *   `swap` for a crypto payout, `offramp` for a bank payout — each as
+   *   a percentage (`developer_fee_bps`) or a flat amount per payment
+   *   (`developer_fee_fixed`, a decimal string in units of the asset
+   *   deposited, added on top of the amount), never both. They are
+   *   independent, so one conversation can charge a swap and stay silent
+   *   about a bank payout in the same turn. Omit a payout type (or set its
+   *   `developer_fee_bps` to zero) and it carries no fee: nothing is
+   *   charged, nothing is added to the amount, and the agent is told
+   *   nothing about a fee it could mention. Both are
    *   DEFAULTS for the auto-accounts this request creates — an action-level
-   *   `developer_fee_bps` still wins outright.
+   *   `developer_fee_bps` or `developer_fee_fixed` still wins outright.
    *
    *   It replaces the deprecated `developer_fee` (`swap_bps` /
    *   `offramp_bps`), which the platform still accepts. Send one or the

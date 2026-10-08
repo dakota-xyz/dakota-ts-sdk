@@ -1,6 +1,7 @@
 /**
  * Developer-fee naming (ENG-3956, platform ENG-3899 / ENG-3900) and the fixed
- * developer fee (ENG-3918, platform ENG-3916 / ENG-4029).
+ * developer fee (ENG-3918, platform ENG-3916 / ENG-4029; agentic: ENG-3923,
+ * platform ENG-3921).
  *
  * Receipts carry `developer_fee`, with `client_fee` deprecated but still sent
  * with the same value; accounts and one-offs report `developer_fee_bps`. The
@@ -23,6 +24,7 @@ import type {
   CreateInstructionsRequest,
   DeveloperFee,
   DeveloperFeeDefaults,
+  DeveloperFeeRate,
 } from '../../src/client/types.js';
 import { createRoutedFetch } from '../agentic/helpers.js';
 
@@ -38,6 +40,19 @@ function makeClient(fetchImpl: typeof fetch) {
     fetch: fetchImpl,
     retryPolicy: { maxAttempts: 1, initialBackoffMs: 1, maxBackoffMs: 1 },
   });
+}
+
+/** A fetch that keeps the raw request body, so the wire bytes can be asserted. */
+function rawCapture(responseBody: unknown) {
+  const bodies: string[] = [];
+  const fetchImpl = async (_input: unknown, init?: RequestInit): Promise<Response> => {
+    bodies.push(String(init?.body));
+    return new Response(JSON.stringify(responseBody), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    });
+  };
+  return { fetch: fetchImpl as unknown as typeof globalThis.fetch, bodies };
 }
 
 describe('developer fee on REST responses', () => {
@@ -91,19 +106,6 @@ describe('developer fee on REST responses', () => {
  * and the wire must carry a JSON string.
  */
 describe('fixed developer fee', () => {
-  /** A fetch that keeps the raw request body, so the wire bytes can be asserted. */
-  function rawCapture(responseBody: unknown) {
-    const bodies: string[] = [];
-    const fetchImpl = async (_input: unknown, init?: RequestInit): Promise<Response> => {
-      bodies.push(String(init?.body));
-      return new Response(JSON.stringify(responseBody), {
-        status: 200,
-        headers: { 'content-type': 'application/json' },
-      });
-    };
-    return { fetch: fetchImpl as unknown as typeof globalThis.fetch, bodies };
-  }
-
   it('the request and response fields are typed string, never number', () => {
     expectTypeOf<AccountCreateRequest['developer_fee_fixed']>().toEqualTypeOf<string | undefined>();
     expectTypeOf<AccountUpdateRequest['developer_fee_fixed']>().toEqualTypeOf<string | undefined>();
@@ -230,6 +232,36 @@ describe('agentic developer-fee fields', () => {
     expect(
       (requests[0]?.body as { developer_fee_defaults?: unknown }).developer_fee_defaults
     ).toEqual(defaults);
+  });
+
+  it('the agentic fixed fee is typed string, never number', () => {
+    expectTypeOf<DeveloperFeeRate['developer_fee_fixed']>().toEqualTypeOf<string | undefined>();
+    expectTypeOf<CreateAutoAccountAction['developer_fee_fixed']>().toEqualTypeOf<
+      string | undefined
+    >();
+
+    // @ts-expect-error a number is not a fixed fee
+    const numeric: DeveloperFeeRate['developer_fee_fixed'] = 10;
+    expect(numeric).toBeDefined();
+  });
+
+  it('instructions.create sends a fixed developer_fee_defaults as JSON strings', async () => {
+    const { fetch, bodies } = rawCapture({ instruction_ids: [] });
+    const client = makeClient(fetch);
+
+    await client.instructions.create({
+      payment_agent_id: 'agt_1',
+      proposals: [],
+      developer_fee_defaults: {
+        swap: { developer_fee_fixed: '10.00' },
+        offramp: { developer_fee_fixed: '2.50' },
+      },
+    });
+
+    expect(bodies[0]).toContain(
+      '"developer_fee_defaults":{"swap":{"developer_fee_fixed":"10.00"},' +
+        '"offramp":{"developer_fee_fixed":"2.50"}}'
+    );
   });
 
   it('the deprecated request fields still type-check', () => {

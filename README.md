@@ -966,6 +966,21 @@ await client.instructions.create({
 Declare it only on the accept and the customer approves a summary that never
 disclosed a fee, then gets charged it.
 
+Each payout type takes a percentage (`developer_fee_bps`) **or** a flat amount
+per payment (`developer_fee_fixed`), never both. The fixed fee is a decimal
+string in units of the asset deposited, and it is added on top of the payment,
+so the payee receives exactly the amount named: a 100.00 USDC payment with
+`{ developer_fee_fixed: '10.00' }` leaves the wallet as 110.00 USDC, and the
+spending limit applies to that 110.00. The `create_auto_account` action takes
+either one too, as an override of the defaults.
+
+```typescript
+const defaults: DeveloperFeeDefaults = {
+  swap: { developer_fee_fixed: '10.00' }, // 10.00 USDC on a USDC payment
+  offramp: { developer_fee_bps: 25 },
+};
+```
+
 Registering is the **only** way to set a policy. It belongs to the client, not
 to a request, so a drafting turn and the accept that follows it cannot be
 judged by different rules. The per-conversation `clientPolicy` option is gone:
