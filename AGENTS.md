@@ -862,7 +862,12 @@ await client.agenticPolicy.set({
 // rather than a surprise on a customer's first conversation.
 
 // Declare your developer fee PER PAYOUT TYPE. The two rates are independent —
-// omit one and that payout type carries no fee.
+// omit one and that payout type carries no fee. Each is EITHER
+// `developer_fee_bps` OR a flat `developer_fee_fixed` per payment (a decimal
+// string in the deposited asset, e.g. `{ developer_fee_fixed: '10.00' }`),
+// never both. A fixed fee is added on top: a 100.00 USDC payment with a
+// 10.00 fee leaves the wallet as 110.00, the payee gets exactly 100.00, and
+// the spending limit applies to the 110.00.
 //
 // Declare it in BOTH places, not one or the other. The drafting turn is what
 // lets the agent MENTION the fee; the accept is what CHARGES it. Set it only

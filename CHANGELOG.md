@@ -4,6 +4,30 @@ All notable changes to the Dakota TypeScript SDK are documented in this file.
 
 ## [Unreleased]
 
+### Agentic fixed developer fee (ENG-3923)
+
+A partial spec sync. It applies only the `openapi.public.yaml` hunks of
+platform `5b497b9b` (#2029) and `1d0200b0` (#2035), both ENG-3921 and both in
+Platform `v0.3.97`, to the base spec, then re-extracts the agentic overlay and
+regenerates the types. The surrounding wording from platform ENG-3907, which
+removed the deprecated `developer_fee` / `fee_bps` names, is not synced here:
+those fields stay in the SDK, deprecated, until a later full sync.
+
+#### Added
+
+- `developer_fee_fixed` on `DeveloperFeeRate`, so each payout type in
+  `developer_fee_defaults` (`swap`, `offramp`) takes `developer_fee_bps` **or**
+  `developer_fee_fixed`, and on the `create_auto_account` action, where it
+  overrides the defaults like `developer_fee_bps`. It is an optional decimal
+  **string** in units of the asset deposited (`'10.00'` on a USDC payment is
+  10.00 USDC), greater than 0 with at most 2 decimals. It cannot be combined
+  with `developer_fee_bps`. The fee is added on top of the payment's `amount`,
+  so the payee receives exactly the amount named, which must be at least
+  0.01. With `amount_includes_fee: true` the amount must be at least the fee
+  plus 0.01. Servers older than Platform `v0.3.97` silently ignore the
+  field, so the payment goes through with no fee and the agent mentions
+  none.
+
 ### Fixed developer fee (ENG-3918)
 
 A partial spec sync. It applies only the `openapi.public.yaml` hunks of

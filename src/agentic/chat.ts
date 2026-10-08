@@ -148,7 +148,8 @@ export interface AgentConversationOptions {
 
   /**
    * Your default developer fee, declared PER PAYOUT TYPE — `swap` for a
-   * crypto payout, `offramp` for a bank one, each as `{ developer_fee_bps }`.
+   * crypto payout, `offramp` for a bank one, each as `{ developer_fee_bps }`
+   * or a flat `{ developer_fee_fixed: '10.00' }` per payment, never both.
    * The two are independent, so one conversation can charge a swap and stay
    * silent about a bank payout.
    *

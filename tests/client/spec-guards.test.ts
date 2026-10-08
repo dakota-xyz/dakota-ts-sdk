@@ -214,6 +214,27 @@ describe('openapi spec guards', () => {
     }
   });
 
+  /**
+   * The agentic fixed fee (ENG-3923, platform ENG-3921) has the same shape.
+   * It lives on beta schemas, so the overlay carries it too: an overlay
+   * re-extracted from a stale base would silently drop it again.
+   */
+  for (const spec of ['openapi.yaml', 'openapi.agentic.yaml']) {
+    it(`${spec}: the agentic fixed developer fee fields stay non-nullable strings`, () => {
+      const schemas = loadSpec(spec).components?.schemas ?? {};
+      for (const schema of ['DeveloperFeeRate', 'CreateAutoAccountAction']) {
+        const def = schemas[schema] as {
+          properties?: Record<string, { type?: unknown; nullable?: unknown }>;
+          required?: string[];
+        };
+        const prop = def.properties?.developer_fee_fixed;
+        expect(prop?.type, `${schema}.developer_fee_fixed`).toBe('string');
+        expect(prop?.nullable, `${schema}.developer_fee_fixed`).toBeUndefined();
+        expect(def.required ?? [], schema).not.toContain('developer_fee_fixed');
+      }
+    });
+  }
+
   it('the agentic overlay carries every x-beta path', () => {
     const base = loadSpec('openapi.yaml');
     const overlay = loadSpec('openapi.agentic.yaml');

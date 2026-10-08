@@ -1576,11 +1576,23 @@ export type RegisteredAgenticClientPolicy = components['schemas']['RegisteredAge
  * The two are independent — omit one (or set its `developer_fee_bps` to zero)
  * and that payout type carries no fee at all, and the agent is told nothing
  * about a fee it could mention. Both are DEFAULTS for the auto-accounts a
- * request creates; an action-level `developer_fee_bps` still wins outright.
+ * request creates; an action-level `developer_fee_bps` or
+ * `developer_fee_fixed` still wins outright.
  */
 export type DeveloperFeeDefaults = components['schemas']['DeveloperFeeDefaults'];
 
-/** The developer fee for one payout type, in basis points (0–10000). */
+/**
+ * The developer fee for one payout type: EITHER `developer_fee_bps` (basis
+ * points, 0–10000) OR `developer_fee_fixed`, never both.
+ *
+ * `developer_fee_fixed` is a decimal string in units of the asset deposited
+ * (`'10.00'` on a USDC payment is 10.00 USDC), greater than 0 with at most 2
+ * decimals. It is added on top of the payment's `amount`, so the payee
+ * receives exactly the amount named, which must be at least 0.01: a 100.00
+ * payment with a 10.00 fee leaves the wallet as 110.00, and the spending
+ * limit is checked against that grossed amount. With
+ * `amount_includes_fee: true` the amount must be at least the fee plus 0.01.
+ */
 export type DeveloperFeeRate = components['schemas']['DeveloperFeeRate'];
 
 /**
