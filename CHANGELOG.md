@@ -4,6 +4,19 @@ All notable changes to the Dakota TypeScript SDK are documented in this file.
 
 ## [Unreleased]
 
+## [3.2.0] - 2026-10-12
+
+The first published version since 3.0.0. 3.1.0 was never published, so
+upgrading from 3.0.0 brings in both this section and [3.1.0] below.
+
+**Upgrading: hand-built objects need `developer_fee_bps`.** The
+developer-fee naming change below (ENG-3956) makes `developer_fee_bps`
+required on `Account` (and `OnrampAccount` / `OfframpAccount` /
+`SwapAccount`) and on `OneOffTransaction`. Values the API returns are
+unaffected, but object literals you type as one of these yourself, such as
+test fixtures or fakes, stop compiling until they set the field (`0` when no
+developer fee applies).
+
 ### deposit.held and deposit.returned event types (ENG-4687)
 
 A partial spec sync. The base `openapi.yaml` takes only the two new values of
