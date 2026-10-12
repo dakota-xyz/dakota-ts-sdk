@@ -20784,6 +20784,8 @@ components:
         - fee_payout_destination.updated
         - fee_payout_destination.deleted
         - scheduled_payment.failed
+        - deposit.held
+        - deposit.returned
       example: transaction.auto.updated
     EventRequest:
       type: object

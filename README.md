@@ -1079,6 +1079,8 @@ and an application decision arrives as `customer.kyb_status.updated`.
 | `rd_payout_destination.updated` | The RD marketing-fee wallet was set or replaced |
 | `fee_payout_destination.updated` / `fee_payout_destination.deleted` | Developer-fee payout destination set, replaced, or removed |
 | `scheduled_payment.failed` | A scheduled payment reached the failed terminal state |
+| `deposit.held` | A deposit Dakota could not process was held (can repeat per `deposit_id`) |
+| `deposit.returned` | A held deposit's funds are back with the sender |
 
 ---
 

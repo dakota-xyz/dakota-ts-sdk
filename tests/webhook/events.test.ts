@@ -467,6 +467,11 @@ describe('Webhook Events', () => {
       expect(WebhookEventType.ScheduledPaymentFailed).toBe('scheduled_payment.failed');
     });
 
+    it('has the deposit events', () => {
+      expect(WebhookEventType.DepositHeld).toBe('deposit.held');
+      expect(WebhookEventType.DepositReturned).toBe('deposit.returned');
+    });
+
     it('has customer lifecycle and capability events', () => {
       expect(WebhookEventType.CustomerDeleted).toBe('customer.deleted');
       expect(WebhookEventType.CustomerCapabilityStatusUpdated).toBe(

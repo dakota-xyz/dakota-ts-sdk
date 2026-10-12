@@ -4,6 +4,26 @@ All notable changes to the Dakota TypeScript SDK are documented in this file.
 
 ## [Unreleased]
 
+### deposit.held and deposit.returned event types (ENG-4687)
+
+A partial spec sync. The base `openapi.yaml` takes only the two new values of
+platform's `EventType` enum, and the types are regenerated. The agentic
+overlay has no `EventType` and is unchanged.
+
+#### Added
+
+- `WebhookEventType.DepositHeld` (`'deposit.held'`) and
+  `WebhookEventType.DepositReturned` (`'deposit.returned'`). Both are also in
+  the generated `EventType` union, so a webhook target's `event_types` can
+  name them.
+- `deposit.held` fires each time a deposit Dakota could not process is held
+  (for example below the account's minimum deposit), so one `deposit_id` can
+  get it more than once. `deposit.returned` fires when the funds are back
+  with the sender. Delivery order is not guaranteed: order by `held_at` /
+  `returned_at`, and handle a `deposit.returned` for a `deposit_id` you
+  haven't seen held. There are no typed payload interfaces yet. See
+  [Deposit Events](https://docs.dakota.xyz/documentation/webhooks#deposit-events).
+
 ### Agentic fixed developer fee (ENG-3923)
 
 A partial spec sync. It applies only the `openapi.public.yaml` hunks of
