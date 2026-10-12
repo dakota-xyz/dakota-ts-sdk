@@ -162,6 +162,30 @@ export enum WebhookEventType {
   ScheduledPaymentFailed = 'scheduled_payment.failed',
 
   // ─────────────────────────────────────────────────────────────────────────────
+  // Deposit events (deposits Dakota held because it could not process them)
+  // ─────────────────────────────────────────────────────────────────────────────
+  /**
+   * Emitted each time a deposit enters held: Dakota kept funds it could not
+   * process (for example below the account's minimum deposit, or over its
+   * `max_transactions` cap) and created no transaction, so no `transaction.*`
+   * event reports it. The same `deposit_id` can get it more than once (a
+   * failed return, an undone manual resolution), so upsert on `deposit_id`.
+   * The payload carries the deposit, its `reason`, `fee_to_cover`,
+   * `minimum_deposit` and `held_at`.
+   */
+  DepositHeld = 'deposit.held',
+  /**
+   * Emitted each time a held deposit's funds are back with the sender,
+   * normally once. Every deposit that gets it also gets a
+   * {@link WebhookEventType.DepositHeld} queued no later than it, which can
+   * still arrive after it: delivery order is not guaranteed, so order a
+   * deposit's events by `held_at` and `returned_at`. The payload carries the deposit,
+   * `return_transaction_hash`, `return_fee`, `return_automatic` and
+   * `returned_at`.
+   */
+  DepositReturned = 'deposit.returned',
+
+  // ─────────────────────────────────────────────────────────────────────────────
   // Legacy/Deprecated event types (kept for backwards compatibility)
   // These may still be emitted but prefer the canonical types above.
   // ─────────────────────────────────────────────────────────────────────────────
