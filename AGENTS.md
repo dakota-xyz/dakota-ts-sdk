@@ -534,20 +534,29 @@ await client.signers.delete(publicKey);
 ### API Keys
 
 ```typescript
-// Create API key
-const { id, secret } = await client.apiKeys.create({
-  name: 'Production Key',
+// Create an API key with a name and a preset: 'full_access', 'operate' or
+// 'read_only'. A key created without a preset has full access.
+const { id, key } = await client.apiKeys.create({
+  name: 'prod-payouts',
+  preset: 'operate',
 });
-// secret is only shown once!
+// key is only shown once!
 
 // List API keys
-for await (const key of client.apiKeys.list()) {
-  console.log(key.name, key.created_at);
+for await (const apiKey of client.apiKeys.list()) {
+  console.log(apiKey.name, apiKey.preset, apiKey.last_used_at);
 }
 
+// Rename a key, change its preset, or both. A new preset applies from the
+// next request made with the key.
+await client.apiKeys.update(id, { preset: 'read_only' });
+
 // Delete API key
-await client.apiKeys.delete(keyId);
+await client.apiKeys.delete(id);
 ```
+
+A key can do what its preset allows. It does not take the role of the person
+who created it, and it keeps working after that person is removed.
 
 ### Users
 

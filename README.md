@@ -749,8 +749,9 @@ Manage API key credentials.
 
 | Method | Description |
 |--------|-------------|
-| `apiKeys.create(data)` | Create API key (secret shown once) |
-| `apiKeys.list(params?)` | List API keys |
+| `apiKeys.create(data)` | Create API key with an optional name and preset (key shown once) |
+| `apiKeys.list(params?)` | List API keys, with name, preset and last-used time |
+| `apiKeys.update(id, data)` | Change the name, the preset, or both |
 | `apiKeys.delete(id)` | Delete API key |
 
 ### Users

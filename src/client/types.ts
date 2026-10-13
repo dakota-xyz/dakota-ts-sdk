@@ -537,8 +537,17 @@ export type ApiKey = components['schemas']['ApiKeyListItem'];
 /** API key response */
 export type ApiKeyResponse = components['schemas']['ApiKeyResponse'];
 
-/** API key creation request */
-export type ApiKeyCreateRequest = Record<string, unknown>;
+/**
+ * The named set of permissions that an API key has: `full_access`, `operate`
+ * or `read_only`. A key does not take the role of the person who created it.
+ */
+export type ApiKeyPreset = components['schemas']['ApiKeyPreset'];
+
+/** API key creation request. A key created without a preset has full access. */
+export type ApiKeyCreateRequest = components['schemas']['CreateApiKeyRequest'];
+
+/** API key update request: a new name, a new preset, or both. */
+export type ApiKeyUpdateRequest = components['schemas']['UpdateApiKeyRequest'];
 
 // ============================================================================
 // User Types

@@ -1493,7 +1493,9 @@ export type paths = {
         readonly put?: never;
         /**
          * Create a new API key
-         * @description Generate a new API key
+         * @description Generate a new API key. The key can do what its `preset` allows: `full_access`, `operate` or `read_only`. A key created without a preset has full access.
+         *
+         *     The key belongs to the client. It does not take the role of the person who created it, and it keeps working after that person is removed.
          */
         readonly post: operations["createApiKey"];
         /**
@@ -1543,7 +1545,11 @@ export type paths = {
         readonly delete: operations["deleteApiKey"];
         readonly options?: never;
         readonly head?: never;
-        readonly patch?: never;
+        /**
+         * Update an API key
+         * @description Change the name, the preset, or both, of an existing API key. A new preset applies from the next request made with the key. The key value does not change. Each change records an `api_key.updated` event.
+         */
+        readonly patch: operations["updateApiKey"];
         readonly trace?: never;
     };
     readonly "/users": {
@@ -1582,7 +1588,9 @@ export type paths = {
         readonly post?: never;
         /**
          * Delete a user
-         * @description Delete an existing user
+         * @description Delete an existing user.
+         *
+         *     The API keys that the user created keep working. A key belongs to the client, not to the person who created it. To stop a key, revoke it with `DELETE /api-keys/{api_key_id}`.
          */
         readonly delete: operations["deleteClientUser"];
         readonly options?: never;
@@ -5132,7 +5140,7 @@ export type components = {
          * @example transaction.auto.updated
          * @enum {string}
          */
-        readonly EventType: "user.created" | "user.updated" | "user.deleted" | "api_key.created" | "api_key.deleted" | "customer.created" | "customer.updated" | "customer.kyb_link.created" | "customer.kyb_link.updated" | "customer.kyb_status.created" | "customer.kyb_status.updated" | "customer.kyb_application.submitted" | "customer.capability_status.updated" | "customer.rfi.requested" | "customer.rfi.responded" | "customer.application.withdrawn" | "auto_account.created" | "auto_account.updated" | "auto_account.deleted" | "transaction.auto.created" | "transaction.auto.updated" | "transaction.one_off.created" | "transaction.one_off.updated" | "recipient.created" | "recipient.updated" | "recipient.deleted" | "destination.created" | "destination.deleted" | "target.created" | "target.updated" | "target.deleted" | "exception.created" | "exception.cleared" | "wallet.created" | "wallet.updated" | "wallet.signer_group.created" | "wallet.signer_group.updated" | "wallet.policy.created" | "wallet.policy.updated" | "wallet.transaction.created" | "wallet.transaction.updated" | "wallet.deposit" | "rd_payout_destination.updated" | "deployment_payout_destination.updated" | "fee_payout_destination.updated" | "fee_payout_destination.deleted" | "scheduled_payment.failed" | "deposit.held" | "deposit.returned";
+        readonly EventType: "user.created" | "user.updated" | "user.deleted" | "api_key.created" | "api_key.updated" | "api_key.deleted" | "customer.created" | "customer.updated" | "customer.kyb_link.created" | "customer.kyb_link.updated" | "customer.kyb_status.created" | "customer.kyb_status.updated" | "customer.kyb_application.submitted" | "customer.capability_status.updated" | "customer.rfi.requested" | "customer.rfi.responded" | "customer.application.withdrawn" | "auto_account.created" | "auto_account.updated" | "auto_account.deleted" | "transaction.auto.created" | "transaction.auto.updated" | "transaction.one_off.created" | "transaction.one_off.updated" | "recipient.created" | "recipient.updated" | "recipient.deleted" | "destination.created" | "destination.deleted" | "target.created" | "target.updated" | "target.deleted" | "exception.created" | "exception.cleared" | "wallet.created" | "wallet.updated" | "wallet.signer_group.created" | "wallet.signer_group.updated" | "wallet.policy.created" | "wallet.policy.updated" | "wallet.transaction.created" | "wallet.transaction.updated" | "wallet.deposit" | "rd_payout_destination.updated" | "deployment_payout_destination.updated" | "fee_payout_destination.updated" | "fee_payout_destination.deleted" | "scheduled_payment.failed" | "deposit.held" | "deposit.returned";
         /** @description Request metadata for the original operation that emitted the event, when available. */
         readonly EventRequest: {
             /**
@@ -5190,6 +5198,32 @@ export type components = {
             /** @description Client ID to create the API key for */
             readonly client_id: components["schemas"]["KSUID"];
         };
+        readonly CreateApiKeyRequest: {
+            readonly name?: components["schemas"]["ApiKeyName"];
+            readonly preset?: components["schemas"]["ApiKeyPreset"];
+        };
+        /** @description Send `name`, `preset` or both. A new preset applies from the next request made with the key, and the key value stays the same. */
+        readonly UpdateApiKeyRequest: {
+            readonly name?: components["schemas"]["ApiKeyName"];
+            readonly preset?: components["schemas"]["ApiKeyPreset"];
+        };
+        /**
+         * @description The named set of permissions that the key has. The presets nest: `read_only` is inside `operate`, and `operate` is inside `full_access`.
+         *
+         *     - `full_access`: everything that an admin of the client can do. A key created without a preset gets it.
+         *     - `operate`: moves money and runs the business, but cannot add payees, delete anything, or manage users, keys and security settings.
+         *     - `read_only`: reads only.
+         *
+         *     A key does not take the role of the person who created it.
+         * @example read_only
+         * @enum {string}
+         */
+        readonly ApiKeyPreset: "full_access" | "operate" | "read_only";
+        /**
+         * @description A label that says what the key is for. No two live keys of a client share a name.
+         * @example prod-payouts
+         */
+        readonly ApiKeyName: string;
         readonly ApiKeyResponse: {
             readonly id: components["schemas"]["KSUID"];
             /**
@@ -5197,9 +5231,13 @@ export type components = {
              * @example dk_live_4KLkSmzQbL6Xs8xnUjssdGHX7PfhHpAb
              */
             readonly key: string;
+            readonly name: components["schemas"]["ApiKeyName"];
+            readonly preset: components["schemas"]["ApiKeyPreset"];
         };
         readonly ApiKeyListItem: {
             readonly id: components["schemas"]["KSUID"];
+            readonly name: components["schemas"]["ApiKeyName"];
+            readonly preset: components["schemas"]["ApiKeyPreset"];
             readonly user_id: components["schemas"]["KSUID"];
             /**
              * @description Last six characters of the API key
@@ -5211,6 +5249,11 @@ export type components = {
              * @example 1234567890
              */
             readonly created_at: number;
+            /**
+             * @description Timestamp of the most recent request made with the API key, accurate to one hour. Null when the key was never used.
+             * @example 1234567890
+             */
+            readonly last_used_at: number | null;
         };
         /**
          * KSUID
@@ -23066,7 +23109,10 @@ export interface operations {
                      *           "id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi",
                      *           "user_id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi",
                      *           "key_suffix": "HpAb4a",
-                     *           "created_at": 1234567890
+                     *           "name": "prod-payouts",
+                     *           "preset": "operate",
+                     *           "created_at": 1234567890,
+                     *           "last_used_at": 1234571490
                      *         }
                      *       ],
                      *       "meta": {
@@ -23150,7 +23196,16 @@ export interface operations {
             readonly path?: never;
             readonly cookie?: never;
         };
-        readonly requestBody?: never;
+        readonly requestBody?: {
+            readonly content: {
+                /**
+                 * @example {
+                 *       "name": "prod-payouts"
+                 *     }
+                 */
+                readonly "application/json": components["schemas"]["CreateApiKeyRequest"];
+            };
+        };
         readonly responses: {
             /** @description API key created successfully */
             readonly 201: {
@@ -23161,7 +23216,9 @@ export interface operations {
                     /**
                      * @example {
                      *       "id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi",
-                     *       "key": "dk_live_4KLkSmzQbL6Xs8xnUjssdGHX7PfhHpAb"
+                     *       "key": "dk_live_4KLkSmzQbL6Xs8xnUjssdGHX7PfhHpAb",
+                     *       "name": "prod-payouts",
+                     *       "preset": "operate"
                      *     }
                      */
                     readonly "application/json": components["schemas"]["ApiKeyResponse"];
@@ -23221,6 +23278,28 @@ export interface operations {
                      *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
                      *     }
                      */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict — another live API key of this client already has this name. */
+            readonly 409: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /**
+             * @description Unprocessable — the `X-Idempotency-Key` was already used on this endpoint with a different request body
+             *     (problem type `idempotency-key-reused`). The request was not executed and the original response was not replayed.
+             *     Resend the original body to receive the original response, or use a new key to make a new request.
+             */
+            readonly 422: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
                     readonly "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
@@ -23312,7 +23391,9 @@ export interface operations {
                     /**
                      * @example {
                      *       "id": "2iNhTbFZGo1bqoTTVOQKVgAfGHH",
-                     *       "key": "dk_live_4KLkSmzQbL6Xs8xnUjssdGHX7PfhHpAb"
+                     *       "key": "dk_live_4KLkSmzQbL6Xs8xnUjssdGHX7PfhHpAb",
+                     *       "name": "prod-payouts",
+                     *       "preset": "full_access"
                      *     }
                      */
                     readonly "application/json": components["schemas"]["ApiKeyResponse"];
@@ -23372,6 +23453,19 @@ export interface operations {
                      *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
                      *     }
                      */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /**
+             * @description Unprocessable — the `X-Idempotency-Key` was already used on this endpoint with a different request body
+             *     (problem type `idempotency-key-reused`). The request was not executed and the original response was not replayed.
+             *     Resend the original body to receive the original response, or use a new key to make a new request.
+             */
+            readonly 422: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
                     readonly "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
@@ -23488,6 +23582,110 @@ export interface operations {
                      *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
                      *     }
                      */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    readonly updateApiKey: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header: {
+                /** @description Unique key to ensure request idempotency. If the same key is used within a certain time window, the original response will be returned instead of executing the request again. */
+                readonly "x-idempotency-key": components["parameters"]["IdempotencyKeyHeader"];
+            };
+            readonly path: {
+                /** @description Unique identifier of the API key to rename */
+                readonly api_key_id: components["schemas"]["KSUID"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                /**
+                 * @example {
+                 *       "name": "prod-payouts-v2"
+                 *     }
+                 */
+                readonly "application/json": components["schemas"]["UpdateApiKeyRequest"];
+            };
+        };
+        readonly responses: {
+            /** @description API key renamed */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi",
+                     *       "user_id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi",
+                     *       "key_suffix": "HpAb4a",
+                     *       "name": "prod-payouts-v2",
+                     *       "preset": "operate",
+                     *       "created_at": 1234567890,
+                     *       "last_used_at": 1234571490
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["ApiKeyListItem"];
+                };
+            };
+            /** @description Invalid request */
+            readonly 400: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            readonly 401: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden */
+            readonly 403: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Not found — no live API key of this client has this id. */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Conflict — another live API key of this client already has this name. */
+            readonly 409: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /**
+             * @description Unprocessable — the `X-Idempotency-Key` was already used on this endpoint with a different request body
+             *     (problem type `idempotency-key-reused`). The request was not executed and the original response was not replayed.
+             *     Resend the original body to receive the original response, or use a new key to make a new request.
+             */
+            readonly 422: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
                     readonly "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
