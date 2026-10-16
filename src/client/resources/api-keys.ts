@@ -45,11 +45,11 @@ export class ApiKeysResource extends BaseResource {
   }
 
   /**
-   * Change the name, the preset, or both, of an API key. A new preset applies
+   * Change the name, the scope, or both, of an API key. A new scope applies
    * from the next request made with the key. The key value does not change.
    *
    * @param apiKeyId - API key ID
-   * @param data - The new name, the new preset, or both
+   * @param data - The new name, the new scope, or both
    * @returns The updated API key
    */
   async update(

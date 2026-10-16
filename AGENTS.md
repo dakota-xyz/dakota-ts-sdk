@@ -534,28 +534,28 @@ await client.signers.delete(publicKey);
 ### API Keys
 
 ```typescript
-// Create an API key with a name and a preset: 'full_access', 'operate' or
-// 'read_only'. A key created without a preset has full access.
+// Create an API key with a name and a scope: 'full_access', 'operate' or
+// 'read_only'. A key created without a scope has full access.
 const { id, key } = await client.apiKeys.create({
   name: 'prod-payouts',
-  preset: 'operate',
+  scope: 'operate',
 });
 // key is only shown once!
 
 // List API keys
 for await (const apiKey of client.apiKeys.list()) {
-  console.log(apiKey.name, apiKey.preset, apiKey.last_used_at);
+  console.log(apiKey.name, apiKey.scope, apiKey.last_used_at);
 }
 
-// Rename a key, change its preset, or both. A new preset applies from the
+// Rename a key, change its scope, or both. A new scope applies from the
 // next request made with the key.
-await client.apiKeys.update(id, { preset: 'read_only' });
+await client.apiKeys.update(id, { scope: 'read_only' });
 
 // Delete API key
 await client.apiKeys.delete(id);
 ```
 
-A key can do what its preset allows. It does not take the role of the person
+A key can do what its scope allows. It does not take the role of the person
 who created it, and it keeps working after that person is removed.
 
 ### Users

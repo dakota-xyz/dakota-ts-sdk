@@ -1493,7 +1493,7 @@ export type paths = {
         readonly put?: never;
         /**
          * Create a new API key
-         * @description Generate a new API key. The key can do what its `preset` allows: `full_access`, `operate` or `read_only`. A key created without a preset has full access.
+         * @description Generate a new API key. The key can do what its `scope` allows: `full_access`, `operate` or `read_only`. A key created without a scope has full access.
          *
          *     The key belongs to the client. It does not take the role of the person who created it, and it keeps working after that person is removed.
          */
@@ -1547,7 +1547,7 @@ export type paths = {
         readonly head?: never;
         /**
          * Update an API key
-         * @description Change the name, the preset, or both, of an existing API key. A new preset applies from the next request made with the key. The key value does not change. Each change records an `api_key.updated` event.
+         * @description Change the name, the scope, or both, of an existing API key. A new scope applies from the next request made with the key. The key value does not change. Each change records an `api_key.updated` event.
          */
         readonly patch: operations["updateApiKey"];
         readonly trace?: never;
@@ -5200,25 +5200,25 @@ export type components = {
         };
         readonly CreateApiKeyRequest: {
             readonly name?: components["schemas"]["ApiKeyName"];
-            readonly preset?: components["schemas"]["ApiKeyPreset"];
+            readonly scope?: components["schemas"]["ApiKeyScope"];
         };
-        /** @description Send `name`, `preset` or both. A new preset applies from the next request made with the key, and the key value stays the same. */
+        /** @description Send `name`, `scope` or both. A new scope applies from the next request made with the key, and the key value stays the same. */
         readonly UpdateApiKeyRequest: {
             readonly name?: components["schemas"]["ApiKeyName"];
-            readonly preset?: components["schemas"]["ApiKeyPreset"];
+            readonly scope?: components["schemas"]["ApiKeyScope"];
         };
         /**
-         * @description The named set of permissions that the key has. The presets nest: `read_only` is inside `operate`, and `operate` is inside `full_access`.
+         * @description What the key can do. The scopes nest: `read_only` is inside `operate`, and `operate` is inside `full_access`.
          *
-         *     - `full_access`: everything that an admin of the client can do. A key created without a preset gets it.
-         *     - `operate`: moves money and runs the business, but cannot add payees, delete anything, or manage users, keys and security settings.
+         *     - `full_access`: everything that an admin of the client can do. A key created without a scope gets it.
+         *     - `operate`: pays saved payees and runs the business, but cannot add payees, delete anything, or manage users, keys and security settings.
          *     - `read_only`: reads only.
          *
          *     A key does not take the role of the person who created it.
          * @example read_only
          * @enum {string}
          */
-        readonly ApiKeyPreset: "full_access" | "operate" | "read_only";
+        readonly ApiKeyScope: "full_access" | "operate" | "read_only";
         /**
          * @description A label that says what the key is for. No two live keys of a client share a name.
          * @example prod-payouts
@@ -5232,12 +5232,12 @@ export type components = {
              */
             readonly key: string;
             readonly name: components["schemas"]["ApiKeyName"];
-            readonly preset: components["schemas"]["ApiKeyPreset"];
+            readonly scope?: components["schemas"]["ApiKeyScope"];
         };
         readonly ApiKeyListItem: {
             readonly id: components["schemas"]["KSUID"];
             readonly name: components["schemas"]["ApiKeyName"];
-            readonly preset: components["schemas"]["ApiKeyPreset"];
+            readonly scope?: components["schemas"]["ApiKeyScope"];
             readonly user_id: components["schemas"]["KSUID"];
             /**
              * @description Last six characters of the API key
@@ -23110,7 +23110,7 @@ export interface operations {
                      *           "user_id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi",
                      *           "key_suffix": "HpAb4a",
                      *           "name": "prod-payouts",
-                     *           "preset": "operate",
+                     *           "scope": "operate",
                      *           "created_at": 1234567890,
                      *           "last_used_at": 1234571490
                      *         }
@@ -23218,7 +23218,7 @@ export interface operations {
                      *       "id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi",
                      *       "key": "dk_live_4KLkSmzQbL6Xs8xnUjssdGHX7PfhHpAb",
                      *       "name": "prod-payouts",
-                     *       "preset": "operate"
+                     *       "scope": "operate"
                      *     }
                      */
                     readonly "application/json": components["schemas"]["ApiKeyResponse"];
@@ -23393,7 +23393,7 @@ export interface operations {
                      *       "id": "2iNhTbFZGo1bqoTTVOQKVgAfGHH",
                      *       "key": "dk_live_4KLkSmzQbL6Xs8xnUjssdGHX7PfhHpAb",
                      *       "name": "prod-payouts",
-                     *       "preset": "full_access"
+                     *       "scope": "full_access"
                      *     }
                      */
                     readonly "application/json": components["schemas"]["ApiKeyResponse"];
@@ -23623,7 +23623,7 @@ export interface operations {
                      *       "user_id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi",
                      *       "key_suffix": "HpAb4a",
                      *       "name": "prod-payouts-v2",
-                     *       "preset": "operate",
+                     *       "scope": "operate",
                      *       "created_at": 1234567890,
                      *       "last_used_at": 1234571490
                      *     }

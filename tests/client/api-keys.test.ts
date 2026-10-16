@@ -1,12 +1,12 @@
 /**
- * API key names, last-used time and presets (ENG-4792, platform ENG-3939 and
+ * API key names, last-used time and scopes (ENG-4792, platform ENG-3939 and
  * ENG-4790).
  */
 
 import { describe, it, expect, expectTypeOf } from 'vitest';
 
 import { DakotaClient } from '../../src/client/client.js';
-import type { ApiKey, ApiKeyPreset } from '../../src/client/types.js';
+import type { ApiKey, ApiKeyScope } from '../../src/client/types.js';
 
 function makeClient(fetchImpl: typeof fetch) {
   return new DakotaClient({
@@ -35,7 +35,7 @@ function capture(responses: unknown[]) {
 }
 
 describe('API keys', () => {
-  it('creates a named key with a preset, renames it, and changes its preset', async () => {
+  it('creates a named key with a scope, renames it, and changes its scope', async () => {
     const id = '2jFh8KzLm4NpQ6RsTvWx9Ab';
     const listed = {
       id,
@@ -43,32 +43,32 @@ describe('API keys', () => {
       key_suffix: 'abc123',
       created_at: 1,
       name: 'payouts-v2',
-      preset: 'read_only',
+      scope: 'read_only',
       last_used_at: null,
     };
     const { fetch, calls } = capture([
-      { id, key: 'dk_live_abc', name: 'payouts', preset: 'operate' },
-      { ...listed, preset: 'operate' },
+      { id, key: 'dk_live_abc', name: 'payouts', scope: 'operate' },
+      { ...listed, scope: 'operate' },
       listed,
     ]);
     const client = makeClient(fetch);
 
-    const created = await client.apiKeys.create({ name: 'payouts', preset: 'operate' });
-    expect(created.preset).toBe('operate');
+    const created = await client.apiKeys.create({ name: 'payouts', scope: 'operate' });
+    expect(created.scope).toBe('operate');
     await client.apiKeys.update(created.id, { name: 'payouts-v2' });
-    const updated = await client.apiKeys.update(created.id, { preset: 'read_only' });
-    expect(updated.preset).toBe('read_only');
+    const updated = await client.apiKeys.update(created.id, { scope: 'read_only' });
+    expect(updated.scope).toBe('read_only');
     expect(updated.last_used_at).toBeNull();
 
     expect(calls).toEqual([
-      { method: 'POST', path: '/api-keys', body: { name: 'payouts', preset: 'operate' } },
+      { method: 'POST', path: '/api-keys', body: { name: 'payouts', scope: 'operate' } },
       { method: 'PATCH', path: `/api-keys/${id}`, body: { name: 'payouts-v2' } },
-      { method: 'PATCH', path: `/api-keys/${id}`, body: { preset: 'read_only' } },
+      { method: 'PATCH', path: `/api-keys/${id}`, body: { scope: 'read_only' } },
     ]);
   });
 
-  it('types the presets and the listed fields', () => {
-    expectTypeOf<ApiKeyPreset>().toEqualTypeOf<'full_access' | 'operate' | 'read_only'>();
+  it('types the scopes and the listed fields', () => {
+    expectTypeOf<ApiKeyScope>().toEqualTypeOf<'full_access' | 'operate' | 'read_only'>();
     expectTypeOf<ApiKey['last_used_at']>().toEqualTypeOf<number | null>();
     expectTypeOf<ApiKey['name']>().toEqualTypeOf<string>();
   });
