@@ -20,6 +20,7 @@ export enum WebhookEventType {
   // API Key events
   // ─────────────────────────────────────────────────────────────────────────────
   ApiKeyCreated = 'api_key.created',
+  ApiKeyUpdated = 'api_key.updated',
   ApiKeyDeleted = 'api_key.deleted',
 
   // ─────────────────────────────────────────────────────────────────────────────

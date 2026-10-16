@@ -534,20 +534,29 @@ await client.signers.delete(publicKey);
 ### API Keys
 
 ```typescript
-// Create API key
-const { id, secret } = await client.apiKeys.create({
-  name: 'Production Key',
+// Create an API key with a name and a scope: 'full_access', 'operate' or
+// 'read_only'. A key created without a scope has full access.
+const { id, key } = await client.apiKeys.create({
+  name: 'prod-payouts',
+  scope: 'operate',
 });
-// secret is only shown once!
+// key is only shown once!
 
 // List API keys
-for await (const key of client.apiKeys.list()) {
-  console.log(key.name, key.created_at);
+for await (const apiKey of client.apiKeys.list()) {
+  console.log(apiKey.name, apiKey.scope, apiKey.last_used_at);
 }
 
+// Rename a key, change its scope, or both. A new scope applies from the
+// next request made with the key.
+await client.apiKeys.update(id, { scope: 'read_only' });
+
 // Delete API key
-await client.apiKeys.delete(keyId);
+await client.apiKeys.delete(id);
 ```
+
+A key can do what its scope allows. It does not take the role of the person
+who created it, and it keeps working after that person is removed.
 
 ### Users
 

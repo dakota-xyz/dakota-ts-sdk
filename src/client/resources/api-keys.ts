@@ -8,6 +8,7 @@ import type {
   ApiKey,
   ApiKeyResponse,
   ApiKeyCreateRequest,
+  ApiKeyUpdateRequest,
   CreateApiKeyForClientRequest,
   ListParams,
   RequestOptions,
@@ -41,6 +42,28 @@ export class ApiKeysResource extends BaseResource {
    */
   list(params?: ListParams): PaginatedIterator<ApiKey> {
     return this.paginate<ApiKey>('/api-keys', params);
+  }
+
+  /**
+   * Change the name, the scope, or both, of an API key. A new scope applies
+   * from the next request made with the key. The key value does not change.
+   *
+   * @param apiKeyId - API key ID
+   * @param data - The new name, the new scope, or both
+   * @returns The updated API key
+   */
+  async update(
+    apiKeyId: string,
+    data: ApiKeyUpdateRequest,
+    options?: RequestOptions
+  ): Promise<ApiKey> {
+    return this.transport.request<ApiKey>({
+      method: 'PATCH',
+      path: `/api-keys/${apiKeyId}`,
+      body: data,
+      idempotencyKey: options?.idempotencyKey,
+      timeout: options?.timeout,
+    });
   }
 
   /**

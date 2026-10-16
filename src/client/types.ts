@@ -537,8 +537,17 @@ export type ApiKey = components['schemas']['ApiKeyListItem'];
 /** API key response */
 export type ApiKeyResponse = components['schemas']['ApiKeyResponse'];
 
-/** API key creation request */
-export type ApiKeyCreateRequest = Record<string, unknown>;
+/**
+ * What an API key can do: `full_access`, `operate` or `read_only`. A key does
+ * not take the role of the person who created it.
+ */
+export type ApiKeyScope = components['schemas']['ApiKeyScope'];
+
+/** API key creation request. A key created without a scope has full access. */
+export type ApiKeyCreateRequest = components['schemas']['CreateApiKeyRequest'];
+
+/** API key update request: a new name, a new scope, or both. */
+export type ApiKeyUpdateRequest = components['schemas']['UpdateApiKeyRequest'];
 
 // ============================================================================
 // User Types
