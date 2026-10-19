@@ -10694,6 +10694,7 @@ paths:
               $ref: '#/components/schemas/CreateApiKeyRequest'
             example:
               name: prod-payouts
+              scope: operate
       responses:
         '201':
           description: API key created successfully
@@ -11012,7 +11013,7 @@ paths:
         - name: api_key_id
           in: path
           required: true
-          description: Unique identifier of the API key to rename
+          description: Unique identifier of the API key to update
           schema:
             $ref: '#/components/schemas/KSUID'
         - $ref: '#/components/parameters/IdempotencyKeyHeader'
@@ -11026,7 +11027,7 @@ paths:
               name: prod-payouts-v2
       responses:
         '200':
-          description: API key renamed
+          description: API key updated
           content:
             application/json:
               schema:

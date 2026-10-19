@@ -23200,7 +23200,8 @@ export interface operations {
             readonly content: {
                 /**
                  * @example {
-                 *       "name": "prod-payouts"
+                 *       "name": "prod-payouts",
+                 *       "scope": "operate"
                  *     }
                  */
                 readonly "application/json": components["schemas"]["CreateApiKeyRequest"];
@@ -23595,7 +23596,7 @@ export interface operations {
                 readonly "x-idempotency-key": components["parameters"]["IdempotencyKeyHeader"];
             };
             readonly path: {
-                /** @description Unique identifier of the API key to rename */
+                /** @description Unique identifier of the API key to update */
                 readonly api_key_id: components["schemas"]["KSUID"];
             };
             readonly cookie?: never;
@@ -23611,7 +23612,7 @@ export interface operations {
             };
         };
         readonly responses: {
-            /** @description API key renamed */
+            /** @description API key updated */
             readonly 200: {
                 headers: {
                     readonly [name: string]: unknown;
