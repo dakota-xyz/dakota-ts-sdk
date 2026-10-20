@@ -5211,7 +5211,7 @@ export type components = {
          * @description What the key can do. The scopes nest: `read_only` is inside `operate`, and `operate` is inside `full_access`.
          *
          *     - `full_access`: everything that an admin of the client can do. A key created without a scope gets it.
-         *     - `operate`: pays saved payees and runs the business, but cannot add payees, delete anything, or manage users, keys and security settings.
+         *     - `operate`: moves money and runs daily operations, but cannot add recipients or destinations, delete anything, or manage users, keys, signers, policies, mandates or webhooks. Wallet transactions and scheduled payments can still pay an address that is not a saved destination. A wallet transaction needs signatures from the signers of the wallet, and the policies of the wallet apply to it. A scheduled payment goes out only when a mandate of the client covers it.
          *     - `read_only`: reads only.
          *
          *     A key does not take the role of the person who created it.
