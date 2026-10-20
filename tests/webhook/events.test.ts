@@ -455,6 +455,7 @@ describe('Webhook Events', () => {
       expect(WebhookEventType.UserUpdated).toBe('user.updated');
       expect(WebhookEventType.UserDeleted).toBe('user.deleted');
       expect(WebhookEventType.ApiKeyCreated).toBe('api_key.created');
+      expect(WebhookEventType.ApiKeyUpdated).toBe('api_key.updated');
       expect(WebhookEventType.ApiKeyDeleted).toBe('api_key.deleted');
     });
 

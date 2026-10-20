@@ -4,6 +4,30 @@ All notable changes to the Dakota TypeScript SDK are documented in this file.
 
 ## [Unreleased]
 
+### API key names, last-used time and scopes (ENG-4792)
+
+A partial spec sync. The base `openapi.yaml` takes the `/api-keys` paths and
+the API key schemas of platform's `openapi.public.yaml` as of platform#2282,
+which publishes the `scope` fields (platform ENG-3939 and ENG-4790). It also
+takes the `api_key.updated` value of `EventType` and the
+`DELETE /users/{user_id}` description, and the types are regenerated. The
+agentic overlay is unchanged.
+
+**Upgrading:** `ApiKeyCreateRequest` is now the generated
+`CreateApiKeyRequest` instead of `Record<string, unknown>`. A create call that
+passes a field the API does not take stops compiling.
+
+- `apiKeys.create` takes an optional `name` and an optional `scope`:
+  `'full_access'`, `'operate'` or `'read_only'`. A key created without a
+  scope has full access.
+- `apiKeys.update(id, data)` changes the name, the scope, or both, of a key.
+  A new scope applies from the next request made with the key.
+- New types `ApiKeyScope` and `ApiKeyUpdateRequest`. `ApiKey` and
+  `ApiKeyResponse` have `name` and an optional `scope`, which the platform
+  leaves out while scoped API keys are off. `ApiKey` also has
+  `last_used_at`, which is `null` for a key that was never used.
+- `WebhookEventType.ApiKeyUpdated` (`'api_key.updated'`).
+
 ## [3.2.0] - 2026-10-12
 
 The first published version since 3.0.0. 3.1.0 was never published, so

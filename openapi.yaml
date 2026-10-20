@@ -10679,10 +10679,22 @@ paths:
       tags:
         - Authentication
       summary: Create a new API key
-      description: Generate a new API key
+      description: |-
+        Generate a new API key. The key can do what its `scope` allows: `full_access`, `operate` or `read_only`. A key created without a scope has full access.
+
+        The key belongs to the client. It does not take the role of the person who created it, and it keeps working after that person is removed.
       operationId: createApiKey
       parameters:
         - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateApiKeyRequest'
+            example:
+              name: prod-payouts
+              scope: operate
       responses:
         '201':
           description: API key created successfully
@@ -10693,6 +10705,8 @@ paths:
               example:
                 id: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
                 key: dk_live_4KLkSmzQbL6Xs8xnUjssdGHX7PfhHpAb
+                name: prod-payouts
+                scope: operate
         '400':
           description: Invalid request
           content:
@@ -10732,6 +10746,21 @@ paths:
                 detail: Forbidden
                 instance: https://api.platform.dakota.xyz/api-keys
                 request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+        '409':
+          description: Conflict — another live API key of this client already has this name.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          description: |-
+            Unprocessable — the `X-Idempotency-Key` was already used on this endpoint with a different request body
+            (problem type `idempotency-key-reused`). The request was not executed and the original response was not replayed.
+            Resend the original body to receive the original response, or use a new key to make a new request.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
       externalDocs:
         description: Read full guide in docs
         url: https://docs.dakota.xyz/api-reference/authentication/create-a-new-api-key
@@ -10795,7 +10824,10 @@ paths:
                   - id: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
                     user_id: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
                     key_suffix: HpAb4a
+                    name: prod-payouts
+                    scope: operate
                     created_at: 1234567890
+                    last_used_at: 1234571490
                 meta:
                   total_count: 100
                   has_more_after: true
@@ -10907,6 +10939,8 @@ paths:
               example:
                 id: 2iNhTbFZGo1bqoTTVOQKVgAfGHH
                 key: dk_live_4KLkSmzQbL6Xs8xnUjssdGHX7PfhHpAb
+                name: prod-payouts
+                scope: full_access
         '400':
           description: Invalid request
           content:
@@ -10946,6 +10980,15 @@ paths:
                 detail: This endpoint requires admin access token
                 instance: https://api.platform.dakota.xyz/api-keys/admin
                 request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
+        '422':
+          description: |-
+            Unprocessable — the `X-Idempotency-Key` was already used on this endpoint with a different request body
+            (problem type `idempotency-key-reused`). The request was not executed and the original response was not replayed.
+            Resend the original body to receive the original response, or use a new key to make a new request.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
         '503':
           description: Service unavailable - endpoint only available in sandbox environment
           content:
@@ -10960,6 +11003,82 @@ paths:
                 instance: https://api.platform.dakota.xyz/api-keys/admin
                 request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
   /api-keys/{api_key_id}:
+    patch:
+      tags:
+        - Authentication
+      summary: Update an API key
+      description: Change the name, the scope, or both, of an existing API key. A new scope applies from the next request made with the key. The key value does not change. Each change records an `api_key.updated` event.
+      operationId: updateApiKey
+      parameters:
+        - name: api_key_id
+          in: path
+          required: true
+          description: Unique identifier of the API key to update
+          schema:
+            $ref: '#/components/schemas/KSUID'
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateApiKeyRequest'
+            example:
+              name: prod-payouts-v2
+      responses:
+        '200':
+          description: API key updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiKeyListItem'
+              example:
+                id: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
+                user_id: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
+                key_suffix: HpAb4a
+                name: prod-payouts-v2
+                scope: operate
+                created_at: 1234567890
+                last_used_at: 1234571490
+        '400':
+          description: Invalid request
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Not found — no live API key of this client has this id.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: Conflict — another live API key of this client already has this name.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          description: |-
+            Unprocessable — the `X-Idempotency-Key` was already used on this endpoint with a different request body
+            (problem type `idempotency-key-reused`). The request was not executed and the original response was not replayed.
+            Resend the original body to receive the original response, or use a new key to make a new request.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
     delete:
       tags:
         - Authentication
@@ -11348,7 +11467,10 @@ paths:
       tags:
         - Users
       summary: Delete a user
-      description: Delete an existing user
+      description: |-
+        Delete an existing user.
+
+        The API keys that the user created keep working. A key belongs to the client, not to the person who created it. To stop a key, revoke it with `DELETE /api-keys/{api_key_id}`.
       operationId: deleteClientUser
       parameters:
         - name: user_id
@@ -20741,6 +20863,7 @@ components:
         - user.updated
         - user.deleted
         - api_key.created
+        - api_key.updated
         - api_key.deleted
         - customer.created
         - customer.updated
@@ -20884,11 +21007,49 @@ components:
           allOf:
             - $ref: '#/components/schemas/KSUID'
           description: Client ID to create the API key for
+    CreateApiKeyRequest:
+      type: object
+      properties:
+        name:
+          $ref: '#/components/schemas/ApiKeyName'
+        scope:
+          $ref: '#/components/schemas/ApiKeyScope'
+    UpdateApiKeyRequest:
+      type: object
+      description: Send `name`, `scope` or both. A new scope applies from the next request made with the key, and the key value stays the same.
+      minProperties: 1
+      properties:
+        name:
+          $ref: '#/components/schemas/ApiKeyName'
+        scope:
+          $ref: '#/components/schemas/ApiKeyScope'
+    ApiKeyScope:
+      type: string
+      description: |-
+        What the key can do. The scopes nest: `read_only` is inside `operate`, and `operate` is inside `full_access`.
+
+        - `full_access`: everything that an admin of the client can do. A key created without a scope gets it.
+        - `operate`: moves money and runs daily operations, but cannot add recipients or destinations, delete anything, or manage users, keys, signers, policies, mandates or webhooks. Wallet transactions and scheduled payments can still pay an address that is not a saved destination. A wallet transaction needs signatures from the signers of the wallet, and the policies of the wallet apply to it. A scheduled payment goes out only when a mandate of the client covers it.
+        - `read_only`: reads only.
+
+        A key does not take the role of the person who created it.
+      enum:
+        - full_access
+        - operate
+        - read_only
+      example: read_only
+    ApiKeyName:
+      type: string
+      description: A label that says what the key is for. No two live keys of a client share a name.
+      minLength: 1
+      maxLength: 128
+      example: prod-payouts
     ApiKeyResponse:
       type: object
       required:
         - id
         - key
+        - name
       properties:
         id:
           $ref: '#/components/schemas/KSUID'
@@ -20896,6 +21057,10 @@ components:
           type: string
           description: The API key value (only shown once at creation)
           example: dk_live_4KLkSmzQbL6Xs8xnUjssdGHX7PfhHpAb
+        name:
+          $ref: '#/components/schemas/ApiKeyName'
+        scope:
+          $ref: '#/components/schemas/ApiKeyScope'
     ApiKeyListItem:
       type: object
       required:
@@ -20903,9 +21068,15 @@ components:
         - user_id
         - key_suffix
         - created_at
+        - name
+        - last_used_at
       properties:
         id:
           $ref: '#/components/schemas/KSUID'
+        name:
+          $ref: '#/components/schemas/ApiKeyName'
+        scope:
+          $ref: '#/components/schemas/ApiKeyScope'
         user_id:
           $ref: '#/components/schemas/KSUID'
         key_suffix:
@@ -20915,6 +21086,11 @@ components:
         created_at:
           type: integer
           description: Timestamp of when the API key was created
+          example: 1234567890
+        last_used_at:
+          type: integer
+          nullable: true
+          description: Timestamp of the most recent request made with the API key, accurate to one hour. Null when the key was never used.
           example: 1234567890
     KSUID:
       type: string
