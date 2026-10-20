@@ -7,8 +7,9 @@ All notable changes to the Dakota TypeScript SDK are documented in this file.
 ### API key names, last-used time and scopes (ENG-4792)
 
 A partial spec sync. The base `openapi.yaml` takes the `/api-keys` paths and
-the API key schemas of platform's `openapi.public.yaml` (platform ENG-3939 and
-ENG-4790), the `api_key.updated` value of `EventType`, and the
+the API key schemas of platform's `openapi.public.yaml` as of platform#2282,
+which publishes the `scope` fields (platform ENG-3939 and ENG-4790). It also
+takes the `api_key.updated` value of `EventType` and the
 `DELETE /users/{user_id}` description, and the types are regenerated. The
 agentic overlay is unchanged.
 

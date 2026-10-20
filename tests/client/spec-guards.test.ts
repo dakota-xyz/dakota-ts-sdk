@@ -235,6 +235,34 @@ describe('openapi spec guards', () => {
     });
   }
 
+  /**
+   * API key scopes (ENG-4792): `ApiKeyScope`, the `scope` field of the four
+   * API key schemas, and the `api_key.updated` event type. Platform marked
+   * them `x-internal`, and left them out of its `openapi.public.yaml`, until
+   * platform#2282 published them. A sync from an older copy of that file
+   * drops all of them, and the SDK loses `ApiKeyScope` with no type error in
+   * this repo.
+   */
+  it('the API key scope fields stay in the spec', () => {
+    const schemas = loadSpec('openapi.yaml').components?.schemas ?? {};
+
+    const scope = schemas.ApiKeyScope as { enum?: unknown[] } | undefined;
+    expect(scope?.enum).toEqual(['full_access', 'operate', 'read_only']);
+    for (const schema of [
+      'CreateApiKeyRequest',
+      'UpdateApiKeyRequest',
+      'ApiKeyResponse',
+      'ApiKeyListItem',
+    ]) {
+      const def = schemas[schema] as { properties?: Record<string, { $ref?: unknown }> };
+      expect(def?.properties?.scope?.$ref, `${schema}.scope`).toBe(
+        '#/components/schemas/ApiKeyScope'
+      );
+    }
+    const eventType = schemas.EventType as { enum?: unknown[] } | undefined;
+    expect(eventType?.enum).toContain('api_key.updated');
+  });
+
   it('the agentic overlay carries every x-beta path', () => {
     const base = loadSpec('openapi.yaml');
     const overlay = loadSpec('openapi.agentic.yaml');
