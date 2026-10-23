@@ -4,6 +4,8 @@ All notable changes to the Dakota TypeScript SDK are documented in this file.
 
 ## [Unreleased]
 
+## [3.3.0] - 2026-10-23
+
 ### API key names, last-used time and scopes (ENG-4792)
 
 A partial spec sync. The base `openapi.yaml` takes the `/api-keys` paths and
@@ -15,7 +17,11 @@ agentic overlay is unchanged.
 
 **Upgrading:** `ApiKeyCreateRequest` is now the generated
 `CreateApiKeyRequest` instead of `Record<string, unknown>`. A create call that
-passes a field the API does not take stops compiling.
+passes a field the API does not take stops compiling. `ApiKey` now requires
+`name` and `last_used_at`, and `ApiKeyResponse` requires `name`. Values the
+API returns are unaffected, but object literals you type as one of these
+yourself, such as test fixtures or fakes, stop compiling until they set the
+fields.
 
 - `apiKeys.create` takes an optional `name` and an optional `scope`:
   `'full_access'`, `'operate'` or `'read_only'`. A key created without a
