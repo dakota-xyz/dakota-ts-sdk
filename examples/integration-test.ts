@@ -58,7 +58,11 @@ async function main() {
   console.log('  Dakota SDK Integration Test');
   console.log('===========================================\n');
 
-  const API_KEY = process.env.DAKOTA_API_KEY || 'bTytwgGQhUPcZjbkddNvI1YhAvReg5lSr0e7Kf8hvQ4=';
+  const API_KEY = process.env.DAKOTA_API_KEY;
+  if (!API_KEY) {
+    console.error('Set DAKOTA_API_KEY to a sandbox API key to run this example.');
+    process.exit(1);
+  }
 
   // ---------------------------------------------------------------------------
   // Section 1: Client Initialization
