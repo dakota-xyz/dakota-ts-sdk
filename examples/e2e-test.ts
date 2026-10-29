@@ -22,8 +22,11 @@ import {
 } from '../src/index.js';
 
 // Test configuration
-const API_KEY =
-  process.env.DAKOTA_API_KEY || 'bTytwgGQhUPcZjbkddNvI1YhAvReg5lSr0e7Kf8hvQ4=';
+const API_KEY = process.env.DAKOTA_API_KEY;
+if (!API_KEY) {
+  console.error('Set DAKOTA_API_KEY to a sandbox API key to run this example.');
+  process.exit(1);
+}
 const TEST_PREFIX = `e2e_${Date.now()}`;
 
 // Store created resources for cleanup/reference
