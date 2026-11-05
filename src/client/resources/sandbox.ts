@@ -3,8 +3,9 @@
  *
  * @remarks
  * These endpoints are only available in the Sandbox environment.
- * In sandbox, Dakota does NOT monitor testnet blockchains - you must
- * use these simulation endpoints to trigger payment events.
+ * Sandbox custody is real on testnets: Dakota sees real testnet crypto
+ * sent to a sandbox address. The banking layer is mocked, so use these
+ * simulation endpoints to trigger fiat payment events.
  */
 
 import { BaseResource } from './base.js';
@@ -28,8 +29,9 @@ import type {
  * These endpoints are only available in the Sandbox environment.
  *
  * @remarks
- * **Important:** In sandbox, Dakota does NOT monitor testnet blockchains.
- * You must use these simulation endpoints to trigger payment events.
+ * **Important:** Sandbox custody is real on testnets, so Dakota sees real
+ * testnet crypto sent to a sandbox address. The banking layer is mocked:
+ * use these simulation endpoints to trigger fiat payment events.
  *
  * @example
  * ```typescript
@@ -147,20 +149,15 @@ export class SandboxResource extends BaseResource {
    * @param data - Simulation request data
    * @returns Simulation response with previous and new state
    *
-   * @example Approve KYB and activate applicant
+   * `applicant_activate` runs the same code path as `kyb_approve`. One call
+   * is enough: do not send `applicant_activate` after `kyb_approve`.
+   *
+   * @example Approve an application
    * ```typescript
-   * // Step 1: Approve the KYB application
    * await client.sandbox.simulateOnboarding({
    *   type: 'kyb_approve',
    *   applicant_id: customer.application_id,
    *   simulation_id: `sim_kyb_${Date.now()}`,
-   * });
-   *
-   * // Step 2: Activate the applicant (triggers provisioning)
-   * await client.sandbox.simulateOnboarding({
-   *   type: 'applicant_activate',
-   *   applicant_id: customer.application_id,
-   *   simulation_id: `sim_activate_${Date.now()}`,
    * });
    * ```
    *

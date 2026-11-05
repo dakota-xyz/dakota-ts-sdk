@@ -49,7 +49,7 @@ export interface WebhookHeaders {
  * import { WebhookHandler, WebhookEventType } from 'dakota-ts-sdk/webhook';
  *
  * const handler = new WebhookHandler({
- *   publicKey: process.env.WEBHOOK_PUBLIC_KEY!,
+ *   publicKey: process.env.DAKOTA_WEBHOOK_PUBLIC_KEY!,
  * });
  *
  * // Register event handlers. The resource lives under event.data.object.

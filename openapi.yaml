@@ -2791,6 +2791,16 @@ paths:
         - $ref: '#/components/parameters/LimitParam'
         - $ref: '#/components/parameters/StartingAfterParam'
         - $ref: '#/components/parameters/EndingBeforeParam'
+        - name: external_id
+          in: query
+          description: |
+            Filter by the client-supplied `external_id`, exact match, case
+            sensitive. The key is a label the client chooses and is not
+            unique, so the result is a (possibly empty) collection rather
+            than a single resource. An empty value is treated as absent.
+          required: false
+          schema:
+            type: string
       responses:
         '200':
           description: List of recipients
@@ -22512,6 +22522,12 @@ components:
             - **Required** for recipients that will have fiat destinations (ACH, Wire, SWIFT)
             - Can be added later via PUT /recipients/{id} to enable fiat capabilities
           $ref: '#/components/schemas/Address'
+        external_id:
+          type: string
+          maxLength: 255
+          pattern: '^[^\x00-\x1f]*$'
+          description: 'Your own label for this recipient in your system, used to look it up with the `external_id` filter on `GET /customers/{customer_id}/recipients`. Not unique: Dakota does not reject a duplicate, and several recipients can share one value. On `PUT /recipients/{recipient_id}`, omit it to leave the current value unchanged; it cannot be cleared.'
+          example: vendor-1177
     RecipientResponse:
       type: object
       title: Recipient Response
@@ -22523,6 +22539,10 @@ components:
       properties:
         id:
           $ref: '#/components/schemas/KSUID'
+        external_id:
+          type: string
+          description: 'Your own label for this recipient in your system, used to look it up with the `external_id` filter on `GET /customers/{customer_id}/recipients`. Not unique: Dakota does not reject a duplicate, and several recipients can share one value. Omitted when none was set.'
+          example: vendor-1177
         name:
           type: string
           description: Name of the recipient entity.

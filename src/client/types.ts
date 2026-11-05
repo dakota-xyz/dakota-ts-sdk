@@ -897,7 +897,7 @@ export interface SimulateOnboardingResponse {
  * - `kyc_approve` - Approve an individual applicant's KYC application status only (no endorsement/recipient)
  * - `kyc_reject` - Reject a KYC check
  * - `kyc_info_request` - Request additional information for KYC
- * - `applicant_activate` - Activate an applicant (triggers provisioning)
+ * - `applicant_activate` - Same code path as `kyb_approve` (approves and triggers provisioning)
  * - `applicant_suspend` - Suspend an applicant
  */
 export type SimulateOnboardingType =
@@ -915,22 +915,15 @@ export type SimulateOnboardingType =
  *
  * Drives KYB, KYC, or applicant account status through a sandbox transition.
  *
- * **Important:** For full activation, you typically need to call:
- * 1. `kyb_approve` - Approves the KYB application
- * 2. `applicant_activate` - Activates the applicant (triggers provisioning)
+ * **Important:** One `kyb_approve` call fully approves an application and
+ * triggers provisioning. `applicant_activate` runs the same code path, so do
+ * not send it after `kyb_approve`.
  *
  * @example
- * // Approve KYB and activate applicant
  * await client.sandbox.simulateOnboarding({
  *   type: 'kyb_approve',
  *   applicant_id: 'app_123',
  *   simulation_id: 'sim_kyb_001',
- * });
- *
- * await client.sandbox.simulateOnboarding({
- *   type: 'applicant_activate',
- *   applicant_id: 'app_123',
- *   simulation_id: 'sim_activate_001',
  * });
  */
 export interface SimulateOnboardingRequest {
@@ -1226,6 +1219,14 @@ export interface ListParams {
   ending_before?: string;
   limit?: number;
   [key: string]: unknown;
+}
+
+/**
+ * Recipient list parameters.
+ */
+export interface RecipientListParams extends ListParams {
+  /** Exact-match, case-sensitive filter on the client-supplied `external_id`. Not unique, so it can match several recipients. */
+  external_id?: string;
 }
 
 /**

@@ -171,7 +171,7 @@ function buildSignedMessage(payload: Uint8Array | string, timestamp: string): Ui
  *   requestBody,
  *   request.headers['x-webhook-signature'],
  *   request.headers['x-webhook-timestamp'],
- *   process.env.WEBHOOK_PUBLIC_KEY
+ *   process.env.DAKOTA_WEBHOOK_PUBLIC_KEY
  * );
  * ```
  */
