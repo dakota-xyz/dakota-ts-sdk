@@ -353,7 +353,7 @@ for (const policy of attachedPolicies) {
 // envelope (`{ signatures, intent }`). Build the SendTransactionIntent,
 // canonicalize per RFC 8785, sign with the wallet's signer-group ECDSA
 // P-256 key, base64-encode the DER signature, then post the envelope.
-import canonicalize from 'canonicalize';
+import { canonicalJSON } from '@dakota-xyz/ts-sdk';
 import { createSign, createPrivateKey, randomUUID } from 'node:crypto';
 
 const intent = {
@@ -363,12 +363,12 @@ const intent = {
     kind: 'transfer',
     from: wallet.address,
     to: '0x...',
-    amount: '100.00',
+    amount: '100', // shortest decimal form: the platform re-serializes the amount before it verifies the signature
     asset_id: 'USDC',
   },
   idempotency_key: randomUUID(),
 };
-const canonical = canonicalize(intent)!;
+const canonical = canonicalJSON(intent);
 const sig = createSign('SHA256').update(canonical).sign({
   key: createPrivateKey({ key: privateKeyDer, format: 'der', type: 'pkcs8' }),
   dsaEncoding: 'der',
@@ -586,9 +586,13 @@ await client.users.delete(userId);
 
 ```typescript
 // Create webhook target
+// `event_types` is an exact-match list (no wildcards). With `global: false`
+// and no `event_types`, the target receives no events. `global: true`
+// receives every event type and ignores `event_types`.
 const target = await client.webhooks.createTarget({
   url: 'https://example.com/webhooks',
-  events: ['customer.created', 'transaction.*'],
+  global: false,
+  event_types: ['customer.created', 'transaction.one_off.updated'],
 });
 
 // List targets
@@ -598,7 +602,7 @@ for await (const target of client.webhooks.listTargets()) {
 
 // Update target
 const updated = await client.webhooks.updateTarget(targetId, {
-  events: ['*'],
+  global: true,
 });
 
 // Delete target
@@ -710,7 +714,7 @@ const result = await client.sandbox.simulateInbound({
 
 // Simulate KYB approval (requires application_id from customer creation)
 const result = await client.sandbox.simulateOnboarding({
-  type: 'kyb_approve',        // or 'kyb_reject', 'applicant_activate'
+  type: 'kyb_approve',        // or 'kyb_reject'. 'applicant_activate' runs the same path as kyb_approve
   applicant_id: applicationId,
   simulation_id: 'sim_' + Date.now(),
 });
@@ -932,7 +936,7 @@ import {
 } from '@dakota-xyz/ts-sdk/webhook';
 
 const handler = new WebhookHandler({
-  publicKey: process.env.WEBHOOK_PUBLIC_KEY!,
+  publicKey: process.env.DAKOTA_WEBHOOK_PUBLIC_KEY!,
   timestampTolerance: 300, // 5 minutes (default)
 });
 
@@ -1085,7 +1089,7 @@ Register your webhook URL with Dakota:
 ```typescript
 await client.webhooks.createTarget({
   url: 'https://your-app.com/webhooks/dakota',
-  events: ['auto_transaction.*'],
+  event_types: ['transaction.auto.updated'],
 });
 ```
 
@@ -1138,7 +1142,7 @@ pending → processing → completed
 
 ### Sandbox: Simulating Transactions
 
-Sandbox does NOT monitor testnet blockchains. Use the simulation API instead:
+Sandbox custody is real on testnets: Dakota sees real testnet crypto sent to a sandbox address. The banking layer is mocked, so use the simulation API for fiat events:
 
 ```typescript
 // For on-ramp accounts (USD → crypto): simulate ACH deposit

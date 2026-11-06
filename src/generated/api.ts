@@ -6421,6 +6421,11 @@ export type components = {
              *     - Can be added later via PUT /recipients/{id} to enable fiat capabilities
              */
             readonly address?: components["schemas"]["Address"];
+            /**
+             * @description Your own label for this recipient in your system, used to look it up with the `external_id` filter on `GET /customers/{customer_id}/recipients`. Not unique: Dakota does not reject a duplicate, and several recipients can share one value. On `PUT /recipients/{recipient_id}`, omit it to leave the current value unchanged; it cannot be cleared.
+             * @example vendor-1177
+             */
+            readonly external_id?: string;
         };
         /**
          * Recipient Response
@@ -6428,6 +6433,11 @@ export type components = {
          */
         readonly RecipientResponse: {
             readonly id: components["schemas"]["KSUID"];
+            /**
+             * @description Your own label for this recipient in your system, used to look it up with the `external_id` filter on `GET /customers/{customer_id}/recipients`. Not unique: Dakota does not reject a duplicate, and several recipients can share one value. Omitted when none was set.
+             * @example vendor-1177
+             */
+            readonly external_id?: string;
             /**
              * @description Name of the recipient entity.
              * @example Acme Corporation
@@ -13195,6 +13205,13 @@ export interface operations {
                 readonly starting_after?: components["parameters"]["StartingAfterParam"];
                 /** @description A cursor for use in pagination. `ending_before` is a KSUID for the object you are listing that defines your place in the list. For instance, if you make a list request and receive 100 objects, starting with ID `2B5J8KZ9N7M1K3P6Q8R4T7V9`, your subsequent call can include `ending_before=2B5J8KZ9N7M1K3P6Q8R4T7V9` in order to fetch the previous page of the list. */
                 readonly ending_before?: components["parameters"]["EndingBeforeParam"];
+                /**
+                 * @description Filter by the client-supplied `external_id`, exact match, case
+                 *     sensitive. The key is a label the client chooses and is not
+                 *     unique, so the result is a (possibly empty) collection rather
+                 *     than a single resource. An empty value is treated as absent.
+                 */
+                readonly external_id?: string;
             };
             readonly header?: never;
             readonly path: {

@@ -8,7 +8,7 @@ import type {
   Recipient,
   RecipientRequest,
   RecipientUpdateRequest,
-  ListParams,
+  RecipientListParams,
   RequestOptions,
 } from '../types.js';
 
@@ -29,6 +29,7 @@ export class RecipientsResource extends BaseResource {
    * ```typescript
    * const recipient = await client.recipients.create(customerId, {
    *   name: 'Treasury Account',
+   *   external_id: 'vendor-1177', // optional: your own label, not unique
    * });
    * ```
    */
@@ -50,7 +51,7 @@ export class RecipientsResource extends BaseResource {
    * List recipients for a customer.
    *
    * @param customerId - Customer ID
-   * @param params - Pagination parameters
+   * @param params - Pagination parameters and an optional `external_id` filter
    * @returns Async iterator of recipients
    *
    * @example
@@ -58,9 +59,14 @@ export class RecipientsResource extends BaseResource {
    * for await (const recipient of client.recipients.list(customerId)) {
    *   console.log(recipient.name);
    * }
+   *
+   * // Look up recipients by your own label
+   * const matches = await client.recipients
+   *   .list(customerId, { external_id: 'vendor-1177' })
+   *   .toArray();
    * ```
    */
-  list(customerId: string, params?: ListParams): PaginatedIterator<Recipient> {
+  list(customerId: string, params?: RecipientListParams): PaginatedIterator<Recipient> {
     return this.paginate<Recipient>(`/customers/${customerId}/recipients`, params);
   }
 

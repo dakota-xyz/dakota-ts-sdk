@@ -134,13 +134,19 @@ export class WalletsResource extends BaseResource {
    * with the wallet's signer-group ECDSA P-256 key, base64-encode the
    * DER signature, then post the envelope.
    *
+   * Use the SDK's `canonicalJSON`: it matches the platform's canonical form
+   * byte for byte. Write `amount` in its shortest decimal form (`'100'`, not
+   * `'100.00'`; `'0.5'`, not `'0.50'`). The platform parses the amount as a
+   * decimal and re-serializes it before it checks the signature, so trailing
+   * zeros change the signed bytes and the signature fails.
+   *
    * @param walletId - Wallet ID
    * @param data - Endorsed wallet transaction request: `{ signatures, intent }`
    * @returns Created transaction
    *
    * @example
    * ```typescript
-   * import canonicalize from 'canonicalize';
+   * import { canonicalJSON } from '@dakota-xyz/ts-sdk';
    * import { createSign, createPrivateKey, randomUUID } from 'node:crypto';
    *
    * const intent = {
@@ -150,12 +156,12 @@ export class WalletsResource extends BaseResource {
    *     kind: 'transfer',
    *     from: wallet.address,
    *     to: '0x...',
-   *     amount: '100.00',
+   *     amount: '100', // shortest decimal form, see below
    *     asset_id: 'USDC',
    *   },
    *   idempotency_key: randomUUID(),
    * };
-   * const canonical = canonicalize(intent)!;
+   * const canonical = canonicalJSON(intent);
    * const sig = createSign('SHA256').update(canonical).sign({
    *   key: createPrivateKey({ key: privateKeyDer, format: 'der', type: 'pkcs8' }),
    *   dsaEncoding: 'der',
