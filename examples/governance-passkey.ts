@@ -22,9 +22,8 @@
  *   5. at quorum 2, a removal signed by P alone -> InsufficientEndorsementsError
  *   6. the same removal signed by P and E       -> version 0 -> 1
  *
- * Use an ORDINARY sandbox client's API key. Never run it with a key of an
- * internal superadmin client: every key there acts as superadmin, whatever
- * its scope. The script creates signers and signer groups (named
+ * Use the API key of an ordinary sandbox client, never one of an internal
+ * staff client. The script creates signers and signer groups (named
  * `gov-passkey-example-*`) and touches nothing else.
  *
  * Run with: DAKOTA_API_KEY=... npx tsx examples/governance-passkey.ts
@@ -94,7 +93,7 @@ class SyntheticPasskey {
   }
 
   /** Answers navigator.credentials.get({ publicKey: { challenge } }). */
-  get(challenge: Uint8Array): AssertionCredential {
+  get(challenge: ArrayBuffer | Uint8Array): AssertionCredential {
     const authenticatorData = Buffer.concat([
       sha256(Buffer.from(RP_ID)),
       Buffer.from([0x05]), // user present + user verified
@@ -103,7 +102,7 @@ class SyntheticPasskey {
     const clientDataJSON = Buffer.from(
       JSON.stringify({
         type: 'webauthn.get',
-        challenge: Buffer.from(challenge).toString('base64url'),
+        challenge: Buffer.from(new Uint8Array(challenge)).toString('base64url'),
         origin: `https://${RP_ID}`,
         crossOrigin: false,
       })

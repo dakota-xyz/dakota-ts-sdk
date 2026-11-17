@@ -29,7 +29,9 @@ export type BinaryOrBase64 = ArrayBuffer | ArrayBufferView | string;
 /**
  * The parts of a `PublicKeyCredential` (with an `AuthenticatorAssertionResponse`)
  * that the platform reads. A browser's `navigator.credentials.get()` result
- * satisfies it as-is.
+ * satisfies it as-is: the DOM types its `response` as the base
+ * `AuthenticatorResponse`, so `authenticatorData` and `signature` are
+ * optional here and checked at run time by {@link packAssertion}.
  */
 export interface AssertionCredential {
   readonly id: string;
@@ -38,28 +40,38 @@ export interface AssertionCredential {
   readonly authenticatorAttachment?: string | null;
   readonly response: {
     readonly clientDataJSON: BinaryOrBase64;
-    readonly authenticatorData: BinaryOrBase64;
-    readonly signature: BinaryOrBase64;
+    readonly authenticatorData?: BinaryOrBase64;
+    readonly signature?: BinaryOrBase64;
     readonly userHandle?: BinaryOrBase64 | null;
   };
 }
 
 /**
- * The WebAuthn challenge for an intent: its raw canonical JSON bytes (a fresh
- * copy). Pass it as `publicKey.challenge`; the browser base64url-encodes it
- * into `clientDataJSON`, which is exactly what the platform expects.
+ * The WebAuthn challenge for an intent: its raw canonical JSON bytes, as a
+ * fresh `ArrayBuffer`. Pass it as `publicKey.challenge`; the browser
+ * base64url-encodes it into `clientDataJSON`, which is exactly what the
+ * platform expects. (An `ArrayBuffer` is a `BufferSource` under every
+ * TypeScript version, unlike a `Uint8Array` on TypeScript 5.7+.)
  *
  * Accepts a built intent, its `canonical` string (what a server would send
  * to the browser), or the bytes.
  */
-export function buildChallenge(intent: CanonicalIntent | string | Uint8Array): Uint8Array {
-  if (typeof intent === 'string') {
-    return utf8(intent);
-  }
-  if (intent instanceof Uint8Array) {
-    return intent.slice();
-  }
-  return intent.bytes.slice();
+export function buildChallenge(
+  intent: CanonicalIntent | string | Uint8Array | ArrayBuffer
+): ArrayBuffer {
+  const bytes =
+    typeof intent === 'string'
+      ? utf8(intent)
+      : isBinary(intent)
+        ? toBytes(intent)
+        : (intent as CanonicalIntent).bytes;
+  const out = new ArrayBuffer(bytes.length);
+  new Uint8Array(out).set(bytes);
+  return out;
+}
+
+function isBinary(v: unknown): v is ArrayBuffer | ArrayBufferView {
+  return ArrayBuffer.isView(v) || Object.prototype.toString.call(v) === '[object ArrayBuffer]';
 }
 
 function b64urlField(name: string, value: BinaryOrBase64 | null | undefined): string {
@@ -126,7 +138,7 @@ export function packAssertion(credential: AssertionCredential): string {
  */
 export function assertionChallengeMatches(
   packed: string,
-  intent: CanonicalIntent | string | Uint8Array
+  intent: CanonicalIntent | string | Uint8Array | ArrayBuffer
 ): boolean {
   try {
     const envelope = JSON.parse(new TextDecoder().decode(base64ToBytes(packed))) as {
@@ -143,7 +155,7 @@ export function assertionChallengeMatches(
       return false;
     }
     const got = base64ToBytes(clientData.challenge);
-    const want = buildChallenge(intent);
+    const want = new Uint8Array(buildChallenge(intent));
     return got.length === want.length && got.every((b, i) => b === want[i]);
   } catch {
     return false;
@@ -166,7 +178,7 @@ export function assertionChallengeMatches(
  * retries unless a second prompt is acceptable.
  */
 export function webauthnSigner(
-  getAssertion: (challenge: Uint8Array) => Promise<AssertionCredential> | AssertionCredential
+  getAssertion: (challenge: ArrayBuffer) => Promise<AssertionCredential> | AssertionCredential
 ): GovernanceSigner {
   return {
     async sign(payload: Uint8Array): Promise<string> {

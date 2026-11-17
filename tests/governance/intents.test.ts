@@ -7,11 +7,11 @@
  * fails here.
  */
 
-import { createHash } from 'node:crypto';
+import { createHash, webcrypto } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 
 import {
   addSignersToGroupIntent,
@@ -141,16 +141,34 @@ describe('governance intent rules', () => {
     expect(() => removeSignersFromGroupIntent({ ...base, membersToRemove: [''] })).toThrow(
       /required/
     );
-    expect(() => updateSignerGroupGovernanceIntent({ ...base, governanceThreshold: 0 })).toThrow(
-      /governanceThreshold/
-    );
+    for (const t of [0, 1.5, 1e21, 2 ** 31]) {
+      expect(() => updateSignerGroupGovernanceIntent({ ...base, governanceThreshold: t })).toThrow(
+        /governanceThreshold/
+      );
+    }
   });
 
-  it('generates lowercase v4 UUID idempotency keys', () => {
-    const keys = new Set(Array.from({ length: 50 }, () => newIdempotencyKey()));
-    expect(keys.size).toBe(50);
-    for (const k of keys) {
-      expect(k).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
-    }
+  describe('newIdempotencyKey', () => {
+    const V4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it('uses crypto.randomUUID, lowercased', () => {
+      vi.stubGlobal('crypto', { randomUUID: () => '047CAA77-8CEC-4E96-994C-A12B655231DE' });
+      expect(newIdempotencyKey()).toBe('047caa77-8cec-4e96-994c-a12b655231de');
+    });
+
+    it('falls back to getRandomValues (React Native with a polyfill)', () => {
+      vi.stubGlobal('crypto', { getRandomValues: (a: Uint8Array) => webcrypto.getRandomValues(a) });
+      const keys = new Set(Array.from({ length: 50 }, () => newIdempotencyKey()));
+      expect(keys.size).toBe(50);
+      for (const k of keys) expect(k).toMatch(V4);
+    });
+
+    it('refuses to invent a key without a cryptographic random source', () => {
+      vi.stubGlobal('crypto', undefined);
+      expect(() => newIdempotencyKey()).toThrow(/random source/);
+    });
   });
 });

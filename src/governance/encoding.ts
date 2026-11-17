@@ -70,11 +70,13 @@ export function utf8(s: string): Uint8Array {
 
 /** A copy of any BufferSource as a plain Uint8Array. */
 export function toBytes(source: ArrayBuffer | ArrayBufferView): Uint8Array {
-  if (source instanceof ArrayBuffer) {
-    return new Uint8Array(source.slice(0));
-  }
+  // isView / toString instead of instanceof: buffers from another realm
+  // (an iframe, jsdom, some React Native bridges) fail `instanceof`.
   if (ArrayBuffer.isView(source)) {
     return new Uint8Array(source.buffer, source.byteOffset, source.byteLength).slice();
+  }
+  if (Object.prototype.toString.call(source) === '[object ArrayBuffer]') {
+    return new Uint8Array((source as ArrayBuffer).slice(0));
   }
   throw new TypeError('expected an ArrayBuffer or a typed array');
 }

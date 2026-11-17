@@ -105,7 +105,6 @@ export {
   attachUserToWallet,
   detachUserFromWallet,
   P256MandateSigner,
-  P256MandateSigner as ES256Signer,
   type MandateAction,
   type MandateSigner,
   addPolicyRulePayload,
@@ -121,6 +120,9 @@ export {
   verifyMandateSignature,
   canonicalJSON,
 } from './agentic/index.js';
+
+// ES256 signing (Node), shared by governance and mandates.
+export { ES256Signer, verifyES256Signature } from './signing/es256.js';
 
 // Signer-group governance: canonical intents, passkey (WebAuthn) packaging,
 // ES256 signers. Also published on its own, browser-safe, as

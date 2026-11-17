@@ -225,8 +225,12 @@ export function updateSignerGroupGovernanceIntent(params: {
     idempotency_key: params.idempotencyKey,
   };
   if (params.governanceThreshold !== undefined && params.governanceThreshold !== null) {
-    if (!Number.isInteger(params.governanceThreshold) || params.governanceThreshold < 1) {
-      throw new TypeError('governanceThreshold must be an integer >= 1, or null to clear it');
+    // The platform stores it as an int32.
+    const t = params.governanceThreshold;
+    if (!Number.isSafeInteger(t) || t < 1 || t > 2147483647) {
+      throw new TypeError(
+        'governanceThreshold must be an integer from 1 to 2^31-1, or null to clear it'
+      );
     }
     intent.governance_threshold = params.governanceThreshold;
   }

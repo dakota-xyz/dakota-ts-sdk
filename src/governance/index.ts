@@ -3,7 +3,8 @@
  * ES256 key or a passkey, and package the signatures.
  *
  * This entry point (`@dakota-xyz/ts-sdk/governance`) has no `node:` import
- * and no `Buffer`, so it bundles for browsers and React Native. The API
+ * and no `Buffer`, so it bundles for browsers and React Native (which needs
+ * `TextEncoder` and `crypto.getRandomValues`; polyfill them on older Hermes). The API
  * calls that send a signed change live on `client.signerGroups` in the main
  * entry, which runs where your API key is (your server).
  *

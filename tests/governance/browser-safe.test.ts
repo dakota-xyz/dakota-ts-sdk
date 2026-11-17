@@ -1,14 +1,15 @@
 /**
  * `@dakota-xyz/ts-sdk/governance` must bundle for browsers and React Native:
- * passkeys are signed there. So nothing it reaches may import a Node
- * built-in or a package, or use Node-only globals. This walks the real
- * import graph from the entry point, so a future import of, say, the
- * mandate signer (which needs `node:crypto`) fails here.
+ * passkeys are signed there. So it is bundled here the way a browser app's
+ * bundler would (esbuild, platform "browser", nothing external): a `node:`
+ * built-in or a package reached by ANY import form (static, side-effect,
+ * dynamic, re-export) fails the build, and the files it pulls in are pinned.
  */
 
 import { readFileSync } from 'node:fs';
-import { dirname, relative, resolve } from 'node:path';
+import { relative, resolve } from 'node:path';
 
+import { build } from 'esbuild';
 import { describe, it, expect } from 'vitest';
 
 const ROOT = resolve(__dirname, '../..');
@@ -18,36 +19,32 @@ function stripComments(src: string): string {
   return src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
 }
 
-function importGraph(entry: string): { files: string[]; external: string[] } {
-  const files = new Set<string>();
-  const external = new Set<string>();
-  const queue = [entry];
-  while (queue.length > 0) {
-    const file = queue.pop() as string;
-    if (files.has(file)) continue;
-    files.add(file);
-    const src = stripComments(readFileSync(file, 'utf8'));
-    for (const m of src.matchAll(/(?:import|export)\s[^'"]*?from\s+['"]([^'"]+)['"]/g)) {
-      const spec = m[1] as string;
-      if (spec.startsWith('.')) {
-        queue.push(resolve(dirname(file), spec.replace(/\.js$/, '.ts')));
-      } else {
-        external.add(spec);
-      }
-    }
-  }
-  return { files: [...files].map((f) => relative(ROOT, f)).sort(), external: [...external] };
+async function bundleForBrowser() {
+  return build({
+    entryPoints: [ENTRY],
+    bundle: true,
+    platform: 'browser',
+    format: 'esm',
+    write: false,
+    metafile: true,
+    logLevel: 'silent',
+  });
 }
 
 describe('governance entry point is browser-safe', () => {
-  const graph = importGraph(ENTRY);
-
-  it('imports nothing outside the SDK source (no node: built-ins, no packages)', () => {
-    expect(graph.external).toEqual([]);
+  it('bundles for the browser with nothing external', async () => {
+    const result = await bundleForBrowser();
+    expect(result.errors).toEqual([]);
+    const code = result.outputFiles[0]!.text;
+    expect(code).not.toMatch(/\bnode:|\brequire\(/);
   });
 
-  it('stays within the pure modules it is meant to use', () => {
-    expect(graph.files).toEqual([
+  it('pulls in only the pure modules it is meant to use', async () => {
+    const { metafile } = await bundleForBrowser();
+    const inputs = Object.keys(metafile.inputs)
+      .map((f) => relative(ROOT, resolve(ROOT, f)))
+      .sort();
+    expect(inputs).toEqual([
       'src/agentic/canonicalize.ts',
       'src/governance/encoding.ts',
       'src/governance/index.ts',
@@ -57,8 +54,9 @@ describe('governance entry point is browser-safe', () => {
     ]);
   });
 
-  it('uses no Node-only globals', () => {
-    for (const f of graph.files) {
+  it('uses no Node-only globals', async () => {
+    const { metafile } = await bundleForBrowser();
+    for (const f of Object.keys(metafile.inputs)) {
       const code = stripComments(readFileSync(resolve(ROOT, f), 'utf8'));
       expect(code, f).not.toMatch(/\b(Buffer|process|require)\b/);
     }

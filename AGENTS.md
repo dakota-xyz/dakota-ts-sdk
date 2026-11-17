@@ -524,22 +524,23 @@ builds the canonical intent, signs it, and sends the same lowercase UUID as
 the intent's `idempotency_key` and the `X-Idempotency-Key` header.
 
 ```typescript
-import { ES256Signer, webauthnSigner, StaleSignerGroupVersionError } from '@dakota-xyz/ts-sdk';
+import { ES256Signer, StaleSignerGroupVersionError } from '@dakota-xyz/ts-sdk';
 
 const admin = ES256Signer.fromPrivateKey(adminPkcs8Pem); // or any { sign(bytes) => base64 DER }
 await client.signerGroups.addSignerSigned(groupId, newMemberKey, [admin]);
-await client.signerGroups.removeSignersSigned(groupId, [memberKey], [admin, ops], { staleRetries: 1 });
+await client.signerGroups.removeSignersSigned(groupId, [memberKey], [admin, ops], { staleRetries: 1 }); // 0-5; each retry re-signs
 // Governance replaces the WHOLE state: a setting left out or null is cleared.
+// (No staleRetries here: a re-sign would undo a concurrent change.)
 await client.signerGroups.updateGovernanceSigned(groupId, { governance_threshold: 2 }, [admin]);
 
-// Passkey, two phase (server -> browser -> server):
+// Passkey, two phase (server -> browser -> server). The API key never goes to the browser:
 const change = await client.signerGroups.prepareAddSigner(groupId, newMemberKey); // plain JSON
 // browser (import from '@dakota-xyz/ts-sdk/governance', no Node deps):
 //   const cred = await navigator.credentials.get({ publicKey: { challenge: buildChallenge(change.canonical), rpId } });
 //   const sig = packAssertion(cred);
 await client.signerGroups.submitSignedChange(change, [sig]);
 
-// Low level (you signed the body yourself; options.idempotencyKey MUST equal the intent's key)
+// Low level (you signed the body yourself; options.idempotencyKey is REQUIRED and must equal the intent's key)
 await client.signerGroups.removeSigners(groupId, { members_to_remove, signer_group_version, signatures }, { idempotencyKey });
 await client.signerGroups.updateGovernance(groupId, { governance_threshold, signer_group_version, signatures }, { idempotencyKey });
 ```
@@ -554,7 +555,7 @@ and its `signatures[]` entry is `packAssertion(credential)`.
 Errors (subclasses of `APIError`): `EndorsementRequiredError` (400, unsigned),
 `InsufficientEndorsementsError` (403, `have`/`need`),
 `StaleSignerGroupVersionError` (409, re-read version and re-sign),
-`BelowThresholdError` (422), `InvalidGoverningGroupError`.
+`BelowThresholdError` (422), `InvalidGoverningGroupError` (409).
 
 ### Signers
 

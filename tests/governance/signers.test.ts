@@ -41,7 +41,7 @@ const sha256 = (b: Uint8Array | Buffer) => createHash('sha256').update(b).digest
 function syntheticPasskey() {
   const { privateKey, publicKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
   const rawId = Buffer.from('synthetic-credential-id-0001');
-  const get = (challenge: Uint8Array): AssertionCredential => {
+  const get = (challenge: ArrayBuffer | Uint8Array): AssertionCredential => {
     const authenticatorData = Buffer.concat([
       sha256(Buffer.from('passkey-test.dakota.xyz')),
       Buffer.from([0x05]), // UP + UV
@@ -50,7 +50,7 @@ function syntheticPasskey() {
     const clientDataJSON = Buffer.from(
       JSON.stringify({
         type: 'webauthn.get',
-        challenge: b64url(challenge),
+        challenge: b64url(new Uint8Array(challenge)),
         origin: 'https://passkey-test.dakota.xyz',
         crossOrigin: false,
       })
@@ -178,10 +178,22 @@ describe('packAssertion', () => {
   });
 });
 
+describe('packAssertion id handling', () => {
+  it('normalizes a standard-base64 id (the verifier requires base64url)', () => {
+    const cred = syntheticPasskey().get(buildChallenge(intent));
+    const raw = Buffer.from([0xfb, 0xff, 0xbf]);
+    const env = decodePacked(
+      packAssertion({ ...cred, id: raw.toString('base64'), rawId: raw.toString('base64') })
+    );
+    expect(env.id).toBe(raw.toString('base64url'));
+    expect(env.rawId).toBe(raw.toString('base64url'));
+  });
+});
+
 describe('webauthnSigner', () => {
   it('hands the raw intent bytes to the authenticator and packs its answer', async () => {
     const pk = syntheticPasskey();
-    const seen: Uint8Array[] = [];
+    const seen: ArrayBuffer[] = [];
     const signer = webauthnSigner(async (challenge) => {
       seen.push(challenge);
       return pk.get(challenge);
@@ -212,6 +224,32 @@ describe('ES256 signers', () => {
       const sig = await signer.sign(intent.bytes);
       expect(() => verifyMandateSignature(spki, intent.bytes, sig)).not.toThrow();
     }
+  });
+
+  it('webCryptoES256Signer DER-encodes edge values exactly', async () => {
+    // r has a leading zero byte (trimmed); s has its high bit set (0x00 pad).
+    const r = Buffer.concat([Buffer.from([0x00, 0x00, 0x7f]), Buffer.alloc(29, 0x11)]);
+    const s = Buffer.concat([Buffer.from([0x80]), Buffer.alloc(31, 0x22)]);
+    const fake: SubtleCryptoLike = {
+      async sign() {
+        const raw = Buffer.concat([r, s]);
+        return raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength) as ArrayBuffer;
+      },
+    };
+    const der = Buffer.from(await webCryptoES256Signer({}, fake).sign(intent.bytes), 'base64');
+    const rBody = r.subarray(2); // 30 bytes, high bit clear
+    const sBody = Buffer.concat([Buffer.from([0x00]), s]); // 33 bytes
+    expect(
+      der.equals(
+        Buffer.concat([
+          Buffer.from([0x30, 2 + rBody.length + 2 + sBody.length]),
+          Buffer.from([0x02, rBody.length]),
+          rBody,
+          Buffer.from([0x02, sBody.length]),
+          sBody,
+        ])
+      )
+    ).toBe(true);
   });
 
   it('signGovernanceIntent accepts signer objects and plain functions, in order', async () => {

@@ -3,13 +3,13 @@
  *
  * A signer turns the intent's canonical bytes into one `signatures[]` entry.
  * The SDK ships three:
- * - ES256 on a server: `ES256Signer` (alias of `P256MandateSigner`) in the
+ * - ES256 on a server: `ES256Signer` (also exported as `P256MandateSigner`) in the
  *   main entry, or your own HSM/KMS behind this interface.
  * - ES256 in a browser: {@link webCryptoES256Signer} over a WebCrypto key.
  * - Passkey: `webauthnSigner` from this entry point.
  */
 
-import { bytesToBase64 } from './encoding.js';
+import { bytesToBase64, toBytes } from './encoding.js';
 import type { CanonicalIntent } from './intents.js';
 
 /**
@@ -39,7 +39,7 @@ export async function signGovernanceIntent(
   if (!Array.isArray(signers) || signers.length === 0) {
     throw new TypeError('a governance change needs at least one signer');
   }
-  const bytes = intent instanceof Uint8Array ? intent : intent.bytes;
+  const bytes = ArrayBuffer.isView(intent) ? toBytes(intent) : intent.bytes;
   const out: string[] = [];
   for (const s of signers) {
     // Each signer gets its own copy, so one cannot alter what the next signs.
@@ -61,7 +61,7 @@ export interface SubtleCryptoLike {
   sign(
     algorithm: { name: 'ECDSA'; hash: 'SHA-256' },
     key: never,
-    data: Uint8Array
+    data: ArrayBuffer
   ): Promise<ArrayBuffer>;
 }
 
@@ -88,11 +88,21 @@ export function webCryptoES256Signer(
         );
       }
       const raw = new Uint8Array(
-        await s.sign({ name: 'ECDSA', hash: 'SHA-256' }, privateKey as never, payload)
+        await s.sign(
+          { name: 'ECDSA', hash: 'SHA-256' },
+          privateKey as never,
+          toArrayBuffer(payload)
+        )
       );
       return bytesToBase64(p1363ToDer(raw));
     },
   };
+}
+
+function toArrayBuffer(bytes: Uint8Array): ArrayBuffer {
+  const out = new ArrayBuffer(bytes.length);
+  new Uint8Array(out).set(bytes);
+  return out;
 }
 
 /** IEEE P1363 `r || s` (64 bytes for P-256) to an ASN.1 DER ECDSA signature. */

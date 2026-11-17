@@ -28,24 +28,31 @@ responses) is not synced here.
     (golden vectors in `tests/fixtures/governance`). `signer_group_version` is
     always signed, including 0; unset governance settings are omitted (which
     clears them); idempotency keys must be lowercase UUIDs.
-  - Passkeys: `buildChallenge(intent)` returns the raw canonical bytes to pass
-    as the WebAuthn `challenge` (not a hash), and `packAssertion(credential)`
+  - Passkeys: `buildChallenge(intent)` returns the raw canonical bytes, as an
+    `ArrayBuffer`, to pass as the WebAuthn `challenge` (not a hash), and `packAssertion(credential)`
     turns the `navigator.credentials.get()` result into the `signatures[]`
-    entry (base64url of the CredentialAssertionResponse JSON). String fields
-    from mobile passkey libraries are accepted too. `webauthnSigner(get)` wraps
+    entry (base64url of the CredentialAssertionResponse JSON). It takes a
+    DOM `PublicKeyCredential` as-is, and string fields from mobile passkey
+    libraries too. `webauthnSigner(get)` wraps
     a passkey as a signer; `assertionChallengeMatches(packed, intent)` lets a
     server check what a browser sent back. The SDK never holds the credential.
   - `webCryptoES256Signer(cryptoKey)`: ES256 over WebCrypto (non-extractable
     keys work), converted to the DER form the platform verifies.
   - `signGovernanceIntent(intent, signers)`, `newIdempotencyKey()`,
     `assertIdempotencyKey()`.
-- `ES256Signer`, an alias of `P256MandateSigner` for server-side ES256 keys.
+- `ES256Signer` and `verifyES256Signature` for server-side ES256 keys (Node).
+  The class moved out of the beta agentic module into `src/signing/es256.ts`;
+  `P256MandateSigner` and `verifyMandateSignature` are the same class and
+  function under their existing names, unchanged.
 - `signerGroups`:
   - One call: `addSignerSigned`, `removeSignersSigned`, `updateGovernanceSigned`.
     Each reads the group's `version`, builds the intent with a fresh lowercase
     UUID key, signs it with every signer in order, and sends it with the SAME
-    key as `X-Idempotency-Key`. `staleRetries` (default 0) re-reads, re-signs
-    and resends after a stale version; each retry calls every signer again.
+    key as `X-Idempotency-Key`. `staleRetries` (0 to 5, default 0) re-reads,
+    re-signs under a new key and resends after a stale version; each retry
+    calls every signer again. It is refused with a fixed version or key, and
+    on `updateGovernanceSigned`, where a re-sign would undo a concurrent
+    governance change.
   - Two phase, for passkeys in a browser: `prepareAddSigner`,
     `prepareRemoveSigners`, `prepareGovernanceUpdate` return a plain-JSON
     `PreparedSignerGroupChange` (store it, send its `canonical` to the
@@ -53,10 +60,15 @@ responses) is not synced here.
     refuses a change altered after it was prepared.
   - Low level: `removeSigners(id, body)` (`POST /signer-groups/{id}/signer-removals`)
     and `updateGovernance(id, body)` (`PATCH /signer-groups/{id}/governance`).
+    These, and `addSigner` when the body carries `signatures`, require
+    `options.idempotencyKey` (the key inside the signed intent): a generated
+    one could never match.
 - Typed governance errors, all subclasses of `APIError`:
   `EndorsementRequiredError`, `InsufficientEndorsementsError` (with `have` /
   `need`), `StaleSignerGroupVersionError`, `BelowThresholdError`,
-  `InvalidGoverningGroupError`.
+  `InvalidGoverningGroupError`. Their `name` is the class name, and for
+  these five codes `code` is always the snake_case form (a code taken from the
+  problem `type` fragment, e.g. `stale-signer-group-version`, is normalized).
 - Types: `version`, `governance_threshold`, `effective_governance_threshold`,
   `governance_signer_group_id` on `SignerGroup`; governance settings on
   `SignerGroupCreateRequest`; `signatures` / `signer_group_version` on the add
@@ -64,7 +76,9 @@ responses) is not synced here.
   `SignerGroupSignerRemovalRequest`, `SignerGroupGovernanceUpdateRequest`,
   `SignerGroupGovernanceSettings`, `PreparedSignerGroupChange`.
 - Examples: `examples/governance-es256.ts` and `examples/governance-passkey.ts`
-  run the whole flow against sandbox (use an ordinary client's key).
+  run the whole flow against sandbox (use an ordinary client's key). `npm run
+  typecheck` now also compiles them, and the README's browser passkey flow,
+  against the DOM types.
 
 ## [3.3.0] - 2026-10-23
 

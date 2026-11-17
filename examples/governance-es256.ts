@@ -12,9 +12,8 @@
  *   7. a removal signed by A alone        -> InsufficientEndorsementsError
  *   8. the same removal signed by A and B -> version 4 -> 5
  *
- * Use an ORDINARY sandbox client's API key. Never run it with a key of an
- * internal superadmin client: every key there acts as superadmin, whatever
- * its scope. The script creates signers and a signer group (named
+ * Use the API key of an ordinary sandbox client, never one of an internal
+ * staff client. The script creates signers and a signer group (named
  * `gov-example-*`) and touches nothing else.
  *
  * Run with: DAKOTA_API_KEY=... npx tsx examples/governance-es256.ts

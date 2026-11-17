@@ -262,7 +262,11 @@ await client.signerGroups.updateGovernanceSigned(groupId, { governance_threshold
 
 Pass as many signers as the group's `effective_governance_threshold` needs.
 The helper reads the group's `version`, generates a lowercase UUID idempotency
-key, signs, and sends the same key as `X-Idempotency-Key`.
+key, signs, and sends the same key as `X-Idempotency-Key`. Pass
+`{ staleRetries: n }` (0 to 5) to the add and remove helpers to re-read and
+re-sign after a concurrent change; each retry asks every signer again. The
+governance update refuses it, since re-signing a whole-state change after
+someone else's would undo theirs.
 
 **With passkeys, signed in the user's browser or app:** the API key stays on
 your server, so the change is prepared there, signed in the browser, and sent
@@ -299,7 +303,7 @@ WebCrypto key, use `webCryptoES256Signer(cryptoKey)`.
 | `InsufficientEndorsementsError` (403) | Too few governing signatures (`have`, `need`) | Collect more over the same change |
 | `StaleSignerGroupVersionError` (409) | The group changed after signing | Prepare and sign again (or pass `staleRetries`) |
 | `BelowThresholdError` (422) | The removal would leave the group too small | Add members first, or remove fewer |
-| `InvalidGoverningGroupError` | The governing group is gone or invalid | Fix the group's governance |
+| `InvalidGoverningGroupError` (409) | The governing group is gone or invalid | Fix the group's governance |
 
 To build intents yourself (for example a governed crypto destination), use
 `addSignersToGroupIntent`, `removeSignersFromGroupIntent`,

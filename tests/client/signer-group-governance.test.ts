@@ -4,7 +4,7 @@
  * the intent and the header. Governance refusals surface as typed errors.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 
 import { DakotaClient } from '../../src/client/client.js';
 import {
@@ -38,10 +38,14 @@ function group(version: number) {
 /** A fake signer that records the exact bytes it was asked to sign. */
 function recordingSigner(label: string) {
   const seen: Array<Record<string, unknown>> = [];
+  const raw: string[] = [];
   return {
     seen,
+    raw,
     sign(payload: Uint8Array) {
-      seen.push(JSON.parse(new TextDecoder().decode(payload)));
+      const text = new TextDecoder().decode(payload);
+      raw.push(text);
+      seen.push(JSON.parse(text));
       return `${label}-sig-${seen.length}`;
     },
   };
@@ -92,6 +96,10 @@ describe('signerGroups signed changes', () => {
       idempotency_key: header(post),
     });
     expect(b.seen[0]).toEqual(a.seen[0]);
+    // The exact bytes, not just an equal object: sorted keys, no whitespace.
+    expect(a.raw[0]).toBe(
+      `{"idempotency_key":"${header(post)}","new_member_keys":["${KEY_X}"],"signer_group_id":"${GROUP}","signer_group_version":4,"type":"add_signers_to_group"}`
+    );
   });
 
   it('removeSignersSigned posts signer-removals with members in the order given', async () => {
@@ -110,13 +118,9 @@ describe('signerGroups signed changes', () => {
       signer_group_version: 0,
       signatures: ['s-sig-1'],
     });
-    expect(s.seen[0]).toEqual({
-      type: 'remove_signers_from_group',
-      group_id: GROUP,
-      members_to_remove: [KEY_Y, KEY_X],
-      signer_group_version: 0,
-      idempotency_key: header(post),
-    });
+    expect(s.raw[0]).toBe(
+      `{"group_id":"${GROUP}","idempotency_key":"${header(post)}","members_to_remove":["${KEY_Y}","${KEY_X}"],"signer_group_version":0,"type":"remove_signers_from_group"}`
+    );
   });
 
   it('updateGovernanceSigned PATCHes the whole state and omits cleared settings', async () => {
@@ -140,13 +144,9 @@ describe('signerGroups signed changes', () => {
       signer_group_version: 3,
       signatures: ['s-sig-1'],
     });
-    expect(s.seen[0]).toEqual({
-      type: 'update_signer_group_governance',
-      signer_group_id: GROUP,
-      governance_threshold: 2,
-      signer_group_version: 3,
-      idempotency_key: header(patch),
-    });
+    expect(s.raw[0]).toBe(
+      `{"governance_threshold":2,"idempotency_key":"${header(patch)}","signer_group_id":"${GROUP}","signer_group_version":3,"type":"update_signer_group_governance"}`
+    );
   });
 
   it('prepare + submit works across a JSON round trip (server -> browser -> server)', async () => {
@@ -262,17 +262,122 @@ describe('signerGroups signed changes', () => {
     expect(s.seen[1]?.idempotency_key).toBe(header(postReqs[1]));
   });
 
-  it('a stale retry is not attempted with a caller-fixed version', async () => {
-    const { fetch } = createRoutedFetch({
+  it('refuses staleRetries combined with a caller-fixed version or key', async () => {
+    const { fetch, requests } = createRoutedFetch({});
+    const sg = makeClient(fetch).signerGroups;
+    const s = recordingSigner('s');
+    await expect(
+      sg.addSignerSigned(GROUP, KEY_X, [s], { signerGroupVersion: 3, staleRetries: 1 })
+    ).rejects.toThrow(/staleRetries/);
+    await expect(
+      sg.addSignerSigned(GROUP, KEY_X, [s], {
+        idempotencyKey: '047caa77-8cec-4e96-994c-a12b655231de',
+        staleRetries: 1,
+      })
+    ).rejects.toThrow(/staleRetries/);
+    expect(requests).toHaveLength(0);
+    expect(s.seen).toHaveLength(0);
+  });
+
+  it('refuses a staleRetries that is negative, fractional, infinite or above 5', async () => {
+    const { fetch, requests } = createRoutedFetch({});
+    const sg = makeClient(fetch).signerGroups;
+    for (const n of [-1, 1.5, Infinity, NaN, 6]) {
+      await expect(
+        sg.removeSignersSigned(GROUP, [KEY_X], [recordingSigner('s')], { staleRetries: n })
+      ).rejects.toThrow(/staleRetries/);
+    }
+    expect(requests).toHaveLength(0);
+  });
+
+  it('refuses staleRetries on a governance update (a re-sign could undo a concurrent change)', async () => {
+    const { fetch, requests } = createRoutedFetch({});
+    await expect(
+      makeClient(fetch).signerGroups.updateGovernanceSigned(
+        GROUP,
+        { governance_threshold: 2 },
+        [recordingSigner('s')],
+        { staleRetries: 1 }
+      )
+    ).rejects.toThrow(/staleRetries/);
+    expect(requests).toHaveLength(0);
+  });
+
+  it('gives up after staleRetries + 1 attempts', async () => {
+    const { fetch, requests } = createRoutedFetch({
+      [`GET /signer-groups/${GROUP}`]: () => ({ status: 200, body: group(0) }),
       [`POST /signer-groups/${GROUP}/signers`]: () =>
         problem(409, 'stale_signer_group_version', 'stale'),
     });
+    const s = recordingSigner('s');
     await expect(
-      makeClient(fetch).signerGroups.addSignerSigned(GROUP, KEY_X, [recordingSigner('s')], {
-        signerGroupVersion: 3,
-        staleRetries: 2,
-      })
+      makeClient(fetch).signerGroups.addSignerSigned(GROUP, KEY_X, [s], { staleRetries: 2 })
     ).rejects.toBeInstanceOf(StaleSignerGroupVersionError);
+    expect(requests.filter((r) => r.method === 'POST')).toHaveLength(3);
+    expect(s.seen).toHaveLength(3);
+  });
+
+  it('does not retry a governance refusal other than a stale version', async () => {
+    const { fetch, requests } = createRoutedFetch({
+      [`GET /signer-groups/${GROUP}`]: () => ({ status: 200, body: group(0) }),
+      [`POST /signer-groups/${GROUP}/signers`]: () =>
+        problem(403, 'insufficient_endorsements', 'insufficient endorsements: have 1, need 2'),
+    });
+    const s = recordingSigner('s');
+    await expect(
+      makeClient(fetch).signerGroups.addSignerSigned(GROUP, KEY_X, [s], { staleRetries: 3 })
+    ).rejects.toBeInstanceOf(InsufficientEndorsementsError);
+    expect(requests.filter((r) => r.method === 'POST')).toHaveLength(1);
+  });
+
+  it('an explicit version of 0 skips the read', async () => {
+    const { fetch, requests } = createRoutedFetch({
+      [`POST /signer-groups/${GROUP}/signers`]: () => ({ status: 200, body: group(1) }),
+    });
+    await makeClient(fetch).signerGroups.addSignerSigned(GROUP, KEY_X, [recordingSigner('s')], {
+      signerGroupVersion: 0,
+    });
+    expect(requests.map((r) => r.method)).toEqual(['POST']);
+  });
+
+  it('works without a global crypto (Node 18), drawing the key from node:crypto', async () => {
+    vi.stubGlobal('crypto', undefined);
+    try {
+      const { fetch, requests } = createRoutedFetch({
+        [`GET /signer-groups/${GROUP}`]: () => ({ status: 200, body: group(0) }),
+        [`POST /signer-groups/${GROUP}/signers`]: () => ({ status: 200, body: group(1) }),
+      });
+      const s = recordingSigner('s');
+      await makeClient(fetch).signerGroups.addSignerSigned(GROUP, KEY_X, [s]);
+      expect(header(requests[1])).toMatch(LOWER_UUID);
+      expect(s.seen[0]?.idempotency_key).toBe(header(requests[1]));
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it('sends only the signed fields, whatever else a stored change carries', async () => {
+    const { fetch, requests } = createRoutedFetch({
+      [`PATCH /signer-groups/${GROUP}/governance`]: () => ({ status: 200, body: group(4) }),
+    });
+    const sg = makeClient(fetch).signerGroups;
+    const change = await sg.prepareGovernanceUpdate(
+      GROUP,
+      { governance_threshold: 2 },
+      { signerGroupVersion: 3 }
+    );
+    const tampered = {
+      ...change,
+      governance: { ...change.governance, governance_signer_group_id: null, rogue: 'x' },
+    } as unknown as typeof change;
+
+    await sg.submitSignedChange(tampered, ['sig']);
+
+    expect(requests[0]?.body).toEqual({
+      governance_threshold: 2,
+      signer_group_version: 3,
+      signatures: ['sig'],
+    });
   });
 
   it('low-level removeSigners and updateGovernance send the body as given', async () => {
@@ -294,6 +399,20 @@ describe('signerGroups signed changes', () => {
     expect(requests[0]?.body).toEqual(body);
     expect(header(requests[0])).toBe(key);
     expect(requests[1]?.body).toEqual({ signer_group_version: 1, signatures: ['y'] });
+  });
+
+  it('a signed low-level call must name the idempotency key that was signed', async () => {
+    const { fetch, requests } = createRoutedFetch({});
+    const sg = makeClient(fetch).signerGroups;
+    const signed = { signer_group_version: 0, signatures: ['x'] };
+    await expect(
+      sg.removeSigners(GROUP, { ...signed, members_to_remove: [KEY_X] })
+    ).rejects.toThrow(/idempotencyKey/);
+    await expect(sg.updateGovernance(GROUP, signed)).rejects.toThrow(/idempotencyKey/);
+    await expect(sg.addSigner(GROUP, { ...signed, member_key: KEY_X })).rejects.toThrow(
+      /idempotencyKey/
+    );
+    expect(requests).toHaveLength(0);
   });
 });
 
@@ -318,7 +437,7 @@ describe('governance errors are typed', () => {
       [403, 'insufficient_endorsements', InsufficientEndorsementsError],
       [409, 'stale_signer_group_version', StaleSignerGroupVersionError],
       [422, 'below_threshold', BelowThresholdError],
-      [400, 'invalid_governing_group', InvalidGoverningGroupError],
+      [409, 'invalid_governing_group', InvalidGoverningGroupError],
     ];
     for (const [status, code, cls] of cases) {
       const err = await fail(status, code);
@@ -355,6 +474,23 @@ describe('governance errors are typed', () => {
       .signerGroups.addSigner(GROUP, { member_key: KEY_X })
       .catch((e: unknown) => e);
     expect(err).toBeInstanceOf(StaleSignerGroupVersionError);
+  });
+
+  it('a non-string or prototype-named code stays a plain APIError', async () => {
+    for (const code of [42, 'toString', 'constructor', '__proto__', 'hasOwnProperty']) {
+      const { fetch } = createRoutedFetch({
+        [`POST /signer-groups/${GROUP}/signers`]: () => ({
+          status: 400,
+          body: { title: 'Bad', status: 400, code },
+        }),
+      });
+      const err = await makeClient(fetch)
+        .signerGroups.addSigner(GROUP, { member_key: KEY_X })
+        .catch((e: unknown) => e);
+      expect(err, String(code)).toBeInstanceOf(APIError);
+      expect((err as APIError).constructor, String(code)).toBe(APIError);
+      expect((err as APIError).statusCode).toBe(400);
+    }
   });
 
   it('leaves other errors as plain APIError', async () => {

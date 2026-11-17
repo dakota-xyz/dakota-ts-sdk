@@ -130,9 +130,15 @@ export class APIError extends Error {
       // Failed to parse JSON, use defaults
     }
 
-    const Typed = GOVERNANCE_ERRORS[code.replace(/-/g, '_')];
+    // A body not shaped like the platform's (numeric code, a code named like
+    // an Object.prototype member) must still become a plain APIError.
+    if (typeof code !== 'string') {
+      code = `http_${response.status}`;
+    }
+    const governanceCode = code.replace(/-/g, '_');
+    const Typed = GOVERNANCE_ERRORS.get(governanceCode);
     if (Typed) {
-      code = code.replace(/-/g, '_');
+      code = governanceCode;
     }
     return new (Typed ?? APIError)(response.status, code, message, {
       details,
@@ -221,8 +227,8 @@ export class BelowThresholdError extends APIError {
 }
 
 /**
- * `invalid_governing_group`: the group's governing signer group is missing or
- * no longer valid, so no signature can satisfy its governance.
+ * `invalid_governing_group` (409): the group's governing signer group is
+ * missing or no longer valid, so no signature can satisfy its governance.
  */
 export class InvalidGoverningGroupError extends APIError {
   constructor(statusCode: number, code: string, message: string, options?: APIErrorOptions) {
@@ -231,13 +237,13 @@ export class InvalidGoverningGroupError extends APIError {
   }
 }
 
-const GOVERNANCE_ERRORS: Record<string, typeof APIError> = {
-  endorsement_required: EndorsementRequiredError,
-  insufficient_endorsements: InsufficientEndorsementsError,
-  stale_signer_group_version: StaleSignerGroupVersionError,
-  below_threshold: BelowThresholdError,
-  invalid_governing_group: InvalidGoverningGroupError,
-};
+const GOVERNANCE_ERRORS = new Map<string, typeof APIError>([
+  ['endorsement_required', EndorsementRequiredError],
+  ['insufficient_endorsements', InsufficientEndorsementsError],
+  ['stale_signer_group_version', StaleSignerGroupVersionError],
+  ['below_threshold', BelowThresholdError],
+  ['invalid_governing_group', InvalidGoverningGroupError],
+]);
 
 /**
  * Represents a transport-level error (network, timeout, etc.).

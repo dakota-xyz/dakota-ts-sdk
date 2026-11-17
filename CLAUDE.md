@@ -118,8 +118,8 @@ server otherwise INFERS it from the other filters — `customer_id` alone infers
   `webCryptoES256Signer` live in `src/governance/`, published separately as
   `@dakota-xyz/ts-sdk/governance`. That entry MUST stay free of `node:`
   imports and packages (`tests/governance/browser-safe.test.ts` walks its
-  import graph); the server ES256 signer is `ES256Signer` (alias of
-  `P256MandateSigner`) in the main entry. Intent bytes are pinned by
+  import graph); the server ES256 signer is `ES256Signer` in `src/signing/es256.ts` (main
+  entry; the agentic module re-exports it as `P256MandateSigner`). Intent bytes are pinned by
   policy-engine golden vectors in `tests/fixtures/governance/`
 
 ### For Environment Questions

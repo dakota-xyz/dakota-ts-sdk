@@ -4,6 +4,8 @@
 
 import { BaseResource } from './base.js';
 import { PaginatedIterator } from '../pagination.js';
+import { randomUUID } from 'node:crypto';
+
 import { StaleSignerGroupVersionError } from '../errors.js';
 import {
   addSignersToGroupIntent,
@@ -112,6 +114,9 @@ export class SignerGroupsResource extends BaseResource {
     data: SignerGroupSignerAddRequest,
     options?: RequestOptions
   ): Promise<SignerGroup> {
+    if (data.signatures !== undefined) {
+      requireSignedKey('addSigner', options);
+    }
     return this.transport.request<SignerGroup>({
       method: 'POST',
       path: `/signer-groups/${signerGroupId}/signers`,
@@ -122,10 +127,12 @@ export class SignerGroupsResource extends BaseResource {
   }
 
   /**
-   * Remove a signer from a group, unsigned.
+   * Remove ONE signer from a group, unsigned, by its KSUID `signer_id`
+   * (`DELETE /signer-groups/{id}/signers/{signer_id}`).
    *
    * A governed group refuses this with `EndorsementRequiredError`; use
-   * {@link removeSignersSigned} instead.
+   * {@link removeSignersSigned} instead. Not to be confused with
+   * {@link removeSigners} (plural), the signed removal by PUBLIC KEY.
    *
    * @param signerGroupId - Signer group ID
    * @param signerId - The signer's KSUID `signer_id` — NOT its public key.
@@ -151,16 +158,18 @@ export class SignerGroupsResource extends BaseResource {
   // --------------------------------------------------------------------------
 
   /**
-   * Remove members from a group with signatures from its governance
+   * Remove members by PUBLIC KEY, with signatures from the group's governance
    * (`POST /signer-groups/{id}/signer-removals`). Low level: you supply the
-   * signed body, and `options.idempotencyKey` MUST be the key inside the
-   * signed intent. Prefer {@link removeSignersSigned}.
+   * signed body, and `options.idempotencyKey` is required and MUST be the key
+   * inside the signed intent. Prefer {@link removeSignersSigned}. (The
+   * singular {@link removeSigner} is the unsigned removal by `signer_id`.)
    */
   async removeSigners(
     signerGroupId: string,
     data: SignerGroupSignerRemovalRequest,
     options?: RequestOptions
   ): Promise<SignerGroup> {
+    requireSignedKey('removeSigners', options);
     return this.transport.request<SignerGroup>({
       method: 'POST',
       path: `/signer-groups/${signerGroupId}/signer-removals`,
@@ -174,14 +183,15 @@ export class SignerGroupsResource extends BaseResource {
    * Replace a group's governance settings with signatures from its current
    * governance (`PATCH /signer-groups/{id}/governance`). The body is the
    * WHOLE state: a setting left out is cleared. Low level: you supply the
-   * signed body, and `options.idempotencyKey` MUST be the key inside the
-   * signed intent. Prefer {@link updateGovernanceSigned}.
+   * signed body, and `options.idempotencyKey` is required and MUST be the key
+   * inside the signed intent. Prefer {@link updateGovernanceSigned}.
    */
   async updateGovernance(
     signerGroupId: string,
     data: SignerGroupGovernanceUpdateRequest,
     options?: RequestOptions
   ): Promise<SignerGroup> {
+    requireSignedKey('updateGovernance', options);
     return this.transport.request<SignerGroup>({
       method: 'PATCH',
       path: `/signer-groups/${signerGroupId}/governance`,
@@ -287,39 +297,47 @@ export class SignerGroupsResource extends BaseResource {
         'the prepared change does not match the intent that was signed (it was altered after it was prepared); prepare it again'
       );
     }
-    const requestOptions = { idempotencyKey: change.idempotencyKey, timeout: options?.timeout };
+    // Every body field comes from the intent that was rebuilt and checked
+    // above, never from the stored change, so nothing unsigned goes out.
+    const i = built.intent;
+    const requestOptions = { idempotencyKey: i.idempotency_key, timeout: options?.timeout };
     const sigs = [...signatures];
-    switch (change.kind) {
+    switch (i.type) {
       case 'add_signers_to_group':
         return this.addSigner(
-          change.signerGroupId,
+          i.signer_group_id,
           {
-            member_key: change.memberKeys![0]!,
-            signer_group_version: change.signerGroupVersion,
+            member_key: i.new_member_keys[0]!,
+            signer_group_version: i.signer_group_version,
             signatures: sigs,
           },
           requestOptions
         );
       case 'remove_signers_from_group':
         return this.removeSigners(
-          change.signerGroupId,
+          i.group_id,
           {
-            members_to_remove: [...change.memberKeys!],
-            signer_group_version: change.signerGroupVersion,
+            members_to_remove: [...i.members_to_remove],
+            signer_group_version: i.signer_group_version,
             signatures: sigs,
           },
           requestOptions
         );
-      case 'update_signer_group_governance':
-        return this.updateGovernance(
-          change.signerGroupId,
-          {
-            ...change.governance,
-            signer_group_version: change.signerGroupVersion,
-            signatures: sigs,
-          },
-          requestOptions
-        );
+      case 'update_signer_group_governance': {
+        const body: SignerGroupGovernanceUpdateRequest = {
+          ...(i.governance_threshold !== undefined && {
+            governance_threshold: i.governance_threshold,
+          }),
+          ...(i.governance_signer_group_id !== undefined && {
+            governance_signer_group_id: i.governance_signer_group_id,
+          }),
+          signer_group_version: i.signer_group_version,
+          signatures: sigs,
+        };
+        return this.updateGovernance(i.signer_group_id, body, requestOptions);
+      }
+      default:
+        throw new TypeError(`cannot submit a ${i.type} change from signerGroups`);
     }
   }
 
@@ -328,9 +346,13 @@ export class SignerGroupsResource extends BaseResource {
    * the `add_signers_to_group` intent, sign it with each signer (in order),
    * and send it with the same idempotency key in the intent and the header.
    *
-   * @param signers - ES256 signers (`ES256Signer`, your KMS), passkey
-   *   signers (`webauthnSigner`), or plain `(bytes) => signature` functions;
-   *   together they must meet the group's `effective_governance_threshold`
+   * @param signers - ES256 signers (`ES256Signer`, your KMS) or plain
+   *   `(bytes) => signature` functions; together they must meet the group's
+   *   `effective_governance_threshold`. For a passkey in the user's browser
+   *   or app, use {@link prepareAddSigner} + {@link submitSignedChange}
+   *   instead, so the API key stays on your server; `webauthnSigner` fits
+   *   here only when the passkey prompt runs in the same process as this
+   *   client. Each stale retry calls every signer again.
    * @example
    * ```typescript
    * const group = await client.signerGroups.addSignerSigned(groupId, newKey, [
@@ -368,6 +390,11 @@ export class SignerGroupsResource extends BaseResource {
   /**
    * Replace a group's governance settings in one call; see
    * {@link addSignerSigned}. Signed by the group's CURRENT governance.
+   *
+   * `staleRetries` is refused here: the change replaces the WHOLE governance
+   * state, so re-signing it after someone else changed the group would
+   * silently undo their change. On `StaleSignerGroupVersionError`, re-read
+   * the group, decide, and call again.
    */
   async updateGovernanceSigned(
     signerGroupId: string,
@@ -375,6 +402,11 @@ export class SignerGroupsResource extends BaseResource {
     signers: readonly GovernanceSignerLike[],
     options?: SignedSignerGroupChangeOptions
   ): Promise<SignerGroup> {
+    if (options?.staleRetries) {
+      throw new TypeError(
+        'staleRetries is not supported on updateGovernanceSigned: a re-sign after a concurrent change would undo it'
+      );
+    }
     return this.signAndSubmit(
       () => this.prepareGovernanceUpdate(signerGroupId, settings, options),
       signers,
@@ -397,7 +429,7 @@ export class SignerGroupsResource extends BaseResource {
       kind,
       signerGroupId,
       signerGroupVersion,
-      idempotencyKey: options?.idempotencyKey ?? newIdempotencyKey(),
+      idempotencyKey: options?.idempotencyKey ?? governanceIdempotencyKey(),
       ...fields,
       canonical: '',
     };
@@ -422,10 +454,7 @@ export class SignerGroupsResource extends BaseResource {
     if (!Array.isArray(signers) || signers.length === 0) {
       throw new TypeError('a governance change needs at least one signer');
     }
-    // A fixed version or key would sign the same stale intent again.
-    const fixed =
-      options?.signerGroupVersion !== undefined || options?.idempotencyKey !== undefined;
-    let retries = fixed ? 0 : Math.max(0, Math.floor(options?.staleRetries ?? 0));
+    let retries = staleRetryBudget(options);
     for (;;) {
       const change = await prepare();
       const signatures = await signGovernanceIntent(utf8(change.canonical), signers);
@@ -516,6 +545,46 @@ export class SignerGroupsResource extends BaseResource {
   listForWallet(walletId: string, params?: ListParams): PaginatedIterator<SignerGroup> {
     return this.paginate<SignerGroup>(`/wallets/${walletId}/signer-groups`, params);
   }
+}
+
+/** Most stale re-signs the one-call helpers will make (each may prompt a passkey). */
+const MAX_STALE_RETRIES = 5;
+
+function staleRetryBudget(options?: SignedSignerGroupChangeOptions): number {
+  const n = options?.staleRetries ?? 0;
+  if (!Number.isInteger(n) || n < 0 || n > MAX_STALE_RETRIES) {
+    throw new TypeError(`staleRetries must be an integer from 0 to ${MAX_STALE_RETRIES}`);
+  }
+  // A fixed version or key would sign the same stale intent again.
+  if (
+    n > 0 &&
+    (options?.signerGroupVersion !== undefined || options?.idempotencyKey !== undefined)
+  ) {
+    throw new TypeError(
+      'staleRetries cannot be combined with a fixed signerGroupVersion or idempotencyKey: a retry needs a fresh read and a fresh key'
+    );
+  }
+  return n;
+}
+
+/**
+ * The idempotency key for a new signed change: a lowercase v4 UUID from the
+ * runtime's WebCrypto, else from `node:crypto` (Node 18 has no global
+ * `crypto` by default).
+ */
+function governanceIdempotencyKey(): string {
+  const c = (globalThis as { crypto?: { randomUUID?: unknown } }).crypto;
+  return typeof c?.randomUUID === 'function' ? newIdempotencyKey() : randomUUID().toLowerCase();
+}
+
+/** A signed request carries the key inside its signed intent; it must not be generated here. */
+function requireSignedKey(method: string, options?: RequestOptions): void {
+  if (!options?.idempotencyKey) {
+    throw new TypeError(
+      `${method} with signatures needs options.idempotencyKey: the idempotency_key inside the signed intent (a generated one could never match)`
+    );
+  }
+  assertIdempotencyKey(options.idempotencyKey);
 }
 
 /**
