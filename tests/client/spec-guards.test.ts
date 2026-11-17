@@ -274,4 +274,42 @@ describe('openapi spec guards', () => {
 
     expect(missing).toEqual([]);
   });
+  /**
+   * ENG-6468 synced only the signer-group governance surface from the
+   * platform's public spec (a partial sync). The signed-change helpers on
+   * `signerGroups` and their request types depend on every piece below, so a
+   * later wholesale or partial re-sync that drops one fails here rather than
+   * as a type error far away.
+   */
+  it('openapi.yaml carries the signer-group governance surface', () => {
+    type Schema = { properties?: Record<string, unknown>; required?: string[] };
+    const { paths, components } = loadSpec('openapi.yaml');
+    const schemas = (components?.schemas ?? {}) as Record<string, Schema>;
+    const route = (p: string) => paths[p] as Record<string, { operationId?: string }> | undefined;
+
+    expect(route('/signer-groups/{signer_group_id}/signer-removals')?.post?.operationId).toBe(
+      'removeSignerGroupSigners'
+    );
+    expect(route('/signer-groups/{signer_group_id}/governance')?.patch?.operationId).toBe(
+      'updateSignerGroupGovernance'
+    );
+    for (const f of [
+      'version',
+      'governance_threshold',
+      'effective_governance_threshold',
+      'governance_signer_group_id',
+    ]) {
+      expect(schemas.SignerGroup?.properties?.[f], `SignerGroup.${f}`).toBeDefined();
+    }
+    for (const f of ['signatures', 'signer_group_version']) {
+      expect(schemas.CreateSignerGroupSignerRequest?.properties?.[f], f).toBeDefined();
+    }
+    expect(schemas.RemoveSignerGroupSignersRequest?.required).toEqual(
+      expect.arrayContaining(['members_to_remove', 'signer_group_version', 'signatures'])
+    );
+    expect(schemas.UpdateSignerGroupGovernanceRequest?.required).toEqual(
+      expect.arrayContaining(['signer_group_version', 'signatures'])
+    );
+    expect(schemas.ProblemDetails?.properties?.code).toBeDefined();
+  });
 });

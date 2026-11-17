@@ -49,6 +49,8 @@ src/
 │   ├── signature.ts         # Ed25519 signature verification
 │   ├── events.ts            # Event types and parsing
 │   └── idempotency.ts       # In-memory idempotency store
+├── governance/              # Signer-group governance intents + ES256/WebAuthn signing
+│                            #   (browser-safe; published as @dakota-xyz/ts-sdk/governance)
 └── utils/
     └── index.ts             # Utility functions
 ```
@@ -109,6 +111,16 @@ server otherwise INFERS it from the other filters — `customer_id` alone infers
   fault)
 - `client.customers.listPage()` returns one page PLUS `status_counts`, which
   `list()` cannot reach because it iterates rows and drops the envelope
+- `client.signerGroups` signed (governed) changes: `addSignerSigned`,
+  `removeSignersSigned`, `updateGovernanceSigned` in one call, or
+  `prepare*` + `submitSignedChange` when a passkey signs in a browser. The
+  intent builders, `buildChallenge` / `packAssertion` (WebAuthn) and
+  `webCryptoES256Signer` live in `src/governance/`, published separately as
+  `@dakota-xyz/ts-sdk/governance`. That entry MUST stay free of `node:`
+  imports and packages (`tests/governance/browser-safe.test.ts` walks its
+  import graph); the server ES256 signer is `ES256Signer` (alias of
+  `P256MandateSigner`) in the main entry. Intent bytes are pinned by
+  policy-engine golden vectors in `tests/fixtures/governance/`
 
 ### For Environment Questions
 - Default: Sandbox (`https://api.platform.sandbox.dakota.xyz`)

@@ -10380,7 +10380,7 @@ paths:
                     public_key: string
                     key_type: ES256
         '400':
-          description: Bad request - invalid input data
+          description: Bad request - invalid input data, or `endorsement_required` - this removal needs signatures (a client under governance enforcement, or a group with governance settings); use `POST /signer-groups/{signer_group_id}/signer-removals`
           content:
             application/problem+json:
               schema:
@@ -10604,7 +10604,7 @@ paths:
                     public_key: string
                     key_type: ES256
         '400':
-          description: Bad request - invalid input data
+          description: Bad request - invalid input data, or `endorsement_required` (unsigned for a client with governance enforcement on, or for a group with governance settings)
           content:
             application/problem+json:
               schema:
@@ -10630,7 +10630,7 @@ paths:
                 instance: https://api.platform.dakota.xyz/signer-groups/example-id/signers
                 request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
         '403':
-          description: Forbidden
+          description: Forbidden, or `insufficient_endorsements` - the signatures do not meet the group's governance quorum
           content:
             application/problem+json:
               schema:
@@ -10656,7 +10656,7 @@ paths:
                 instance: https://api.platform.dakota.xyz/signer-groups/example-id/signers
                 request_id: req_01hzy6y7v8w9x0y1z2a3b4c5d6
         '409':
-          description: Conflict - duplicate request detected
+          description: Conflict - duplicate request detected, or `stale_signer_group_version` - the group changed since the signatures were made
           content:
             application/problem+json:
               schema:
@@ -10684,6 +10684,221 @@ paths:
       externalDocs:
         description: Read full guide in docs
         url: https://docs.dakota.xyz/api-reference/signer-groups/add-a-signer-to-a-signer-group
+  /signer-groups/{signer_group_id}/signer-removals:
+    post:
+      tags:
+        - Signer Groups
+      summary: Remove signers from a signer group, with signatures
+      description: |
+        Removes members from the signer group with signatures from the group's
+        governance, which policy-engine verifies before anything changes. The
+        group's `version` increases by 1.
+
+        This is the signed counterpart of
+        `DELETE /signer-groups/{signer_group_id}/signers/{signer_id}`. A client
+        under governance enforcement, or a group with governance settings, can
+        remove members only this way. An `operate` API key of a client under
+        governance enforcement may call it, since the signatures carry the
+        authority.
+      operationId: removeSignerGroupSigners
+      parameters:
+        - name: signer_group_id
+          in: path
+          required: true
+          description: Signer Group ID
+          schema:
+            $ref: '#/components/schemas/KSUID'
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RemoveSignerGroupSignersRequest'
+            example:
+              members_to_remove:
+                - MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE...
+              signer_group_version: 3
+              signatures:
+                - MEUCIQDx...base64
+      responses:
+        '200':
+          description: Signers removed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignerGroup'
+              example:
+                id: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
+                client_id: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
+                name: My Wallet
+                members:
+                  - id: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
+                    client_id: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
+                    name: Marc
+                    public_key: string
+                    key_type: ES256
+                version: 4
+                effective_governance_threshold: 1
+        '400':
+          description: Bad request - invalid input data
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden, or `insufficient_endorsements` - the signatures do not meet the group's governance quorum
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Signer Group not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: '`stale_signer_group_version` - the group changed since the signatures were made'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          description: '`below_threshold` - the removal would leave the group below a threshold it must keep (at least one member, its governance quorum, or a governed group''s threshold). A policy''s approval threshold does not block a removal; a policy left unmeetable denies sends until a member is added.'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '503':
+          description: Service unavailable
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+      externalDocs:
+        description: Read full guide in docs
+        url: https://docs.dakota.xyz/api-reference/signer-groups/remove-signers-from-a-signer-group-with-signatures
+  /signer-groups/{signer_group_id}/governance:
+    patch:
+      tags:
+        - Signer Groups
+      summary: Update a signer group's governance
+      description: |
+        Sets who governs the signer group and how many of them must agree:
+        `governance_threshold` and `governance_signer_group_id`. Always
+        endorsed by the group's current governance, which policy-engine
+        verifies. The group's `version` increases by 1.
+
+        The body replaces the group's whole governance state: a field left
+        out is cleared (no `governance_threshold` means the default quorum,
+        no `governance_signer_group_id` means the group governs itself).
+        Clearing is endorsed like any other change, because the signed
+        intent omits exactly the fields the body omits.
+      operationId: updateSignerGroupGovernance
+      parameters:
+        - name: signer_group_id
+          in: path
+          required: true
+          description: Signer Group ID
+          schema:
+            $ref: '#/components/schemas/KSUID'
+        - $ref: '#/components/parameters/IdempotencyKeyHeader'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateSignerGroupGovernanceRequest'
+            example:
+              governance_threshold: 2
+              signer_group_version: 3
+              signatures:
+                - MEUCIQDx...base64
+                - MEQCIF1y...base64
+      responses:
+        '200':
+          description: Governance updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SignerGroup'
+              example:
+                id: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
+                client_id: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
+                name: My Wallet
+                members:
+                  - id: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
+                    client_id: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
+                    name: Marc
+                    public_key: string
+                    key_type: ES256
+                version: 4
+                governance_threshold: 2
+                effective_governance_threshold: 2
+        '400':
+          description: Bad request - invalid input data, or invalid governance settings
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '401':
+          description: Unauthorized
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '403':
+          description: Forbidden, or `insufficient_endorsements` - the signatures do not meet the group's governance quorum
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '404':
+          description: Signer Group not found
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '409':
+          description: '`stale_signer_group_version` - the group changed since the signatures were made'
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '422':
+          description: Unprocessable
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '500':
+          description: Internal server error
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+        '503':
+          description: Service unavailable
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/ProblemDetails'
+      externalDocs:
+        description: Read full guide in docs
+        url: https://docs.dakota.xyz/api-reference/signer-groups/update-a-signer-groups-governance
   /api-keys:
     post:
       tags:
@@ -20818,6 +21033,15 @@ components:
           type: string
           description: Unique request identifier. Include when contacting support.
           example: req_7f3a8b2c
+        code:
+          type: string
+          description: |
+            A stable snake_case error code for the signer-group governance
+            refusals, equal to `reason` for them: `endorsement_required`,
+            `insufficient_endorsements`, `stale_signer_group_version`,
+            `below_threshold` and `invalid_governing_group`. Absent for every
+            other problem.
+          example: insufficient_endorsements
         errors:
           type: array
           description: Field-level validation errors (present for validation failures).
@@ -22322,6 +22546,25 @@ components:
               example: '0x1234'
             network_id:
               $ref: '#/components/schemas/NetworkId'
+            signatures:
+              type: array
+              maxItems: 100
+              description: |
+                Optional. Signatures from the governance of `signer_group_id`
+                over the canonical intent
+                `{"address":"<crypto_address>","idempotency_key":"<X-Idempotency-Key>","network_id":"<network_id>","recipient_id":"<id>","signer_group_id":"<id>","type":"create_crypto_destination"}`.
+                With them, an `operate` API key of a client under governance
+                enforcement may create the destination,
+                the group must be attached to a wallet of the recipient's
+                customer, and `network_id` is required (the signed intent
+                names it). Only on creation; ignored on update.
+              items:
+                type: string
+                example: MEUCIQDx...base64
+            signer_group_id:
+              type: string
+              description: The signer group whose governance signed `signatures`. Required with `signatures`.
+              example: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
           required:
             - crypto_address
             - name
@@ -23945,6 +24188,38 @@ components:
             entry carries its `removed_at` timestamp. Omitted otherwise.
           items:
             $ref: '#/components/schemas/Signer'
+        version:
+          type: integer
+          format: int64
+          description: |
+            The group's version. It increases by 1 with every membership or
+            governance change. Endorsements of a membership or governance
+            change sign over it as `signer_group_version`, so a signature made
+            before a change cannot be replayed after it.
+          example: 3
+        governance_threshold:
+          type: integer
+          format: int32
+          nullable: true
+          description: The explicit number of distinct endorsers a governance change of the group needs, or null for the default.
+          example: 2
+        effective_governance_threshold:
+          type: integer
+          format: int32
+          description: |
+            The number of distinct endorsers a governance change of the group
+            needs now: `governance_threshold` when set, else the default (1,
+            or 2 for a group of 3 or more members when the client has
+            governance enforcement on), capped at the members that can
+            endorse and never below 1. Keys of payment agents and card
+            settlement signers are members for spending only: they never
+            endorse governance changes.
+          example: 2
+        governance_signer_group_id:
+          type: string
+          nullable: true
+          description: The signer group whose members endorse governance changes of this group instead of its own members, or null when the group governs itself.
+          example: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
     Signer:
       type: object
       description: A signer is a public key that can sign intents and it is part of a signer group
@@ -24040,6 +24315,27 @@ components:
           items:
             type: string
             description: The signer public key
+        governance_threshold:
+          type: integer
+          format: int32
+          minimum: 1
+          description: |
+            Optional. The number of distinct endorsers a governance change of
+            the group needs (membership, governance settings, and the rules of
+            the policies it governs). At most the member count of the group
+            whose members endorse: the governing group when
+            `governance_signer_group_id` is set, else this group. Keys of
+            payment agents and card settlement signers never endorse
+            governance changes and are not counted.
+          example: 2
+        governance_signer_group_id:
+          type: string
+          description: |
+            Optional. Another signer group of the same client whose members
+            endorse governance changes of this group instead of its own
+            members. It must not be spend-scoped, deleted, or governed by
+            another group itself.
+          example: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
     Policy:
       type: object
       required:
@@ -24334,6 +24630,118 @@ components:
         member_key:
           type: string
           description: Public key of the member to add to the signer group.
+        signatures:
+          type: array
+          maxItems: 100
+          description: |
+            Signatures over the canonical intent, each base64-encoded, in the
+            format the endorsed policy routes use (ES256 ASN.1 DER, or a
+            WebAuthn assertion whose challenge is the canonical intent).
+            Policy-engine verifies them against the signer group's governance:
+            the members of its governing group (`governance_signer_group_id`,
+            else the group itself), at least `effective_governance_threshold`
+            distinct members. Payment-agent and card-settlement keys never
+            count: a signature by one of them is refused.
+            The canonical intent is
+            `{"idempotency_key":"<X-Idempotency-Key>","new_member_keys":["<member_key>"],"signer_group_id":"<id>","signer_group_version":<version>,"type":"add_signers_to_group"}`.
+            Without signatures the member is added unendorsed, which a client
+            with governance enforcement on is refused (400
+            `endorsement_required`).
+          items:
+            type: string
+            example: MEUCIQDx...base64
+        signer_group_version:
+          type: integer
+          format: int64
+          description: The group's `version` the signatures were made over. Required with `signatures`.
+          example: 3
+    RemoveSignerGroupSignersRequest:
+      type: object
+      description: |
+        A signed removal of members from a signer group. Policy-engine verifies
+        the signatures against the group's governance (the members of its
+        governing group, `governance_signer_group_id`, else the group itself;
+        at least `effective_governance_threshold` distinct members, never
+        counting payment-agent or card-settlement keys) and refuses a removal
+        that would leave the group below a threshold it must keep.
+      required:
+        - members_to_remove
+        - signer_group_version
+        - signatures
+      properties:
+        members_to_remove:
+          type: array
+          minItems: 1
+          maxItems: 100
+          description: Public keys of the members to remove, as the group lists them.
+          items:
+            type: string
+            example: MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE...
+        signer_group_version:
+          type: integer
+          format: int64
+          minimum: 0
+          description: The group's `version` the signatures were made over.
+          example: 3
+        signatures:
+          type: array
+          minItems: 1
+          maxItems: 100
+          description: |
+            Signatures over the canonical intent, each base64-encoded, in the
+            format the endorsed policy routes use (ES256 ASN.1 DER, or a
+            WebAuthn assertion whose challenge is the canonical intent).
+            The canonical intent is
+            `{"group_id":"<id>","idempotency_key":"<X-Idempotency-Key>","members_to_remove":["<public_key>"],"signer_group_version":<version>,"type":"remove_signers_from_group"}`,
+            with `members_to_remove` in the order sent.
+          items:
+            type: string
+            example: MEUCIQDx...base64
+    UpdateSignerGroupGovernanceRequest:
+      type: object
+      description: |
+        The group's complete governance settings, endorsed by its current
+        governance. A field left out clears that setting: no
+        `governance_threshold` means the default quorum, and no
+        `governance_signer_group_id` means the group governs itself.
+      required:
+        - signer_group_version
+        - signatures
+      properties:
+        governance_threshold:
+          type: integer
+          format: int32
+          minimum: 1
+          description: The number of distinct endorsers a governance change of the group needs.
+          example: 2
+        governance_signer_group_id:
+          type: string
+          description: Another signer group of the same client whose members endorse governance changes of this group.
+          example: 1NFHrqBHb3cTfLVkFSGmHZqdDPi
+        signer_group_version:
+          type: integer
+          format: int64
+          description: The group's `version` the signatures were made over.
+          example: 3
+        signatures:
+          type: array
+          maxItems: 100
+          description: |
+            Signatures over the canonical intent, each base64-encoded, in the
+            format the endorsed policy routes use (ES256 ASN.1 DER, or a
+            WebAuthn assertion whose challenge is the canonical intent).
+            Policy-engine verifies them against the signer group's governance:
+            the members of its governing group (`governance_signer_group_id`,
+            else the group itself), at least `effective_governance_threshold`
+            distinct members. Payment-agent and card-settlement keys never
+            count: a signature by one of them is refused.
+            The canonical intent is
+            `{"governance_signer_group_id":"<id>","governance_threshold":<n>,"idempotency_key":"<X-Idempotency-Key>","signer_group_id":"<id>","signer_group_version":<version>,"type":"update_signer_group_governance"}`,
+            with each optional field absent when it is not sent.
+          items:
+            type: string
+            example: MEUCIQDx...base64
+          minItems: 1
     AttachGroupToWalletIntent:
       type: object
       required:

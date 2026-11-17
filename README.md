@@ -241,6 +241,72 @@ const portfolio = await client.insights.getClientReport({ severity: 'critical,wa
 
 The full agentic surface is reachable via `client.paymentAgents`, `client.mandates`, `client.instructions`, `client.scheduledPayments`, and `client.insights`.
 
+## Signer-group governance (ES256 and passkeys)
+
+When a client has governance enforcement on, or a signer group has
+governance settings, adding or removing members and changing who governs the
+group need signatures from the group's governing members. Each signature
+covers a canonical "intent" that includes the group's current `version` and
+the request's idempotency key, so the SDK builds it for you.
+
+**On a server, with ES256 keys:**
+
+```typescript
+import { ES256Signer, StaleSignerGroupVersionError } from '@dakota-xyz/ts-sdk';
+
+const admin = ES256Signer.fromPrivateKey(process.env.ADMIN_KEY_PEM!); // or your KMS behind GovernanceSigner
+const group = await client.signerGroups.addSignerSigned(groupId, newMemberPublicKey, [admin]);
+await client.signerGroups.removeSignersSigned(groupId, [oldMemberPublicKey], [admin]);
+await client.signerGroups.updateGovernanceSigned(groupId, { governance_threshold: 2 }, [admin]);
+```
+
+Pass as many signers as the group's `effective_governance_threshold` needs.
+The helper reads the group's `version`, generates a lowercase UUID idempotency
+key, signs, and sends the same key as `X-Idempotency-Key`.
+
+**With passkeys, signed in the user's browser or app:** the API key stays on
+your server, so the change is prepared there, signed in the browser, and sent
+from the server.
+
+```typescript
+// server: build the change and keep it (it is plain JSON)
+const change = await client.signerGroups.prepareAddSigner(groupId, newMemberPublicKey);
+session.pendingChange = change;
+return { challenge: change.canonical };
+
+// browser: the browser-safe entry point has no Node dependencies
+import { buildChallenge, packAssertion } from '@dakota-xyz/ts-sdk/governance';
+const credential = await navigator.credentials.get({
+  publicKey: { challenge: buildChallenge(challenge), rpId: 'app.example.com', userVerification: 'required' },
+});
+const signature = packAssertion(credential as PublicKeyCredential);
+
+// server: check it, then send it
+import { assertionChallengeMatches } from '@dakota-xyz/ts-sdk';
+if (!assertionChallengeMatches(signature, session.pendingChange)) throw new Error('wrong change');
+const group = await client.signerGroups.submitSignedChange(session.pendingChange, [signature]);
+```
+
+The challenge is the canonical intent itself, not a hash of it. Passkey and
+ES256 signatures can be combined toward one quorum. In a browser with a
+WebCrypto key, use `webCryptoES256Signer(cryptoKey)`.
+
+**When governance refuses**, the error says why (each is an `APIError`):
+
+| Error | Meaning | What to do |
+|---|---|---|
+| `EndorsementRequiredError` (400) | The change was sent unsigned | Use the signed helpers |
+| `InsufficientEndorsementsError` (403) | Too few governing signatures (`have`, `need`) | Collect more over the same change |
+| `StaleSignerGroupVersionError` (409) | The group changed after signing | Prepare and sign again (or pass `staleRetries`) |
+| `BelowThresholdError` (422) | The removal would leave the group too small | Add members first, or remove fewer |
+| `InvalidGoverningGroupError` | The governing group is gone or invalid | Fix the group's governance |
+
+To build intents yourself (for example a governed crypto destination), use
+`addSignersToGroupIntent`, `removeSignersFromGroupIntent`,
+`updateSignerGroupGovernanceIntent` and `createCryptoDestinationIntent`. See
+`examples/governance-es256.ts` and `examples/governance-passkey.ts` for
+complete runs against sandbox.
+
 ## Handling Webhooks
 
 Dakota sends webhooks for all status changes. Set up a handler:
@@ -728,10 +794,18 @@ Manage multi-party authorization.
 | `signerGroups.create(data)` | Create signer group |
 | `signerGroups.list(params?)` | List signer groups |
 | `signerGroups.get(id, params?)` | Get signer group by ID (`{ include_removed: true }` adds `removed_members`) |
-| `signerGroups.addSigner(groupId, data)` | Add signer to group |
-| `signerGroups.removeSigner(groupId, signerId)` | Remove signer (by KSUID `signer_id`, not public key) |
+| `signerGroups.addSigner(groupId, data)` | Add signer to group (unsigned; a governed group refuses it) |
+| `signerGroups.removeSigner(groupId, signerId)` | Remove signer (by KSUID `signer_id`, not public key; unsigned) |
+| `signerGroups.addSignerSigned(groupId, memberKey, signers, opts?)` | Add a member with governance signatures, in one call |
+| `signerGroups.removeSignersSigned(groupId, memberKeys, signers, opts?)` | Remove members with governance signatures, in one call |
+| `signerGroups.updateGovernanceSigned(groupId, settings, signers, opts?)` | Replace the group's governance settings, signed |
+| `signerGroups.prepareAddSigner` / `prepareRemoveSigners` / `prepareGovernanceUpdate` | Build a change to sign elsewhere (passkey in a browser) |
+| `signerGroups.submitSignedChange(change, signatures)` | Send a prepared change with its signatures |
+| `signerGroups.removeSigners(groupId, body)` / `updateGovernance(groupId, body)` | Low level: send a body you signed yourself |
 | `signerGroups.attachToWallet(walletId, groupId)` | Attach to wallet |
 | `signerGroups.detachFromWallet(walletId, groupId)` | Detach from wallet |
+
+See [Signer-group governance](#signer-group-governance-es256-and-passkeys) for signing.
 
 ### Signers
 

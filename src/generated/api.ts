@@ -1478,6 +1478,64 @@ export type paths = {
         readonly patch?: never;
         readonly trace?: never;
     };
+    readonly "/signer-groups/{signer_group_id}/signer-removals": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        /**
+         * Remove signers from a signer group, with signatures
+         * @description Removes members from the signer group with signatures from the group's
+         *     governance, which policy-engine verifies before anything changes. The
+         *     group's `version` increases by 1.
+         *
+         *     This is the signed counterpart of
+         *     `DELETE /signer-groups/{signer_group_id}/signers/{signer_id}`. A client
+         *     under governance enforcement, or a group with governance settings, can
+         *     remove members only this way. An `operate` API key of a client under
+         *     governance enforcement may call it, since the signatures carry the
+         *     authority.
+         */
+        readonly post: operations["removeSignerGroupSigners"];
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        readonly patch?: never;
+        readonly trace?: never;
+    };
+    readonly "/signer-groups/{signer_group_id}/governance": {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header?: never;
+            readonly path?: never;
+            readonly cookie?: never;
+        };
+        readonly get?: never;
+        readonly put?: never;
+        readonly post?: never;
+        readonly delete?: never;
+        readonly options?: never;
+        readonly head?: never;
+        /**
+         * Update a signer group's governance
+         * @description Sets who governs the signer group and how many of them must agree:
+         *     `governance_threshold` and `governance_signer_group_id`. Always
+         *     endorsed by the group's current governance, which policy-engine
+         *     verifies. The group's `version` increases by 1.
+         *
+         *     The body replaces the group's whole governance state: a field left
+         *     out is cleared (no `governance_threshold` means the default quorum,
+         *     no `governance_signer_group_id` means the group governs itself).
+         *     Clearing is endorsed like any other change, because the signed
+         *     intent omits exactly the fields the body omits.
+         */
+        readonly patch: operations["updateSignerGroupGovernance"];
+        readonly trace?: never;
+    };
     readonly "/api-keys": {
         readonly parameters: {
             readonly query?: never;
@@ -5091,6 +5149,15 @@ export type components = {
              * @example req_7f3a8b2c
              */
             readonly request_id?: string;
+            /**
+             * @description A stable snake_case error code for the signer-group governance
+             *     refusals, equal to `reason` for them: `endorsement_required`,
+             *     `insufficient_endorsements`, `stale_signer_group_version`,
+             *     `below_threshold` and `invalid_governing_group`. Absent for every
+             *     other problem.
+             * @example insufficient_endorsements
+             */
+            readonly code?: string;
             /** @description Field-level validation errors (present for validation failures). */
             readonly errors?: readonly components["schemas"]["ValidationError"][];
             /**
@@ -6256,6 +6323,22 @@ export type components = {
             /** @example 0x1234 */
             readonly crypto_address: string;
             readonly network_id?: components["schemas"]["NetworkId"];
+            /**
+             * @description Optional. Signatures from the governance of `signer_group_id`
+             *     over the canonical intent
+             *     `{"address":"<crypto_address>","idempotency_key":"<X-Idempotency-Key>","network_id":"<network_id>","recipient_id":"<id>","signer_group_id":"<id>","type":"create_crypto_destination"}`.
+             *     With them, an `operate` API key of a client under governance
+             *     enforcement may create the destination,
+             *     the group must be attached to a wallet of the recipient's
+             *     customer, and `network_id` is required (the signed intent
+             *     names it). Only on creation; ignored on update.
+             */
+            readonly signatures?: readonly string[];
+            /**
+             * @description The signer group whose governance signed `signatures`. Required with `signatures`.
+             * @example 1NFHrqBHb3cTfLVkFSGmHZqdDPi
+             */
+            readonly signer_group_id?: string;
         } & {
             /**
              * @description discriminator enum property added by openapi-typescript
@@ -7513,6 +7596,38 @@ export type components = {
              *     entry carries its `removed_at` timestamp. Omitted otherwise.
              */
             readonly removed_members?: readonly components["schemas"]["Signer"][];
+            /**
+             * Format: int64
+             * @description The group's version. It increases by 1 with every membership or
+             *     governance change. Endorsements of a membership or governance
+             *     change sign over it as `signer_group_version`, so a signature made
+             *     before a change cannot be replayed after it.
+             * @example 3
+             */
+            readonly version?: number;
+            /**
+             * Format: int32
+             * @description The explicit number of distinct endorsers a governance change of the group needs, or null for the default.
+             * @example 2
+             */
+            readonly governance_threshold?: number | null;
+            /**
+             * Format: int32
+             * @description The number of distinct endorsers a governance change of the group
+             *     needs now: `governance_threshold` when set, else the default (1,
+             *     or 2 for a group of 3 or more members when the client has
+             *     governance enforcement on), capped at the members that can
+             *     endorse and never below 1. Keys of payment agents and card
+             *     settlement signers are members for spending only: they never
+             *     endorse governance changes.
+             * @example 2
+             */
+            readonly effective_governance_threshold?: number;
+            /**
+             * @description The signer group whose members endorse governance changes of this group instead of its own members, or null when the group governs itself.
+             * @example 1NFHrqBHb3cTfLVkFSGmHZqdDPi
+             */
+            readonly governance_signer_group_id?: string | null;
         };
         /** @description A signer is a public key that can sign intents and it is part of a signer group */
         readonly Signer: {
@@ -7586,6 +7701,26 @@ export type components = {
              *     unbounded list would let one request drive unbounded work.
              */
             readonly member_keys: readonly string[];
+            /**
+             * Format: int32
+             * @description Optional. The number of distinct endorsers a governance change of
+             *     the group needs (membership, governance settings, and the rules of
+             *     the policies it governs). At most the member count of the group
+             *     whose members endorse: the governing group when
+             *     `governance_signer_group_id` is set, else this group. Keys of
+             *     payment agents and card settlement signers never endorse
+             *     governance changes and are not counted.
+             * @example 2
+             */
+            readonly governance_threshold?: number;
+            /**
+             * @description Optional. Another signer group of the same client whose members
+             *     endorse governance changes of this group instead of its own
+             *     members. It must not be spend-scoped, deleted, or governed by
+             *     another group itself.
+             * @example 1NFHrqBHb3cTfLVkFSGmHZqdDPi
+             */
+            readonly governance_signer_group_id?: string;
         };
         readonly Policy: {
             /**
@@ -7802,6 +7937,94 @@ export type components = {
         readonly CreateSignerGroupSignerRequest: {
             /** @description Public key of the member to add to the signer group. */
             readonly member_key: string;
+            /**
+             * @description Signatures over the canonical intent, each base64-encoded, in the
+             *     format the endorsed policy routes use (ES256 ASN.1 DER, or a
+             *     WebAuthn assertion whose challenge is the canonical intent).
+             *     Policy-engine verifies them against the signer group's governance:
+             *     the members of its governing group (`governance_signer_group_id`,
+             *     else the group itself), at least `effective_governance_threshold`
+             *     distinct members. Payment-agent and card-settlement keys never
+             *     count: a signature by one of them is refused.
+             *     The canonical intent is
+             *     `{"idempotency_key":"<X-Idempotency-Key>","new_member_keys":["<member_key>"],"signer_group_id":"<id>","signer_group_version":<version>,"type":"add_signers_to_group"}`.
+             *     Without signatures the member is added unendorsed, which a client
+             *     with governance enforcement on is refused (400
+             *     `endorsement_required`).
+             */
+            readonly signatures?: readonly string[];
+            /**
+             * Format: int64
+             * @description The group's `version` the signatures were made over. Required with `signatures`.
+             * @example 3
+             */
+            readonly signer_group_version?: number;
+        };
+        /**
+         * @description A signed removal of members from a signer group. Policy-engine verifies
+         *     the signatures against the group's governance (the members of its
+         *     governing group, `governance_signer_group_id`, else the group itself;
+         *     at least `effective_governance_threshold` distinct members, never
+         *     counting payment-agent or card-settlement keys) and refuses a removal
+         *     that would leave the group below a threshold it must keep.
+         */
+        readonly RemoveSignerGroupSignersRequest: {
+            /** @description Public keys of the members to remove, as the group lists them. */
+            readonly members_to_remove: readonly string[];
+            /**
+             * Format: int64
+             * @description The group's `version` the signatures were made over.
+             * @example 3
+             */
+            readonly signer_group_version: number;
+            /**
+             * @description Signatures over the canonical intent, each base64-encoded, in the
+             *     format the endorsed policy routes use (ES256 ASN.1 DER, or a
+             *     WebAuthn assertion whose challenge is the canonical intent).
+             *     The canonical intent is
+             *     `{"group_id":"<id>","idempotency_key":"<X-Idempotency-Key>","members_to_remove":["<public_key>"],"signer_group_version":<version>,"type":"remove_signers_from_group"}`,
+             *     with `members_to_remove` in the order sent.
+             */
+            readonly signatures: readonly string[];
+        };
+        /**
+         * @description The group's complete governance settings, endorsed by its current
+         *     governance. A field left out clears that setting: no
+         *     `governance_threshold` means the default quorum, and no
+         *     `governance_signer_group_id` means the group governs itself.
+         */
+        readonly UpdateSignerGroupGovernanceRequest: {
+            /**
+             * Format: int32
+             * @description The number of distinct endorsers a governance change of the group needs.
+             * @example 2
+             */
+            readonly governance_threshold?: number;
+            /**
+             * @description Another signer group of the same client whose members endorse governance changes of this group.
+             * @example 1NFHrqBHb3cTfLVkFSGmHZqdDPi
+             */
+            readonly governance_signer_group_id?: string;
+            /**
+             * Format: int64
+             * @description The group's `version` the signatures were made over.
+             * @example 3
+             */
+            readonly signer_group_version: number;
+            /**
+             * @description Signatures over the canonical intent, each base64-encoded, in the
+             *     format the endorsed policy routes use (ES256 ASN.1 DER, or a
+             *     WebAuthn assertion whose challenge is the canonical intent).
+             *     Policy-engine verifies them against the signer group's governance:
+             *     the members of its governing group (`governance_signer_group_id`,
+             *     else the group itself), at least `effective_governance_threshold`
+             *     distinct members. Payment-agent and card-settlement keys never
+             *     count: a signature by one of them is refused.
+             *     The canonical intent is
+             *     `{"governance_signer_group_id":"<id>","governance_threshold":<n>,"idempotency_key":"<X-Idempotency-Key>","signer_group_id":"<id>","signer_group_version":<version>,"type":"update_signer_group_governance"}`,
+             *     with each optional field absent when it is not sent.
+             */
+            readonly signatures: readonly string[];
         };
         readonly AttachGroupToWalletIntent: {
             /**
@@ -22673,7 +22896,7 @@ export interface operations {
                     readonly "application/json": components["schemas"]["SignerGroup"];
                 };
             };
-            /** @description Bad request - invalid input data */
+            /** @description Bad request - invalid input data, or `endorsement_required` - this removal needs signatures (a client under governance enforcement, or a group with governance settings); use `POST /signer-groups/{signer_group_id}/signer-removals` */
             readonly 400: {
                 headers: {
                     readonly [name: string]: unknown;
@@ -22973,7 +23196,7 @@ export interface operations {
                     readonly "application/json": components["schemas"]["SignerGroup"];
                 };
             };
-            /** @description Bad request - invalid input data */
+            /** @description Bad request - invalid input data, or `endorsement_required` (unsigned for a client with governance enforcement on, or for a group with governance settings) */
             readonly 400: {
                 headers: {
                     readonly [name: string]: unknown;
@@ -23011,7 +23234,7 @@ export interface operations {
                     readonly "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
-            /** @description Forbidden */
+            /** @description Forbidden, or `insufficient_endorsements` - the signatures do not meet the group's governance quorum */
             readonly 403: {
                 headers: {
                     readonly [name: string]: unknown;
@@ -23049,7 +23272,7 @@ export interface operations {
                     readonly "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };
-            /** @description Conflict - duplicate request detected */
+            /** @description Conflict - duplicate request detected, or `stale_signer_group_version` - the group changed since the signatures were made */
             readonly 409: {
                 headers: {
                     readonly [name: string]: unknown;
@@ -23084,6 +23307,268 @@ export interface operations {
                      *       "request_id": "req_01hzy6y7v8w9x0y1z2a3b4c5d6"
                      *     }
                      */
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    readonly removeSignerGroupSigners: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header: {
+                /** @description Unique key to ensure request idempotency. If the same key is used within a certain time window, the original response will be returned instead of executing the request again. */
+                readonly "x-idempotency-key": components["parameters"]["IdempotencyKeyHeader"];
+            };
+            readonly path: {
+                /** @description Signer Group ID */
+                readonly signer_group_id: components["schemas"]["KSUID"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                /**
+                 * @example {
+                 *       "members_to_remove": [
+                 *         "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAE..."
+                 *       ],
+                 *       "signer_group_version": 3,
+                 *       "signatures": [
+                 *         "MEUCIQDx...base64"
+                 *       ]
+                 *     }
+                 */
+                readonly "application/json": components["schemas"]["RemoveSignerGroupSignersRequest"];
+            };
+        };
+        readonly responses: {
+            /** @description Signers removed */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi",
+                     *       "client_id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi",
+                     *       "name": "My Wallet",
+                     *       "members": [
+                     *         {
+                     *           "id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi",
+                     *           "client_id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi",
+                     *           "name": "Marc",
+                     *           "public_key": "string",
+                     *           "key_type": "ES256"
+                     *         }
+                     *       ],
+                     *       "version": 4,
+                     *       "effective_governance_threshold": 1
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["SignerGroup"];
+                };
+            };
+            /** @description Bad request - invalid input data */
+            readonly 400: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            readonly 401: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden, or `insufficient_endorsements` - the signatures do not meet the group's governance quorum */
+            readonly 403: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Signer Group not found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description `stale_signer_group_version` - the group changed since the signatures were made */
+            readonly 409: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description `below_threshold` - the removal would leave the group below a threshold it must keep (at least one member, its governance quorum, or a governed group's threshold). A policy's approval threshold does not block a removal; a policy left unmeetable denies sends until a member is added. */
+            readonly 422: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal server error */
+            readonly 500: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service unavailable */
+            readonly 503: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+        };
+    };
+    readonly updateSignerGroupGovernance: {
+        readonly parameters: {
+            readonly query?: never;
+            readonly header: {
+                /** @description Unique key to ensure request idempotency. If the same key is used within a certain time window, the original response will be returned instead of executing the request again. */
+                readonly "x-idempotency-key": components["parameters"]["IdempotencyKeyHeader"];
+            };
+            readonly path: {
+                /** @description Signer Group ID */
+                readonly signer_group_id: components["schemas"]["KSUID"];
+            };
+            readonly cookie?: never;
+        };
+        readonly requestBody: {
+            readonly content: {
+                /**
+                 * @example {
+                 *       "governance_threshold": 2,
+                 *       "signer_group_version": 3,
+                 *       "signatures": [
+                 *         "MEUCIQDx...base64",
+                 *         "MEQCIF1y...base64"
+                 *       ]
+                 *     }
+                 */
+                readonly "application/json": components["schemas"]["UpdateSignerGroupGovernanceRequest"];
+            };
+        };
+        readonly responses: {
+            /** @description Governance updated */
+            readonly 200: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    /**
+                     * @example {
+                     *       "id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi",
+                     *       "client_id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi",
+                     *       "name": "My Wallet",
+                     *       "members": [
+                     *         {
+                     *           "id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi",
+                     *           "client_id": "1NFHrqBHb3cTfLVkFSGmHZqdDPi",
+                     *           "name": "Marc",
+                     *           "public_key": "string",
+                     *           "key_type": "ES256"
+                     *         }
+                     *       ],
+                     *       "version": 4,
+                     *       "governance_threshold": 2,
+                     *       "effective_governance_threshold": 2
+                     *     }
+                     */
+                    readonly "application/json": components["schemas"]["SignerGroup"];
+                };
+            };
+            /** @description Bad request - invalid input data, or invalid governance settings */
+            readonly 400: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unauthorized */
+            readonly 401: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Forbidden, or `insufficient_endorsements` - the signatures do not meet the group's governance quorum */
+            readonly 403: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Signer Group not found */
+            readonly 404: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description `stale_signer_group_version` - the group changed since the signatures were made */
+            readonly 409: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Unprocessable */
+            readonly 422: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Internal server error */
+            readonly 500: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
+                    readonly "application/problem+json": components["schemas"]["ProblemDetails"];
+                };
+            };
+            /** @description Service unavailable */
+            readonly 503: {
+                headers: {
+                    readonly [name: string]: unknown;
+                };
+                content: {
                     readonly "application/problem+json": components["schemas"]["ProblemDetails"];
                 };
             };

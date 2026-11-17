@@ -517,6 +517,89 @@ export type SignerCreateRequest = components['schemas']['SignerCreateRequest'];
  */
 export type SignerGroupSignerAddRequest = components['schemas']['CreateSignerGroupSignerRequest'];
 
+/**
+ * Signed removal of members (POST /signer-groups/{id}/signer-removals).
+ * Build and sign it with `signerGroups.removeSignersSigned` or
+ * `prepareRemoveSigners` + `submitSignedChange`.
+ */
+export type SignerGroupSignerRemovalRequest =
+  components['schemas']['RemoveSignerGroupSignersRequest'];
+
+/**
+ * Signed replacement of a group's governance settings
+ * (PATCH /signer-groups/{id}/governance). A setting left out is cleared.
+ */
+export type SignerGroupGovernanceUpdateRequest =
+  components['schemas']['UpdateSignerGroupGovernanceRequest'];
+
+/**
+ * The governance settings of a signer group, as passed to the signed
+ * governance helpers. The change replaces the whole state: leave a setting
+ * out (or null) to clear it.
+ */
+export interface SignerGroupGovernanceSettings {
+  /** Distinct endorsers a governance change needs; absent/null = default quorum. */
+  governance_threshold?: number | null;
+  /** Group whose members endorse instead of this group's; absent/null = self-governed. */
+  governance_signer_group_id?: string | null;
+}
+
+/**
+ * A signer-group change that is built and ready to sign, from
+ * `signerGroups.prepareAddSigner` / `prepareRemoveSigners` /
+ * `prepareGovernanceUpdate`.
+ *
+ * It is plain JSON, so a server can store it (or send it to a browser) while
+ * the signatures are collected, then pass it to `submitSignedChange`. The
+ * signers sign the UTF-8 bytes of `canonical`; for a passkey, pass
+ * `canonical` to `buildChallenge`.
+ */
+export interface PreparedSignerGroupChange {
+  readonly kind:
+    | 'add_signers_to_group'
+    | 'remove_signers_from_group'
+    | 'update_signer_group_governance';
+  readonly signerGroupId: string;
+  /** The group's `version` the change is signed over. */
+  readonly signerGroupVersion: number;
+  /** Lowercase UUID; sent as `X-Idempotency-Key` and signed inside the intent. */
+  readonly idempotencyKey: string;
+  /** Member public keys to add (one) or remove (in order). Absent for governance. */
+  readonly memberKeys?: readonly string[];
+  /** The new governance settings. Present for governance only. */
+  readonly governance?: {
+    readonly governance_threshold?: number;
+    readonly governance_signer_group_id?: string;
+  };
+  /** The canonical intent JSON: the exact bytes every signature covers. */
+  readonly canonical: string;
+}
+
+/** Options for preparing a signed signer-group change. */
+export interface PrepareSignerGroupChangeOptions {
+  /**
+   * Sign over this version instead of reading the group's current one.
+   * Useful when you just fetched the group; a wrong value gets a
+   * `StaleSignerGroupVersionError`.
+   */
+  signerGroupVersion?: number;
+  /** Lowercase UUID to use; one is generated when omitted. */
+  idempotencyKey?: string;
+}
+
+/** Options for the one-call signed signer-group helpers. */
+export interface SignedSignerGroupChangeOptions extends PrepareSignerGroupChangeOptions {
+  /**
+   * How many times to re-read the version, re-sign under a new idempotency
+   * key, and resend after a `StaleSignerGroupVersionError`. Default 0. Each
+   * retry calls every signer again (a passkey prompts again). Ignored when
+   * `signerGroupVersion` or `idempotencyKey` is fixed by the caller.
+   */
+  staleRetries?: number;
+  /** Per-request deadline in milliseconds, as in {@link RequestOptions}. */
+  timeout?: number;
+}
+
 /** Parameters for getting a single signer group. */
 export interface SignerGroupGetParams {
   /**

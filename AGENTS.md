@@ -476,22 +476,21 @@ for (const w of policyWallets) {
 ### Signer Groups
 
 ```typescript
-// Create signer group
+// Create signer group (governance settings are optional)
 const group = await client.signerGroups.create({
   name: 'Approvers',
-  threshold: 2,
+  member_keys: [adminPublicKey, opsPublicKey], // base64 public keys of existing signers
+  governance_threshold: 2,
 });
 
 // List signer groups
 for await (const group of client.signerGroups.list()) {
-  console.log(group);
+  console.log(group.id, group.version, group.effective_governance_threshold);
 }
 
-// Add signer
-const signer = await client.signerGroups.addSigner(groupId, {
-  public_key: '0x...',
-  name: 'Alice',
-});
+// Add an existing signer's public key (UNSIGNED: a governed group refuses it
+// with EndorsementRequiredError; use addSignerSigned below)
+await client.signerGroups.addSigner(groupId, { member_key: signerPublicKey });
 
 // Attach to wallet
 await client.signerGroups.attachToWallet(walletId, groupId);
@@ -511,10 +510,51 @@ for (const s of withHistory.removed_members ?? []) {
   console.log(s.name, 'removed at', s.removed_at);
 }
 
-// Remove a signer from a group — takes the KSUID `signer_id`, NOT the
-// public key (client.signers.delete() is the one that takes a public key).
+// Remove a signer from a group, unsigned — takes the KSUID `signer_id`, NOT
+// the public key (client.signers.delete() is the one that takes a public key).
 await client.signerGroups.removeSigner(groupId, signerId);
 ```
+
+#### Signed (governed) changes
+
+A governed group (client with governance enforcement on, or a group with
+governance settings) needs signatures from its governing members for member
+adds, removals and governance updates. The SDK reads the group's `version`,
+builds the canonical intent, signs it, and sends the same lowercase UUID as
+the intent's `idempotency_key` and the `X-Idempotency-Key` header.
+
+```typescript
+import { ES256Signer, webauthnSigner, StaleSignerGroupVersionError } from '@dakota-xyz/ts-sdk';
+
+const admin = ES256Signer.fromPrivateKey(adminPkcs8Pem); // or any { sign(bytes) => base64 DER }
+await client.signerGroups.addSignerSigned(groupId, newMemberKey, [admin]);
+await client.signerGroups.removeSignersSigned(groupId, [memberKey], [admin, ops], { staleRetries: 1 });
+// Governance replaces the WHOLE state: a setting left out or null is cleared.
+await client.signerGroups.updateGovernanceSigned(groupId, { governance_threshold: 2 }, [admin]);
+
+// Passkey, two phase (server -> browser -> server):
+const change = await client.signerGroups.prepareAddSigner(groupId, newMemberKey); // plain JSON
+// browser (import from '@dakota-xyz/ts-sdk/governance', no Node deps):
+//   const cred = await navigator.credentials.get({ publicKey: { challenge: buildChallenge(change.canonical), rpId } });
+//   const sig = packAssertion(cred);
+await client.signerGroups.submitSignedChange(change, [sig]);
+
+// Low level (you signed the body yourself; options.idempotencyKey MUST equal the intent's key)
+await client.signerGroups.removeSigners(groupId, { members_to_remove, signer_group_version, signatures }, { idempotencyKey });
+await client.signerGroups.updateGovernance(groupId, { governance_threshold, signer_group_version, signatures }, { idempotencyKey });
+```
+
+Intent builders (pure, also in `@dakota-xyz/ts-sdk/governance`):
+`addSignersToGroupIntent`, `removeSignersFromGroupIntent`,
+`updateSignerGroupGovernanceIntent`, `createCryptoDestinationIntent` — each
+returns `{ intent, canonical, bytes }`. ES256 signs SHA-256 of `bytes` (DER,
+base64); a passkey's WebAuthn `challenge` is `bytes` itself (`buildChallenge`),
+and its `signatures[]` entry is `packAssertion(credential)`.
+
+Errors (subclasses of `APIError`): `EndorsementRequiredError` (400, unsigned),
+`InsufficientEndorsementsError` (403, `have`/`need`),
+`StaleSignerGroupVersionError` (409, re-read version and re-sign),
+`BelowThresholdError` (422), `InvalidGoverningGroupError`.
 
 ### Signers
 

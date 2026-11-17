@@ -4,6 +4,7 @@ export default defineConfig({
   entry: {
     index: 'src/index.ts',
     'webhook/index': 'src/webhook/index.ts',
+    'governance/index': 'src/governance/index.ts',
   },
   format: ['esm', 'cjs'],
   dts: true,

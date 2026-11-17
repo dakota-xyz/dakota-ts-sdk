@@ -4,6 +4,68 @@ All notable changes to the Dakota TypeScript SDK are documented in this file.
 
 ## [Unreleased]
 
+### Signed signer-group governance changes, ES256 and passkey (ENG-6468)
+
+Signer-group member changes need signatures from the group's governing
+members when the client has governance enforcement on, or the group has
+governance settings. The SDK now builds, signs and sends them.
+
+A partial spec sync: the base `openapi.yaml` takes only the signer-group
+governance hunks of platform's `openapi.public.yaml` (platform `93cb530b7`),
+and the types are regenerated. The rest of upstream's drift (for example the
+`reason` / `params` problem fields and the 422 `idempotency-key-reused`
+responses) is not synced here.
+
+#### Added
+
+- **New entry point `@dakota-xyz/ts-sdk/governance`**, with no `node:` import
+  and no `Buffer`, so it bundles for browsers and React Native (passkeys are
+  signed there). Everything in it is also exported from the main entry.
+  - Canonical intent builders: `addSignersToGroupIntent`,
+    `removeSignersFromGroupIntent`, `updateSignerGroupGovernanceIntent`,
+    `createCryptoDestinationIntent`. Each returns `{ intent, canonical, bytes }`;
+    the bytes equal policy-engine's `CanonicalIntentBytes` for the same intent
+    (golden vectors in `tests/fixtures/governance`). `signer_group_version` is
+    always signed, including 0; unset governance settings are omitted (which
+    clears them); idempotency keys must be lowercase UUIDs.
+  - Passkeys: `buildChallenge(intent)` returns the raw canonical bytes to pass
+    as the WebAuthn `challenge` (not a hash), and `packAssertion(credential)`
+    turns the `navigator.credentials.get()` result into the `signatures[]`
+    entry (base64url of the CredentialAssertionResponse JSON). String fields
+    from mobile passkey libraries are accepted too. `webauthnSigner(get)` wraps
+    a passkey as a signer; `assertionChallengeMatches(packed, intent)` lets a
+    server check what a browser sent back. The SDK never holds the credential.
+  - `webCryptoES256Signer(cryptoKey)`: ES256 over WebCrypto (non-extractable
+    keys work), converted to the DER form the platform verifies.
+  - `signGovernanceIntent(intent, signers)`, `newIdempotencyKey()`,
+    `assertIdempotencyKey()`.
+- `ES256Signer`, an alias of `P256MandateSigner` for server-side ES256 keys.
+- `signerGroups`:
+  - One call: `addSignerSigned`, `removeSignersSigned`, `updateGovernanceSigned`.
+    Each reads the group's `version`, builds the intent with a fresh lowercase
+    UUID key, signs it with every signer in order, and sends it with the SAME
+    key as `X-Idempotency-Key`. `staleRetries` (default 0) re-reads, re-signs
+    and resends after a stale version; each retry calls every signer again.
+  - Two phase, for passkeys in a browser: `prepareAddSigner`,
+    `prepareRemoveSigners`, `prepareGovernanceUpdate` return a plain-JSON
+    `PreparedSignerGroupChange` (store it, send its `canonical` to the
+    browser), and `submitSignedChange(change, signatures)` sends it. Submit
+    refuses a change altered after it was prepared.
+  - Low level: `removeSigners(id, body)` (`POST /signer-groups/{id}/signer-removals`)
+    and `updateGovernance(id, body)` (`PATCH /signer-groups/{id}/governance`).
+- Typed governance errors, all subclasses of `APIError`:
+  `EndorsementRequiredError`, `InsufficientEndorsementsError` (with `have` /
+  `need`), `StaleSignerGroupVersionError`, `BelowThresholdError`,
+  `InvalidGoverningGroupError`.
+- Types: `version`, `governance_threshold`, `effective_governance_threshold`,
+  `governance_signer_group_id` on `SignerGroup`; governance settings on
+  `SignerGroupCreateRequest`; `signatures` / `signer_group_version` on the add
+  request; `signatures` / `signer_group_id` on `CryptoDestinationRequest`;
+  `SignerGroupSignerRemovalRequest`, `SignerGroupGovernanceUpdateRequest`,
+  `SignerGroupGovernanceSettings`, `PreparedSignerGroupChange`.
+- Examples: `examples/governance-es256.ts` and `examples/governance-passkey.ts`
+  run the whole flow against sandbox (use an ordinary client's key).
+
 ## [3.3.0] - 2026-10-23
 
 ### API key names, last-used time and scopes (ENG-4792)

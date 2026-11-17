@@ -27,6 +27,16 @@
         "types": "./dist/webhook/index.d.ts",
         "default": "./dist/webhook/index.js"
       }
+    },
+    "./governance": {
+      "import": {
+        "types": "./dist/governance/index.d.mts",
+        "default": "./dist/governance/index.mjs"
+      },
+      "require": {
+        "types": "./dist/governance/index.d.ts",
+        "default": "./dist/governance/index.js"
+      }
     }
   },
   "files": [
@@ -83,7 +93,9 @@
     "on-ramp",
     "off-ramp",
     "api",
-    "sdk"
+    "sdk",
+    "passkey",
+    "webauthn"
   ],
   "repository": {
     "type": "git",
