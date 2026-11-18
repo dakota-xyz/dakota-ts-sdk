@@ -184,7 +184,10 @@ export class EndorsementRequiredError extends APIError {
 /**
  * `insufficient_endorsements` (403): the signatures do not meet the group's
  * governance quorum (`effective_governance_threshold` distinct governing
- * members). Collect more signatures over the SAME intent and resend.
+ * members). The refusal is final for that idempotency key: the platform
+ * replays it, and a resend under the same key with more signatures is
+ * refused as a different request. Prepare again (a new key and intent) and
+ * collect every signature again.
  */
 export class InsufficientEndorsementsError extends APIError {
   /** Signatures the platform counted, when it said so. */
