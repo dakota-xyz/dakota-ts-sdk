@@ -549,10 +549,16 @@ export interface SignerGroupGovernanceSettings {
  * `signerGroups.prepareAddSigner` / `prepareRemoveSigners` /
  * `prepareGovernanceUpdate`.
  *
- * It is plain JSON, so a server can store it (or send it to a browser) while
- * the signatures are collected, then pass it to `submitSignedChange`. The
- * signers sign the UTF-8 bytes of `canonical`; for a passkey, pass
- * `canonical` to `buildChallenge`.
+ * It is plain JSON, so a server can store it while the signatures are
+ * collected, then pass it to `submitSignedChange`. The signers sign the UTF-8
+ * bytes of `canonical`; for a passkey, send only `canonical` to the browser
+ * and pass it to `buildChallenge` there.
+ *
+ * Keep the change itself on the server. `submitSignedChange` refuses a change
+ * whose fields no longer match its `canonical`, but a change rebuilt as a
+ * whole (new group id and matching `canonical`) is a different, valid change,
+ * and it is sent with this client's API key. Never submit one that came back
+ * from a browser.
  */
 export interface PreparedSignerGroupChange {
   readonly kind:
@@ -592,8 +598,12 @@ export interface SignedSignerGroupChangeOptions extends PrepareSignerGroupChange
   /**
    * How many times to re-read the version, re-sign under a new idempotency
    * key, and resend after a `StaleSignerGroupVersionError`. Default 0. Each
-   * retry calls every signer again (a passkey prompts again). Ignored when
-   * `signerGroupVersion` or `idempotencyKey` is fixed by the caller.
+   * retry calls every signer again (a passkey prompts again).
+   *
+   * @throws TypeError when it is above 5, when it is combined with a fixed
+   *   `signerGroupVersion` or `idempotencyKey` (a retry needs a fresh read and
+   *   a fresh key), and on `updateGovernanceSigned`, which never re-signs
+   *   (a re-sign could undo a concurrent governance change).
    */
   staleRetries?: number;
   /** Per-request deadline in milliseconds, as in {@link RequestOptions}. */

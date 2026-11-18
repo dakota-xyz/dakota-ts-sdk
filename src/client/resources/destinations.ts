@@ -3,6 +3,7 @@
  */
 
 import { BaseResource } from './base.js';
+import { assertIdempotencyKey } from '../../governance/intents.js';
 import { PaginatedIterator } from '../pagination.js';
 import type {
   Destination,
@@ -59,6 +60,17 @@ export class DestinationsResource extends BaseResource {
     data: DestinationRequest,
     options?: RequestOptions
   ): Promise<DestinationCreateResponse> {
+    // A signed (governed) crypto destination carries its idempotency key
+    // inside the signed intent, so a generated one could never match it.
+    const signatures = (data as { signatures?: readonly unknown[] }).signatures;
+    if (signatures !== undefined && signatures.length > 0) {
+      if (!options?.idempotencyKey) {
+        throw new TypeError(
+          'destinations.create with signatures needs options.idempotencyKey: the idempotency_key inside the signed intent (a generated one could never match)'
+        );
+      }
+      assertIdempotencyKey(options.idempotencyKey);
+    }
     return this.transport.request<DestinationCreateResponse>({
       method: 'POST',
       path: `/recipients/${recipientId}/destinations`,

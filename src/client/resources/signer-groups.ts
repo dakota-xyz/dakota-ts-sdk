@@ -87,7 +87,7 @@ export class SignerGroupsResource extends BaseResource {
   async get(signerGroupId: string, params?: SignerGroupGetParams): Promise<SignerGroup> {
     return this.transport.request<SignerGroup>({
       method: 'GET',
-      path: `/signer-groups/${signerGroupId}`,
+      path: `/signer-groups/${seg(signerGroupId)}`,
       query: { ...params },
     });
   }
@@ -119,7 +119,7 @@ export class SignerGroupsResource extends BaseResource {
     }
     return this.transport.request<SignerGroup>({
       method: 'POST',
-      path: `/signer-groups/${signerGroupId}/signers`,
+      path: `/signer-groups/${seg(signerGroupId)}/signers`,
       body: data,
       idempotencyKey: options?.idempotencyKey,
       timeout: options?.timeout,
@@ -147,7 +147,7 @@ export class SignerGroupsResource extends BaseResource {
   ): Promise<void> {
     await this.transport.request<void>({
       method: 'DELETE',
-      path: `/signer-groups/${signerGroupId}/signers/${signerId}`,
+      path: `/signer-groups/${seg(signerGroupId)}/signers/${seg(signerId)}`,
       idempotencyKey: options?.idempotencyKey,
       timeout: options?.timeout,
     });
@@ -172,7 +172,7 @@ export class SignerGroupsResource extends BaseResource {
     requireSignedKey('removeSigners', options);
     return this.transport.request<SignerGroup>({
       method: 'POST',
-      path: `/signer-groups/${signerGroupId}/signer-removals`,
+      path: `/signer-groups/${seg(signerGroupId)}/signer-removals`,
       body: data,
       idempotencyKey: options?.idempotencyKey,
       timeout: options?.timeout,
@@ -194,7 +194,7 @@ export class SignerGroupsResource extends BaseResource {
     requireSignedKey('updateGovernance', options);
     return this.transport.request<SignerGroup>({
       method: 'PATCH',
-      path: `/signer-groups/${signerGroupId}/governance`,
+      path: `/signer-groups/${seg(signerGroupId)}/governance`,
       body: data,
       idempotencyKey: options?.idempotencyKey,
       timeout: options?.timeout,
@@ -481,7 +481,7 @@ export class SignerGroupsResource extends BaseResource {
   async getWallets(signerGroupId: string): Promise<AttachedWallet[]> {
     return this.transport.request<AttachedWallet[]>({
       method: 'GET',
-      path: `/signer-groups/${signerGroupId}/wallets`,
+      path: `/signer-groups/${seg(signerGroupId)}/wallets`,
     });
   }
 
@@ -503,7 +503,7 @@ export class SignerGroupsResource extends BaseResource {
   ): Promise<void> {
     await this.transport.request<void>({
       method: 'PUT',
-      path: `/wallets/${walletId}/signer-groups/${signerGroupId}`,
+      path: `/wallets/${seg(walletId)}/signer-groups/${seg(signerGroupId)}`,
       body: options?.endorsement,
       idempotencyKey: options?.idempotencyKey,
       timeout: options?.timeout,
@@ -528,7 +528,7 @@ export class SignerGroupsResource extends BaseResource {
   ): Promise<void> {
     await this.transport.request<void>({
       method: 'DELETE',
-      path: `/wallets/${walletId}/signer-groups/${signerGroupId}`,
+      path: `/wallets/${seg(walletId)}/signer-groups/${seg(signerGroupId)}`,
       body: options?.endorsement,
       idempotencyKey: options?.idempotencyKey,
       timeout: options?.timeout,
@@ -545,6 +545,15 @@ export class SignerGroupsResource extends BaseResource {
   listForWallet(walletId: string, params?: ListParams): PaginatedIterator<SignerGroup> {
     return this.paginate<SignerGroup>(`/wallets/${walletId}/signer-groups`, params);
   }
+}
+
+/**
+ * One id as a URL path segment. Ids are plain tokens today; encoding keeps a
+ * value from elsewhere (a prepared change that went through a browser, say)
+ * from reaching a different route with this client's API key.
+ */
+function seg(id: string): string {
+  return encodeURIComponent(id);
 }
 
 /** Most stale re-signs the one-call helpers will make (each may prompt a passkey). */

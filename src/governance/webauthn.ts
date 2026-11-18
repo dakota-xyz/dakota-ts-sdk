@@ -47,27 +47,52 @@ export interface AssertionCredential {
 }
 
 /**
+ * What a challenge can be built from: a built intent, anything else that
+ * carries the `canonical` string (such as a `PreparedSignerGroupChange`),
+ * the `canonical` string itself (what a server would send to the browser),
+ * or its bytes.
+ */
+export type ChallengeSource =
+  | CanonicalIntent
+  | { readonly canonical: string }
+  | string
+  | Uint8Array
+  | ArrayBuffer;
+
+/**
  * The WebAuthn challenge for an intent: its raw canonical JSON bytes, as a
  * fresh `ArrayBuffer`. Pass it as `publicKey.challenge`; the browser
  * base64url-encodes it into `clientDataJSON`, which is exactly what the
  * platform expects. (An `ArrayBuffer` is a `BufferSource` under every
  * TypeScript version, unlike a `Uint8Array` on TypeScript 5.7+.)
  *
- * Accepts a built intent, its `canonical` string (what a server would send
- * to the browser), or the bytes.
+ * @throws TypeError when `intent` is none of the {@link ChallengeSource} forms
  */
-export function buildChallenge(
-  intent: CanonicalIntent | string | Uint8Array | ArrayBuffer
-): ArrayBuffer {
-  const bytes =
-    typeof intent === 'string'
-      ? utf8(intent)
-      : isBinary(intent)
-        ? toBytes(intent)
-        : (intent as CanonicalIntent).bytes;
+export function buildChallenge(intent: ChallengeSource): ArrayBuffer {
+  const bytes = challengeBytes(intent);
   const out = new ArrayBuffer(bytes.length);
   new Uint8Array(out).set(bytes);
   return out;
+}
+
+function challengeBytes(intent: ChallengeSource): Uint8Array {
+  if (typeof intent === 'string') {
+    return utf8(intent);
+  }
+  if (isBinary(intent)) {
+    return toBytes(intent);
+  }
+  if (intent && typeof intent === 'object') {
+    // `canonical` first: it is the one field every source carries, and a
+    // built intent's `bytes` are its UTF-8 encoding anyway.
+    const canonical = (intent as { canonical?: unknown }).canonical;
+    if (typeof canonical === 'string') {
+      return utf8(canonical);
+    }
+  }
+  throw new TypeError(
+    'expected a built intent, a prepared change, its canonical string, or its bytes'
+  );
 }
 
 function isBinary(v: unknown): v is ArrayBuffer | ArrayBufferView {
@@ -130,16 +155,22 @@ export function packAssertion(credential: AssertionCredential): string {
   return bytesToBase64url(utf8(JSON.stringify(envelope)));
 }
 
+/** Longest packed assertion {@link assertionChallengeMatches} will decode. */
+const MAX_PACKED_ASSERTION_LENGTH = 64 * 1024;
+
 /**
  * Whether a packed passkey signature was made over `intent` — its challenge
  * equals the intent's canonical bytes. A cheap server-side check of what a
  * browser sent back before you submit it. It does NOT verify the signature
- * itself; the platform does that.
+ * itself; the platform does that. Returns false for anything that is not a
+ * packed assertion, including one longer than 64 KiB.
  */
-export function assertionChallengeMatches(
-  packed: string,
-  intent: CanonicalIntent | string | Uint8Array | ArrayBuffer
-): boolean {
+export function assertionChallengeMatches(packed: string, intent: ChallengeSource): boolean {
+  // `packed` usually comes from a browser, so bound the work it can cause
+  // before decoding it. A real assertion is a few kilobytes.
+  if (typeof packed !== 'string' || packed.length > MAX_PACKED_ASSERTION_LENGTH) {
+    return false;
+  }
   try {
     const envelope = JSON.parse(new TextDecoder().decode(base64ToBytes(packed))) as {
       response?: { clientDataJSON?: string };

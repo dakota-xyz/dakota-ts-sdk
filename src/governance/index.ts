@@ -49,6 +49,7 @@ export {
   webauthnSigner,
   type AssertionCredential,
   type BinaryOrBase64,
+  type ChallengeSource,
 } from './webauthn.js';
 
 export {

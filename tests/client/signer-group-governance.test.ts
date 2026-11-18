@@ -15,6 +15,7 @@ import {
   InvalidGoverningGroupError,
   StaleSignerGroupVersionError,
 } from '../../src/client/errors.js';
+import { addSignersToGroupIntent, assertionChallengeMatches } from '../../src/governance/index.js';
 import { createRoutedFetch, type RecordedRequest } from '../agentic/helpers.js';
 
 const GROUP = '3MF5pRlAIRFYkOAd3TstqUKMOpp';
@@ -496,5 +497,97 @@ describe('governance errors are typed', () => {
   it('leaves other errors as plain APIError', async () => {
     const err = await fail(404, 'not_found');
     expect(err.constructor).toBe(APIError);
+  });
+});
+
+describe('review round 1 hardening', () => {
+  const key = '047caa77-8cec-4e96-994c-a12b655231de';
+
+  it('keeps a rebuilt change with a hostile group id on the signer-group route', async () => {
+    const { fetch, requests } = createRoutedFetch({}, () => ({ status: 200, body: group(1) }));
+    const client = makeClient(fetch);
+    const hostileId = '../wallets/w1/signer-groups/other';
+    // A whole change rebuilt with the public builder: its canonical matches its fields.
+    const built = addSignersToGroupIntent({
+      signerGroupId: hostileId,
+      newMemberKeys: [KEY_X],
+      signerGroupVersion: 0,
+      idempotencyKey: key,
+    });
+    await client.signerGroups.submitSignedChange(
+      {
+        kind: 'add_signers_to_group',
+        signerGroupId: hostileId,
+        signerGroupVersion: 0,
+        idempotencyKey: key,
+        memberKeys: [KEY_X],
+        canonical: built.canonical,
+      },
+      ['sig']
+    );
+    expect(requests[0]?.path).toBe(`/signer-groups/${encodeURIComponent(hostileId)}/signers`);
+  });
+
+  it('assertionChallengeMatches accepts a prepared change, as the README passes it', async () => {
+    const { fetch } = createRoutedFetch({});
+    const client = makeClient(fetch);
+    const change = await client.signerGroups.prepareAddSigner(GROUP, KEY_X, {
+      signerGroupVersion: 3,
+      idempotencyKey: key,
+    });
+    const clientData = new TextEncoder().encode(
+      JSON.stringify({
+        type: 'webauthn.get',
+        challenge: Buffer.from(change.canonical).toString('base64url'),
+        origin: 'https://app.example.com',
+      })
+    );
+    const packed = Buffer.from(
+      JSON.stringify({
+        response: { clientDataJSON: Buffer.from(clientData).toString('base64url') },
+      })
+    ).toString('base64url');
+    const stored = JSON.parse(JSON.stringify(change));
+    expect(assertionChallengeMatches(packed, stored)).toBe(true);
+    expect(
+      assertionChallengeMatches(packed, {
+        ...stored,
+        canonical: stored.canonical.replace('3', '4'),
+      })
+    ).toBe(false);
+  });
+
+  it('destinations.create with signatures needs the signed lowercase idempotency key', async () => {
+    const { fetch, requests } = createRoutedFetch({}, () => ({ status: 201, body: { id: 'd1' } }));
+    const client = makeClient(fetch);
+    const data = {
+      destination_type: 'crypto',
+      name: 'Treasury',
+      crypto_address: '0xabc',
+      network_id: 'base-mainnet',
+      signer_group_id: GROUP,
+      signatures: ['sig'],
+    } as unknown as Parameters<typeof client.destinations.create>[1];
+
+    await expect(client.destinations.create('rcp', data)).rejects.toThrow(/idempotencyKey/);
+    await expect(
+      client.destinations.create('rcp', data, { idempotencyKey: key.toUpperCase() })
+    ).rejects.toThrow(/lowercase/);
+    expect(requests).toHaveLength(0);
+
+    await client.destinations.create('rcp', data, { idempotencyKey: key });
+    expect(header(requests[0])).toBe(key);
+  });
+
+  it('destinations.create without signatures still generates its own key', async () => {
+    const { fetch, requests } = createRoutedFetch({}, () => ({ status: 201, body: { id: 'd1' } }));
+    const client = makeClient(fetch);
+    await client.destinations.create('rcp', {
+      destination_type: 'crypto',
+      name: 'Treasury',
+      crypto_address: '0xabc',
+      network_id: 'base-mainnet',
+    } as unknown as Parameters<typeof client.destinations.create>[1]);
+    expect(header(requests[0])).toMatch(LOWER_UUID);
   });
 });

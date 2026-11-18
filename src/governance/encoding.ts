@@ -35,7 +35,15 @@ export function bytesToBase64(bytes: Uint8Array): string {
 
 /** base64url (RFC 4648 §5), unpadded — the encoding WebAuthn uses. */
 export function bytesToBase64url(bytes: Uint8Array): string {
-  return bytesToBase64(bytes).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return stripPadding(bytesToBase64(bytes).replace(/\+/g, '-').replace(/\//g, '_'));
+}
+
+// Trailing '=' removal without a regex: an unanchored /=+$/ backtracks
+// quadratically on a long run of '=' that is not at the end.
+function stripPadding(s: string): string {
+  let end = s.length;
+  while (end > 0 && s.charCodeAt(end - 1) === 61 /* '=' */) end--;
+  return s.slice(0, end);
 }
 
 /**
@@ -44,7 +52,7 @@ export function bytesToBase64url(bytes: Uint8Array): string {
  * @throws on characters outside both alphabets or an impossible length.
  */
 export function base64ToBytes(input: string): Uint8Array {
-  const s = input.replace(/-/g, '+').replace(/_/g, '/').replace(/=+$/, '');
+  const s = stripPadding(input.replace(/-/g, '+').replace(/_/g, '/'));
   if (!/^[A-Za-z0-9+/]*$/.test(s) || s.length % 4 === 1) {
     throw new TypeError('invalid base64 or base64url string');
   }

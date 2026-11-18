@@ -80,6 +80,17 @@ responses) is not synced here.
   typecheck` now also compiles them, and the README's browser passkey flow,
   against the DOM types.
 
+#### Changed
+
+- `destinations.create` with `signatures` now requires
+  `options.idempotencyKey` (a lowercase UUID, the one inside the signed
+  `create_crypto_destination` intent), like the signed signer-group calls.
+  Before, a generated key was sent, which could never match the signature.
+- Signer-group request paths now URL-encode the ids they carry.
+- Member keys with leading or trailing whitespace are refused when building
+  an intent: the platform trims an added key before it verifies, so the
+  signature could never match.
+
 ## [3.3.0] - 2026-10-23
 
 ### API key names, last-used time and scopes (ENG-4792)

@@ -35,9 +35,7 @@
       "kind": "add_signers_to_group",
       "input": {
         "idempotency_key": "047caa77-8cec-4e96-994c-a12b655231de",
-        "new_member_keys": [
-          "k\"\\/"
-        ],
+        "new_member_keys": ["k\"\\/"],
         "signer_group_id": "g<1>&é\u2028",
         "signer_group_version": 4294967296
       },

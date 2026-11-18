@@ -135,7 +135,16 @@ function keyList(name: string, keys: readonly string[]): string[] {
   if (!Array.isArray(keys) || keys.length === 0) {
     throw new TypeError(`${name} must list at least one public key`);
   }
-  return keys.map((k, i) => nonEmpty(`${name}[${i}]`, k));
+  return keys.map((k, i) => {
+    const key = nonEmpty(`${name}[${i}]`, k);
+    // The platform trims an added member key before it rebuilds the intent it
+    // verifies, so a key signed with surrounding whitespace can never verify.
+    // Refuse it rather than guess which form the caller meant to sign.
+    if (key.trim() !== key) {
+      throw new TypeError(`${name}[${i}] has leading or trailing whitespace; trim it first`);
+    }
+    return key;
+  });
 }
 
 function version(v: number): number {

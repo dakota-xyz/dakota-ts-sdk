@@ -40,3 +40,17 @@ describe('governance encoding helpers', () => {
     expect([...toBytes(backing.buffer)]).toEqual([9, 7, 2, 3, 9]);
   });
 });
+
+describe('base64 padding removal', () => {
+  it('stays linear on a long run of "=" that is not at the end', () => {
+    const hostile = '='.repeat(200_000) + 'A';
+    const started = Date.now();
+    expect(() => base64ToBytes(hostile)).toThrow(/base64/);
+    expect(Date.now() - started).toBeLessThan(500);
+  });
+
+  it('still strips real padding', () => {
+    expect(Array.from(base64ToBytes('AQ=='))).toEqual([1]);
+    expect(Array.from(base64ToBytes('AQI='))).toEqual([1, 2]);
+  });
+});

@@ -266,3 +266,15 @@ describe('ES256 signers', () => {
     await expect(signGovernanceIntent(intent, [() => ''])).rejects.toThrow(/empty signature/);
   });
 });
+
+describe('challenge sources', () => {
+  it('buildChallenge takes anything carrying canonical, and refuses other objects', () => {
+    const want = Buffer.from(intent.canonical);
+    expect(Buffer.from(buildChallenge({ canonical: intent.canonical })).equals(want)).toBe(true);
+    expect(() => buildChallenge({} as unknown as string)).toThrow(TypeError);
+  });
+
+  it('assertionChallengeMatches refuses an oversized assertion without decoding it', () => {
+    expect(assertionChallengeMatches('A'.repeat(64 * 1024 + 1), intent)).toBe(false);
+  });
+});

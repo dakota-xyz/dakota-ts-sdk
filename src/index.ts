@@ -143,6 +143,7 @@ export {
   type AddSignersToGroupIntent,
   type AssertionCredential,
   type BinaryOrBase64,
+  type ChallengeSource,
   type CanonicalIntent,
   type CreateCryptoDestinationIntent,
   type GovernanceIntent,

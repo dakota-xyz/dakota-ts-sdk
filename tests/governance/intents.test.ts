@@ -172,3 +172,20 @@ describe('governance intent rules', () => {
     });
   });
 });
+
+describe('member keys with surrounding whitespace', () => {
+  const base = {
+    signerGroupId: 'grp',
+    signerGroupVersion: 0,
+    idempotencyKey: '047caa77-8cec-4e96-994c-a12b655231de',
+  };
+
+  it('are refused, since the platform trims an added key before it verifies', () => {
+    expect(() => addSignersToGroupIntent({ ...base, newMemberKeys: ['key\n'] })).toThrow(
+      /newMemberKeys\[0\] has leading or trailing whitespace/
+    );
+    expect(() =>
+      removeSignersFromGroupIntent({ ...base, membersToRemove: ['ok', ' key'] })
+    ).toThrow(/membersToRemove\[1\] has leading or trailing whitespace/);
+  });
+});
