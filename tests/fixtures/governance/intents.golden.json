@@ -1,0 +1,152 @@
+{
+  "source": "policy-engine pkg/intent.CanonicalIntentBytes (generator: ENG-6468)",
+  "vectors": [
+    {
+      "name": "add one key at version 0",
+      "kind": "add_signers_to_group",
+      "input": {
+        "idempotency_key": "047caa77-8cec-4e96-994c-a12b655231de",
+        "new_member_keys": [
+          "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEMbuCXgirK7R0SD7rp7e/YLTYbw0ceCI/WA31TtTcZ//y3CNkqgXkKdwHBa3N4S5BI+8pSx1NLYnyfihfmELCgw=="
+        ],
+        "signer_group_id": "3MF5pRlAIRFYkOAd3TstqUKMOpp",
+        "signer_group_version": 0
+      },
+      "canonical_b64": "eyJpZGVtcG90ZW5jeV9rZXkiOiIwNDdjYWE3Ny04Y2VjLTRlOTYtOTk0Yy1hMTJiNjU1MjMxZGUiLCJuZXdfbWVtYmVyX2tleXMiOlsiTUZrd0V3WUhLb1pJemowQ0FRWUlLb1pJemowREFRY0RRZ0FFTWJ1Q1hnaXJLN1IwU0Q3cnA3ZS9ZTFRZYncwY2VDSS9XQTMxVHRUY1ovL3kzQ05rcWdYa0tkd0hCYTNONFM1QkkrOHBTeDFOTFlueWZpaGZtRUxDZ3c9PSJdLCJzaWduZXJfZ3JvdXBfaWQiOiIzTUY1cFJsQUlSRllrT0FkM1RzdHFVS01PcHAiLCJzaWduZXJfZ3JvdXBfdmVyc2lvbiI6MCwidHlwZSI6ImFkZF9zaWduZXJzX3RvX2dyb3VwIn0=",
+      "sha256_hex": "ed7d5c6bf80a621e2be2b2b2a8daf503fe2fe96c340343b13f9b1ebcdab0caf3"
+    },
+    {
+      "name": "add two keys keeps order",
+      "kind": "add_signers_to_group",
+      "input": {
+        "idempotency_key": "047caa77-8cec-4e96-994c-a12b655231de",
+        "new_member_keys": [
+          "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEyrrHNsQMwUxGIWthOdpPCAwR",
+          "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEMbuCXgirK7R0SD7rp7e/YLTYbw0ceCI/WA31TtTcZ//y3CNkqgXkKdwHBa3N4S5BI+8pSx1NLYnyfihfmELCgw=="
+        ],
+        "signer_group_id": "3MF5pRlAIRFYkOAd3TstqUKMOpp",
+        "signer_group_version": 7
+      },
+      "canonical_b64": "eyJpZGVtcG90ZW5jeV9rZXkiOiIwNDdjYWE3Ny04Y2VjLTRlOTYtOTk0Yy1hMTJiNjU1MjMxZGUiLCJuZXdfbWVtYmVyX2tleXMiOlsiTUZrd0V3WUhLb1pJemowQ0FRWUlLb1pJemowREFRY0RRZ0FFeXJySE5zUU13VXhHSVd0aE9kcFBDQXdSIiwiTUZrd0V3WUhLb1pJemowQ0FRWUlLb1pJemowREFRY0RRZ0FFTWJ1Q1hnaXJLN1IwU0Q3cnA3ZS9ZTFRZYncwY2VDSS9XQTMxVHRUY1ovL3kzQ05rcWdYa0tkd0hCYTNONFM1QkkrOHBTeDFOTFlueWZpaGZtRUxDZ3c9PSJdLCJzaWduZXJfZ3JvdXBfaWQiOiIzTUY1cFJsQUlSRllrT0FkM1RzdHFVS01PcHAiLCJzaWduZXJfZ3JvdXBfdmVyc2lvbiI6NywidHlwZSI6ImFkZF9zaWduZXJzX3RvX2dyb3VwIn0=",
+      "sha256_hex": "dbdfbabfade29bbcc75c1dd6f5bfde02de185c1f983012301d05a435dbe4f9db"
+    },
+    {
+      "name": "add with HTML and non-ASCII characters",
+      "kind": "add_signers_to_group",
+      "input": {
+        "idempotency_key": "047caa77-8cec-4e96-994c-a12b655231de",
+        "new_member_keys": [
+          "k\"\\/"
+        ],
+        "signer_group_id": "g<1>&é\u2028",
+        "signer_group_version": 4294967296
+      },
+      "canonical_b64": "eyJpZGVtcG90ZW5jeV9rZXkiOiIwNDdjYWE3Ny04Y2VjLTRlOTYtOTk0Yy1hMTJiNjU1MjMxZGUiLCJuZXdfbWVtYmVyX2tleXMiOlsia1wiXFwvIl0sInNpZ25lcl9ncm91cF9pZCI6Imc8MT4mw6nigKgiLCJzaWduZXJfZ3JvdXBfdmVyc2lvbiI6NDI5NDk2NzI5NiwidHlwZSI6ImFkZF9zaWduZXJzX3RvX2dyb3VwIn0=",
+      "sha256_hex": "0d8fafce5c7bb270594421a220f4291193e39946dffcc01c84aac3870feed3d3"
+    },
+    {
+      "name": "remove one key at version 0",
+      "kind": "remove_signers_from_group",
+      "input": {
+        "group_id": "3MF5pRlAIRFYkOAd3TstqUKMOpp",
+        "idempotency_key": "047caa77-8cec-4e96-994c-a12b655231de",
+        "members_to_remove": [
+          "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEMbuCXgirK7R0SD7rp7e/YLTYbw0ceCI/WA31TtTcZ//y3CNkqgXkKdwHBa3N4S5BI+8pSx1NLYnyfihfmELCgw=="
+        ],
+        "signer_group_version": 0
+      },
+      "canonical_b64": "eyJncm91cF9pZCI6IjNNRjVwUmxBSVJGWWtPQWQzVHN0cVVLTU9wcCIsImlkZW1wb3RlbmN5X2tleSI6IjA0N2NhYTc3LThjZWMtNGU5Ni05OTRjLWExMmI2NTUyMzFkZSIsIm1lbWJlcnNfdG9fcmVtb3ZlIjpbIk1Ga3dFd1lIS29aSXpqMENBUVlJS29aSXpqMERBUWNEUWdBRU1idUNYZ2lySzdSMFNEN3JwN2UvWUxUWWJ3MGNlQ0kvV0EzMVR0VGNaLy95M0NOa3FnWGtLZHdIQmEzTjRTNUJJKzhwU3gxTkxZbnlmaWhmbUVMQ2d3PT0iXSwic2lnbmVyX2dyb3VwX3ZlcnNpb24iOjAsInR5cGUiOiJyZW1vdmVfc2lnbmVyc19mcm9tX2dyb3VwIn0=",
+      "sha256_hex": "989523f4d1d89bd0491683a457c9bb4800a3608ca34624983eb33938a22c76f0"
+    },
+    {
+      "name": "remove keeps the order sent",
+      "kind": "remove_signers_from_group",
+      "input": {
+        "group_id": "3MF5pRlAIRFYkOAd3TstqUKMOpp",
+        "idempotency_key": "047caa77-8cec-4e96-994c-a12b655231de",
+        "members_to_remove": [
+          "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEyrrHNsQMwUxGIWthOdpPCAwR",
+          "pQECAyYgASFYIONPBSOpT1b1GhA42/UncK14mua0wlAqa3rifDVE+dNIIlggkoBPQr6PDtfwTEhVgmvlrYauaafB3MLQ3AIGo7OEvYo=",
+          "MFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEMbuCXgirK7R0SD7rp7e/YLTYbw0ceCI/WA31TtTcZ//y3CNkqgXkKdwHBa3N4S5BI+8pSx1NLYnyfihfmELCgw=="
+        ],
+        "signer_group_version": 3
+      },
+      "canonical_b64": "eyJncm91cF9pZCI6IjNNRjVwUmxBSVJGWWtPQWQzVHN0cVVLTU9wcCIsImlkZW1wb3RlbmN5X2tleSI6IjA0N2NhYTc3LThjZWMtNGU5Ni05OTRjLWExMmI2NTUyMzFkZSIsIm1lbWJlcnNfdG9fcmVtb3ZlIjpbIk1Ga3dFd1lIS29aSXpqMENBUVlJS29aSXpqMERBUWNEUWdBRXlyckhOc1FNd1V4R0lXdGhPZHBQQ0F3UiIsInBRRUNBeVlnQVNGWUlPTlBCU09wVDFiMUdoQTQyL1VuY0sxNG11YTB3bEFxYTNyaWZEVkUrZE5JSWxnZ2tvQlBRcjZQRHRmd1RFaFZnbXZscllhdWFhZkIzTUxRM0FJR283T0V2WW89IiwiTUZrd0V3WUhLb1pJemowQ0FRWUlLb1pJemowREFRY0RRZ0FFTWJ1Q1hnaXJLN1IwU0Q3cnA3ZS9ZTFRZYncwY2VDSS9XQTMxVHRUY1ovL3kzQ05rcWdYa0tkd0hCYTNONFM1QkkrOHBTeDFOTFlueWZpaGZtRUxDZ3c9PSJdLCJzaWduZXJfZ3JvdXBfdmVyc2lvbiI6MywidHlwZSI6InJlbW92ZV9zaWduZXJzX2Zyb21fZ3JvdXAifQ==",
+      "sha256_hex": "62a70e226dc75361437236117038589d95728de0e87edd37b600af65136eecd0"
+    },
+    {
+      "name": "governance clears both settings",
+      "kind": "update_signer_group_governance",
+      "input": {
+        "idempotency_key": "047caa77-8cec-4e96-994c-a12b655231de",
+        "signer_group_id": "3MF5pRlAIRFYkOAd3TstqUKMOpp",
+        "signer_group_version": 0
+      },
+      "canonical_b64": "eyJpZGVtcG90ZW5jeV9rZXkiOiIwNDdjYWE3Ny04Y2VjLTRlOTYtOTk0Yy1hMTJiNjU1MjMxZGUiLCJzaWduZXJfZ3JvdXBfaWQiOiIzTUY1cFJsQUlSRllrT0FkM1RzdHFVS01PcHAiLCJzaWduZXJfZ3JvdXBfdmVyc2lvbiI6MCwidHlwZSI6InVwZGF0ZV9zaWduZXJfZ3JvdXBfZ292ZXJuYW5jZSJ9",
+      "sha256_hex": "00334aebaaea99bf4a2e507e8ab9958e970d08ada7ae7695ebc4830deaf3eab2"
+    },
+    {
+      "name": "governance threshold only",
+      "kind": "update_signer_group_governance",
+      "input": {
+        "governance_threshold": 2,
+        "idempotency_key": "047caa77-8cec-4e96-994c-a12b655231de",
+        "signer_group_id": "3MF5pRlAIRFYkOAd3TstqUKMOpp",
+        "signer_group_version": 3
+      },
+      "canonical_b64": "eyJnb3Zlcm5hbmNlX3RocmVzaG9sZCI6MiwiaWRlbXBvdGVuY3lfa2V5IjoiMDQ3Y2FhNzctOGNlYy00ZTk2LTk5NGMtYTEyYjY1NTIzMWRlIiwic2lnbmVyX2dyb3VwX2lkIjoiM01GNXBSbEFJUkZZa09BZDNUc3RxVUtNT3BwIiwic2lnbmVyX2dyb3VwX3ZlcnNpb24iOjMsInR5cGUiOiJ1cGRhdGVfc2lnbmVyX2dyb3VwX2dvdmVybmFuY2UifQ==",
+      "sha256_hex": "92fbdcad446be21e0ae7e2de6c9b073425bda23fb6603ee5334a16ddb4f99863"
+    },
+    {
+      "name": "governance governing group only",
+      "kind": "update_signer_group_governance",
+      "input": {
+        "governance_signer_group_id": "3MF5pokUeizBfGkQF0N4qhUgRve",
+        "idempotency_key": "047caa77-8cec-4e96-994c-a12b655231de",
+        "signer_group_id": "3MF5pRlAIRFYkOAd3TstqUKMOpp",
+        "signer_group_version": 5
+      },
+      "canonical_b64": "eyJnb3Zlcm5hbmNlX3NpZ25lcl9ncm91cF9pZCI6IjNNRjVwb2tVZWl6QmZHa1FGME40cWhVZ1J2ZSIsImlkZW1wb3RlbmN5X2tleSI6IjA0N2NhYTc3LThjZWMtNGU5Ni05OTRjLWExMmI2NTUyMzFkZSIsInNpZ25lcl9ncm91cF9pZCI6IjNNRjVwUmxBSVJGWWtPQWQzVHN0cVVLTU9wcCIsInNpZ25lcl9ncm91cF92ZXJzaW9uIjo1LCJ0eXBlIjoidXBkYXRlX3NpZ25lcl9ncm91cF9nb3Zlcm5hbmNlIn0=",
+      "sha256_hex": "5dbdf18468918091637e8b096028c8714ae077c6679777299499412ac8683b85"
+    },
+    {
+      "name": "governance both settings",
+      "kind": "update_signer_group_governance",
+      "input": {
+        "governance_signer_group_id": "3MF5pokUeizBfGkQF0N4qhUgRve",
+        "governance_threshold": 3,
+        "idempotency_key": "047caa77-8cec-4e96-994c-a12b655231de",
+        "signer_group_id": "3MF5pRlAIRFYkOAd3TstqUKMOpp",
+        "signer_group_version": 12
+      },
+      "canonical_b64": "eyJnb3Zlcm5hbmNlX3NpZ25lcl9ncm91cF9pZCI6IjNNRjVwb2tVZWl6QmZHa1FGME40cWhVZ1J2ZSIsImdvdmVybmFuY2VfdGhyZXNob2xkIjozLCJpZGVtcG90ZW5jeV9rZXkiOiIwNDdjYWE3Ny04Y2VjLTRlOTYtOTk0Yy1hMTJiNjU1MjMxZGUiLCJzaWduZXJfZ3JvdXBfaWQiOiIzTUY1cFJsQUlSRllrT0FkM1RzdHFVS01PcHAiLCJzaWduZXJfZ3JvdXBfdmVyc2lvbiI6MTIsInR5cGUiOiJ1cGRhdGVfc2lnbmVyX2dyb3VwX2dvdmVybmFuY2UifQ==",
+      "sha256_hex": "4c015d8608da417b8a1590cc3574b4e0b183213c199912c0918225be46c1b9aa"
+    },
+    {
+      "name": "crypto destination on an EVM network",
+      "kind": "create_crypto_destination",
+      "input": {
+        "address": "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb1",
+        "idempotency_key": "047caa77-8cec-4e96-994c-a12b655231de",
+        "network_id": "ethereum-sepolia",
+        "recipient_id": "3MF9wAqM2HQHe7eiQ1OU1ovUuWt",
+        "signer_group_id": "3MF5pRlAIRFYkOAd3TstqUKMOpp"
+      },
+      "canonical_b64": "eyJhZGRyZXNzIjoiMHg3NDJkMzVDYzY2MzRDMDUzMjkyNWEzYjg0NEJjOWU3NTk1ZjBiRWIxIiwiaWRlbXBvdGVuY3lfa2V5IjoiMDQ3Y2FhNzctOGNlYy00ZTk2LTk5NGMtYTEyYjY1NTIzMWRlIiwibmV0d29ya19pZCI6ImV0aGVyZXVtLXNlcG9saWEiLCJyZWNpcGllbnRfaWQiOiIzTUY5d0FxTTJIUUhlN2VpUTFPVTFvdlV1V3QiLCJzaWduZXJfZ3JvdXBfaWQiOiIzTUY1cFJsQUlSRllrT0FkM1RzdHFVS01PcHAiLCJ0eXBlIjoiY3JlYXRlX2NyeXB0b19kZXN0aW5hdGlvbiJ9",
+      "sha256_hex": "332d3c58ab37641b9c634f47dd6e24b67ecb94c2e269c060db867d6dab02e63b"
+    },
+    {
+      "name": "crypto destination on Solana",
+      "kind": "create_crypto_destination",
+      "input": {
+        "address": "7EcDhSYGxXyscszYEp35KHN8vvw3svAuLKTzXwCFLtV",
+        "idempotency_key": "047caa77-8cec-4e96-994c-a12b655231de",
+        "network_id": "solana-devnet",
+        "recipient_id": "3MF9wAqM2HQHe7eiQ1OU1ovUuWt",
+        "signer_group_id": "3MF5pRlAIRFYkOAd3TstqUKMOpp"
+      },
+      "canonical_b64": "eyJhZGRyZXNzIjoiN0VjRGhTWUd4WHlzY3N6WUVwMzVLSE44dnZ3M3N2QXVMS1R6WHdDRkx0ViIsImlkZW1wb3RlbmN5X2tleSI6IjA0N2NhYTc3LThjZWMtNGU5Ni05OTRjLWExMmI2NTUyMzFkZSIsIm5ldHdvcmtfaWQiOiJzb2xhbmEtZGV2bmV0IiwicmVjaXBpZW50X2lkIjoiM01GOXdBcU0ySFFIZTdlaVExT1Uxb3ZVdVd0Iiwic2lnbmVyX2dyb3VwX2lkIjoiM01GNXBSbEFJUkZZa09BZDNUc3RxVUtNT3BwIiwidHlwZSI6ImNyZWF0ZV9jcnlwdG9fZGVzdGluYXRpb24ifQ==",
+      "sha256_hex": "1d166b69d130f97ea17302131e5b19ddf45b05384f803883d44a80dd041b7c59"
+    }
+  ]
+}

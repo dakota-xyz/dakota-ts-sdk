@@ -39,7 +39,16 @@ export {
 } from './client/config.js';
 
 // Errors
-export { APIError, TransportError, ConfigurationError } from './client/errors.js';
+export {
+  APIError,
+  TransportError,
+  ConfigurationError,
+  EndorsementRequiredError,
+  InsufficientEndorsementsError,
+  StaleSignerGroupVersionError,
+  BelowThresholdError,
+  InvalidGoverningGroupError,
+} from './client/errors.js';
 
 // Pagination
 export {
@@ -111,3 +120,36 @@ export {
   verifyMandateSignature,
   canonicalJSON,
 } from './agentic/index.js';
+
+// ES256 signing (Node), shared by governance and mandates.
+export { ES256Signer, verifyES256Signature } from './signing/es256.js';
+
+// Signer-group governance: canonical intents, passkey (WebAuthn) packaging,
+// ES256 signers. Also published on its own, browser-safe, as
+// `@dakota-xyz/ts-sdk/governance`.
+export {
+  addSignersToGroupIntent,
+  assertIdempotencyKey,
+  createCryptoDestinationIntent,
+  newIdempotencyKey,
+  removeSignersFromGroupIntent,
+  updateSignerGroupGovernanceIntent,
+  assertionChallengeMatches,
+  buildChallenge,
+  packAssertion,
+  webauthnSigner,
+  signGovernanceIntent,
+  webCryptoES256Signer,
+  type AddSignersToGroupIntent,
+  type AssertionCredential,
+  type BinaryOrBase64,
+  type ChallengeSource,
+  type CanonicalIntent,
+  type CreateCryptoDestinationIntent,
+  type GovernanceIntent,
+  type GovernanceSigner,
+  type GovernanceSignerLike,
+  type RemoveSignersFromGroupIntent,
+  type SubtleCryptoLike,
+  type UpdateSignerGroupGovernanceIntent,
+} from './governance/index.js';

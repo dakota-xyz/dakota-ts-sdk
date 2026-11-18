@@ -130,7 +130,17 @@ export class APIError extends Error {
       // Failed to parse JSON, use defaults
     }
 
-    return new APIError(response.status, code, message, {
+    // A body not shaped like the platform's (numeric code, a code named like
+    // an Object.prototype member) must still become a plain APIError.
+    if (typeof code !== 'string') {
+      code = `http_${response.status}`;
+    }
+    const governanceCode = code.replace(/-/g, '_');
+    const Typed = GOVERNANCE_ERRORS.get(governanceCode);
+    if (Typed) {
+      code = governanceCode;
+    }
+    return new (Typed ?? APIError)(response.status, code, message, {
       details,
       requestId,
       rawBody,
@@ -146,6 +156,94 @@ export class APIError extends Error {
     return `APIError [${this.statusCode}]: ${this.message}`;
   }
 }
+
+// ============================================================================
+// Signer-group governance refusals
+// ============================================================================
+//
+// Each is an APIError (so existing `instanceof APIError` handling still
+// catches it) with a class of its own, so a caller can react to the one
+// governance refusal it can act on without matching strings.
+
+type APIErrorOptions = ConstructorParameters<typeof APIError>[3];
+
+/**
+ * `endorsement_required` (400): the signer-group change needs signatures from
+ * the group's governing members — the client has governance enforcement on,
+ * or the group has governance settings. Send it signed: use
+ * `signerGroups.addSignerSigned` / `removeSignersSigned` /
+ * `updateGovernanceSigned`, or the `prepare*` + `submitSignedChange` pair.
+ */
+export class EndorsementRequiredError extends APIError {
+  constructor(statusCode: number, code: string, message: string, options?: APIErrorOptions) {
+    super(statusCode, code, message, options);
+    this.name = 'EndorsementRequiredError';
+  }
+}
+
+/**
+ * `insufficient_endorsements` (403): the signatures do not meet the group's
+ * governance quorum (`effective_governance_threshold` distinct governing
+ * members). Collect more signatures over the SAME intent and resend.
+ */
+export class InsufficientEndorsementsError extends APIError {
+  /** Signatures the platform counted, when it said so. */
+  readonly have: number | null;
+  /** Signatures the quorum needs, when it said so. */
+  readonly need: number | null;
+
+  constructor(statusCode: number, code: string, message: string, options?: APIErrorOptions) {
+    super(statusCode, code, message, options);
+    this.name = 'InsufficientEndorsementsError';
+    const m = /have (\d+), need (\d+)/.exec(message);
+    this.have = m ? Number(m[1]) : null;
+    this.need = m ? Number(m[2]) : null;
+  }
+}
+
+/**
+ * `stale_signer_group_version` (409): the group changed after the signatures
+ * were made, so they can never verify. Read the group's `version`, build a
+ * new intent under a new idempotency key, and sign again (or pass
+ * `staleRetries` to the one-call helpers to do that automatically).
+ */
+export class StaleSignerGroupVersionError extends APIError {
+  constructor(statusCode: number, code: string, message: string, options?: APIErrorOptions) {
+    super(statusCode, code, message, options);
+    this.name = 'StaleSignerGroupVersionError';
+  }
+}
+
+/**
+ * `below_threshold` (422): the removal would leave the group below a
+ * threshold it must keep (at least one member, its governance quorum, or a
+ * governed group's threshold). Add members first or remove fewer.
+ */
+export class BelowThresholdError extends APIError {
+  constructor(statusCode: number, code: string, message: string, options?: APIErrorOptions) {
+    super(statusCode, code, message, options);
+    this.name = 'BelowThresholdError';
+  }
+}
+
+/**
+ * `invalid_governing_group` (409): the group's governing signer group is
+ * missing or no longer valid, so no signature can satisfy its governance.
+ */
+export class InvalidGoverningGroupError extends APIError {
+  constructor(statusCode: number, code: string, message: string, options?: APIErrorOptions) {
+    super(statusCode, code, message, options);
+    this.name = 'InvalidGoverningGroupError';
+  }
+}
+
+const GOVERNANCE_ERRORS = new Map<string, typeof APIError>([
+  ['endorsement_required', EndorsementRequiredError],
+  ['insufficient_endorsements', InsufficientEndorsementsError],
+  ['stale_signer_group_version', StaleSignerGroupVersionError],
+  ['below_threshold', BelowThresholdError],
+  ['invalid_governing_group', InvalidGoverningGroupError],
+]);
 
 /**
  * Represents a transport-level error (network, timeout, etc.).

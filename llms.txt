@@ -44,7 +44,7 @@ const customer = await client.customers.create({
 | `client.events` | Event history |
 | `client.applications` | KYB applications |
 | `client.policies` | Transaction policies |
-| `client.signerGroups` | Multi-sig signer groups |
+| `client.signerGroups` | Multi-sig signer groups; signed member/governance changes (`addSignerSigned`, `removeSignersSigned`, `updateGovernanceSigned`, `prepare*` + `submitSignedChange`) |
 | `client.signers` | Individual signers |
 | `client.apiKeys` | API key management |
 | `client.users` | User management |
@@ -108,6 +108,12 @@ try {
   }
 }
 ```
+
+Signer-group governance refusals are `APIError` subclasses:
+`EndorsementRequiredError`, `InsufficientEndorsementsError`,
+`StaleSignerGroupVersionError`, `BelowThresholdError`,
+`InvalidGoverningGroupError`. Passkey helpers (`buildChallenge`,
+`packAssertion`) live in the browser-safe `@dakota-xyz/ts-sdk/governance`.
 
 ## Environments
 
