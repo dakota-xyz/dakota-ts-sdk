@@ -4,6 +4,8 @@ All notable changes to the Dakota TypeScript SDK are documented in this file.
 
 ## [Unreleased]
 
+## [3.4.0] - 2026-11-18
+
 ### Signed signer-group governance changes, ES256 and passkey (ENG-6468)
 
 Signer-group member changes need signatures from the group's governing
