@@ -528,6 +528,34 @@ describe('review round 1 hardening', () => {
     expect(requests[0]?.path).toBe(`/signer-groups/${encodeURIComponent(hostileId)}/signers`);
   });
 
+  it('refuses dot-segment and empty ids before any request', async () => {
+    const { fetch, requests } = createRoutedFetch({}, () => ({ status: 200, body: group(1) }));
+    const client = makeClient(fetch);
+    for (const id of ['..', '.', '']) {
+      const built = addSignersToGroupIntent({
+        signerGroupId: id || 'x',
+        newMemberKeys: [KEY_X],
+        signerGroupVersion: 0,
+        idempotencyKey: key,
+      });
+      await expect(
+        client.signerGroups.submitSignedChange(
+          {
+            kind: 'add_signers_to_group',
+            signerGroupId: id,
+            signerGroupVersion: 0,
+            idempotencyKey: key,
+            memberKeys: [KEY_X],
+            canonical: built.canonical,
+          },
+          ['sig']
+        )
+      ).rejects.toThrow(TypeError);
+      await expect(client.signerGroups.get(id)).rejects.toThrow(/invalid id/);
+    }
+    expect(requests).toHaveLength(0);
+  });
+
   it('assertionChallengeMatches accepts a prepared change, as the README passes it', async () => {
     const { fetch } = createRoutedFetch({});
     const client = makeClient(fetch);

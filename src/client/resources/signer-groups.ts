@@ -551,8 +551,13 @@ export class SignerGroupsResource extends BaseResource {
  * One id as a URL path segment. Ids are plain tokens today; encoding keeps a
  * value from elsewhere (a prepared change that went through a browser, say)
  * from reaching a different route with this client's API key.
+ * `encodeURIComponent` leaves `.` and `..` alone, and URL parsing resolves
+ * them as dot segments, so those (and an empty id) are refused outright.
  */
 function seg(id: string): string {
+  if (typeof id !== 'string' || id === '' || id === '.' || id === '..') {
+    throw new TypeError(`invalid id for a request path: ${JSON.stringify(id)}`);
+  }
   return encodeURIComponent(id);
 }
 
