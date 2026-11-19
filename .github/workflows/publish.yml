@@ -1,8 +1,32 @@
 name: Publish Package
 
+# Publishing a GitHub release (tag vX.Y.Z on main) STAGES that version on
+# npm. Nothing is public until an npm maintainer of @dakota-xyz/ts-sdk
+# approves it with 2FA: npmjs.com > the package > Staged Packages, or
+# `npm stage list @dakota-xyz/ts-sdk` then `npm stage approve <stage-id>`.
+#
+# A plain `npm publish` from here is refused with E403 E_STAGE_REQUIRED (the
+# token can only stage), which is why 3.2.0 and 3.3.0 never published from
+# CI. See "Release Process" in CONTRIBUTING.md.
+#
+# A release run uses this file as it is at the tagged commit. To stage a tag
+# again with the current file (a rejected or expired stage, or a fixed
+# secret), run this workflow by hand from main with that tag.
+
 on:
   release:
-    types: [created]
+    # Not `created`: GitHub fires no `created` event for a release that was
+    # saved as a draft first. `published` fires for both paths.
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to stage, for example v3.4.0'
+        required: true
+
+concurrency:
+  group: publish
+  cancel-in-progress: false
 
 jobs:
   publish:
@@ -10,25 +34,77 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
+          fetch-depth: 0
 
+      # `npm stage` needs npm 11.15+ and Node 22.14+. Node 22 ships npm 10.
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           registry-url: 'https://registry.npmjs.org'
+
+      - name: Install npm 11
+        run: npm install -g npm@^11.15.0
+
+      - name: Check the tag, the branch and the registry
+        run: |
+          version=$(node -p "require('./package.json').version")
+          if [ "$TAG" != "v$version" ]; then
+            echo "::error::Tag $TAG does not match package.json version $version. Tag v$version instead."
+            exit 1
+          fi
+          if ! git merge-base --is-ancestor HEAD origin/main; then
+            echo "::error::$TAG is not on main. Cut releases from main only."
+            exit 1
+          fi
+          if [ -n "$(npm view "@dakota-xyz/ts-sdk@$version" version 2>/dev/null)" ]; then
+            echo "::error::@dakota-xyz/ts-sdk@$version is already on npm. Bump the version for a new release."
+            exit 1
+          fi
+          case "$version" in
+            *-*) echo "DIST_TAG=next" >> "$GITHUB_ENV" ;;
+            *) echo "DIST_TAG=latest" >> "$GITHUB_ENV" ;;
+          esac
+          echo "VERSION=$version" >> "$GITHUB_ENV"
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Run tests
-        run: npm test
+      - name: Lint
+        run: npm run lint
+
+      - name: Type check
+        run: npm run typecheck
+
+      - name: Test
+        run: npm run test:ci
 
       - name: Build
         run: npm run build
 
-      - name: Publish to npm
-        run: npm publish --provenance --access public
+      # npm tries a trusted-publisher (OIDC) token first and falls back to
+      # NPM_TOKEN, so this step keeps working when the package moves to
+      # trusted publishing and the secret is deleted.
+      - name: Stage on npm
+        run: npm stage publish --provenance --access public --tag "$DIST_TAG"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Ask for approval
+        run: |
+          {
+            echo "### @dakota-xyz/ts-sdk@$VERSION is staged, not yet public"
+            echo
+            echo "An npm maintainer of the package must approve it with 2FA:"
+            echo
+            echo "- npmjs.com: open @dakota-xyz/ts-sdk, then the Staged Packages tab, then Approve."
+            echo "- CLI (npm 11.15+): \`npm stage list @dakota-xyz/ts-sdk\`, then \`npm stage approve <stage-id>\`."
+            echo
+            echo "It installs as \`$DIST_TAG\` once approved."
+          } >> "$GITHUB_STEP_SUMMARY"
