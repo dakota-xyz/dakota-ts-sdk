@@ -179,11 +179,61 @@ test(transactions): add coverage for pagination
 
 ## Release Process
 
-Releases are managed by maintainers. Version bumps follow [Semantic Versioning](https://semver.org/):
+Version bumps follow [Semantic Versioning](https://semver.org/):
 
 - **MAJOR**: Breaking changes
 - **MINOR**: New features (backwards compatible)
 - **PATCH**: Bug fixes (backwards compatible)
+
+Anyone with write access to this repository can cut a release. Only the
+last step needs an npm maintainer of the package
+(`npm owner ls @dakota-xyz/ts-sdk`).
+
+1. **Open a release PR.** Run `npm version X.Y.Z --no-git-tag-version`
+   (it bumps `package.json` and `package-lock.json`), and date the
+   `[Unreleased]` section of `CHANGELOG.md` as `[X.Y.Z] - YYYY-MM-DD`.
+   Merge it. Merging to `main` runs CI only. It publishes nothing.
+2. **Publish a GitHub release** from `main`, with the tag `vX.Y.Z` (the exact
+   `package.json` version):
+
+   ```bash
+   gh release create vX.Y.Z --target main --title "vX.Y.Z: <summary>" --notes-file notes.md
+   ```
+
+   A draft release does nothing until you publish it.
+3. **CI stages the version on npm.** The *Publish Package* workflow checks
+   that the tag matches `package.json`, is on `main` and is not on npm yet.
+   Then it lints, type checks, tests, builds and runs `npm stage publish`.
+   A staged version is not public.
+4. **An npm maintainer approves it with 2FA.** On npmjs.com, open
+   `@dakota-xyz/ts-sdk`, then the *Staged Packages* tab, then *Approve*. Or,
+   with npm 11.15 or later:
+
+   ```bash
+   npm stage list @dakota-xyz/ts-sdk
+   ```
+
+   ```bash
+   npm stage approve <stage-id>
+   ```
+
+5. **Check** that `npm view @dakota-xyz/ts-sdk dist-tags` shows the new
+   version as `latest`. A version with a pre-release suffix (`3.5.0-beta.1`)
+   goes to `next` instead.
+
+Do not change the workflow back to `npm publish`. The npm token can only
+stage, so npm refuses a direct publish with `E403 E_STAGE_REQUIRED`. That is
+why 3.2.0 and 3.3.0 failed in CI.
+
+**If staging fails**, fix the cause and stage the tag again from `main`:
+
+```bash
+gh workflow run publish.yml --ref main -f tag=vX.Y.Z
+```
+
+Do not use *Re-run* on the failed release run for a workflow fix. A release
+run uses `publish.yml` as it is at the tagged commit, so a re-run does not
+see changes merged after the tag. (A re-run does see a changed secret.)
 
 ## Questions?
 
