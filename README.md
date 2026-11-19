@@ -300,10 +300,22 @@ WebCrypto key, use `webCryptoES256Signer(cryptoKey)`.
 | Error | Meaning | What to do |
 |---|---|---|
 | `EndorsementRequiredError` (400) | The change was sent unsigned | Use the signed helpers |
-| `InsufficientEndorsementsError` (403) | Too few governing signatures (`have`, `need`) | Collect more over the same change |
+| `InsufficientEndorsementsError` (403) | Too few governing signatures (`have`, `need`) | Prepare again (a new idempotency key) and collect every signature again |
 | `StaleSignerGroupVersionError` (409) | The group changed after signing | Prepare and sign again (or pass `staleRetries`) |
 | `BelowThresholdError` (422) | The removal would leave the group too small | Add members first, or remove fewer |
 | `InvalidGoverningGroupError` (409) | The governing group is gone or invalid | Fix the group's governance |
+
+The idempotency key is part of what is signed, and the platform remembers the
+outcome per key. So a governance refusal (stale version, too few or bad
+signatures) is final for that intent: prepare and sign again. Resending the
+same key with more signatures is refused as a different request.
+
+If a submit may fail without any response (a timeout or a dropped
+connection), use the `prepare*` + `submitSignedChange` pair and keep the
+prepared change and its signatures: after such a failure, resubmit exactly
+those with `submitSignedChange`. The `*Signed` helpers do not return what
+they signed, so there is nothing to resubmit, and calling one again prepares
+a new intent (under a new key, unless you pass `idempotencyKey`).
 
 To build intents yourself (for example a governed crypto destination), use
 `addSignersToGroupIntent`, `removeSignersFromGroupIntent`,
