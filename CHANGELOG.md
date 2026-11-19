@@ -6,6 +6,10 @@ All notable changes to the Dakota TypeScript SDK are documented in this file.
 
 ## [3.4.0] - 2026-11-18
 
+**Upgrading from 3.2.0:** 3.3.0 was never published to npm, so 3.4.0 is the
+first release after 3.2.0 there. Read the 3.3.0 entry below as well: its API
+key type changes can stop code that compiles against 3.2.0 from compiling.
+
 ### Signed signer-group governance changes, ES256 and passkey (ENG-6468)
 
 Signer-group member changes need signatures from the group's governing

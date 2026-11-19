@@ -308,9 +308,14 @@ WebCrypto key, use `webCryptoES256Signer(cryptoKey)`.
 The idempotency key is part of what is signed, and the platform remembers the
 outcome per key. So a governance refusal (stale version, too few or bad
 signatures) is final for that intent: prepare and sign again. Resending the
-same key with more signatures is refused as a different request. If a submit
-fails without any response, resubmit the same intent and signatures rather
-than calling a `*Signed` helper again (each call mints a new key).
+same key with more signatures is refused as a different request.
+
+If a submit may fail without any response (a timeout or a dropped
+connection), use the `prepare*` + `submitSignedChange` pair and keep the
+prepared change and its signatures: after such a failure, resubmit exactly
+those with `submitSignedChange`. The `*Signed` helpers do not return what
+they signed, so there is nothing to resubmit, and calling one again prepares
+a new intent (under a new key, unless you pass `idempotencyKey`).
 
 To build intents yourself (for example a governed crypto destination), use
 `addSignersToGroupIntent`, `removeSignersFromGroupIntent`,
