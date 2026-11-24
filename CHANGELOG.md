@@ -32,8 +32,10 @@ docs.dakota.xyz ("Verifying a Delivery", "Key Rotation") and the Go SDK.
 - `verifyWebhookSignatures` / `verifyWebhookSignaturesSync`: the same checks
   without the handler. They take raw header values (string, string array or
   unset). The sync variant needs `etc.sha512Sync` set on `@noble/ed25519` and
-  throws a plain `Error` saying so otherwise; a runtime that cannot hash is
-  never reported as a forged webhook. `parsePublicKeys`, `keyId`, and `handler.keyIds()` (key
+  throws a plain `Error` saying so otherwise. A runtime that cannot hash is
+  never reported as a forged webhook: when a check throws, the SDK verifies a
+  known-good signature (platform's golden vector) and rethrows the error if
+  that fails too. `parsePublicKeys`, `keyId`, and `handler.keyIds()` (key
   ids are safe to log).
 - `constructEvent(payload, signature, timestamp, signatures?)`: optional
   fourth argument for the list header.
@@ -47,10 +49,11 @@ docs.dakota.xyz ("Verifying a Delivery", "Key Rotation") and the Go SDK.
   handler is built. The message names the key's position, never its value.
 - If both options are set and only `publicKey` is malformed, it is skipped
   with one warning (without the key value), and the `publicKeys` keys are used.
-- If both are set and `publicKey` is valid but not in `publicKeys`, it is
-  trusted too, with one warning naming its key id, so it is not forgotten
-  when Dakota retires that key. An empty `publicKeys` (an unset variable) next
-  to a valid `publicKey` is allowed; on its own it throws.
+- Once `publicKeys` has a key, `publicKey` is ignored, so removing a retired
+  key from `publicKeys` always stops trusting it. If `publicKey` is valid and
+  not listed in `publicKeys`, the handler warns once, naming its key id only.
+  An empty `publicKeys` (an unset variable) falls back to `publicKey`, with
+  its old contract; on its own it throws.
 - A request with neither signature header fails with
   `Missing x-dakota-webhook-signatures and x-webhook-signature headers`
   (previously `Missing x-webhook-signature header`). A signature that no

@@ -43,7 +43,10 @@ export interface WebhookHandlerConfig extends WebhookHandlerOptions {
    * here; every request fails verification instead, as in earlier versions.
    */
   publicKey: string;
-  /** See {@link MultiKeyWebhookHandlerConfig.publicKeys}. */
+  /**
+   * See {@link MultiKeyWebhookHandlerConfig.publicKeys}. When it has at least
+   * one key, `publicKey` is ignored.
+   */
   publicKeys?: string | readonly string[];
 }
 
@@ -62,9 +65,11 @@ export interface MultiKeyWebhookHandlerConfig extends WebhookHandlerOptions {
    */
   publicKeys: string | readonly string[];
   /**
-   * Optional legacy single key, trusted alongside `publicKeys` (with a
-   * warning, unless it is also listed there). If malformed, it is skipped
-   * with a warning.
+   * Ignored when `publicKeys` has at least one key, so removing a retired key
+   * from `publicKeys` always stops trusting it. If it is set and not listed
+   * in `publicKeys` (or malformed), the handler warns once, naming at most
+   * its key id. Used only when `publicKeys` is empty, for example an unset
+   * environment variable.
    */
   publicKey?: string;
 }
@@ -158,43 +163,29 @@ export class WebhookHandler {
     }
 
     // publicKeys is new: validate it now and throw on a malformed key.
-    const keys = hasList ? parsePublicKeyList([config.publicKeys]) : [];
-    const listed = keys.length;
-
-    // publicKey keeps its old contract: a malformed value never throws here.
+    let keys = hasList ? parsePublicKeyList([config.publicKeys]) : [];
     let keyError: SignatureVerificationError | null = null;
-    if (config.publicKey) {
+
+    if (keys.length > 0) {
+      // publicKeys decides what is trusted. A publicKey next to it is never
+      // added, so removing a retired key from publicKeys always stops
+      // trusting it.
+      if (config.publicKey) {
+        this.warnIgnoredPublicKey(config.publicKey, keys, logger);
+      }
+    } else if (config.publicKey) {
+      // publicKey alone (or next to an empty publicKeys, such as an unset
+      // environment variable) keeps its old contract: a malformed value never
+      // throws here, and every request fails verification instead.
       try {
-        const legacy = parsePublicKey(config.publicKey);
-        const legacyHex = toHex(legacy);
-        if (!keys.some((key) => toHex(key) === legacyHex)) {
-          keys.unshift(legacy);
-          if (hasList) {
-            logger.warn(
-              `Dakota webhook handler: also trusting the publicKey option (key id ${keyId(legacy)}) ` +
-                'alongside publicKeys; move it into publicKeys, and remove it once Dakota retires that key'
-            );
-          }
-        }
+        keys = [parsePublicKey(config.publicKey)];
       } catch (error) {
-        const reason =
+        keyError =
           error instanceof SignatureVerificationError
             ? error
             : new SignatureVerificationError('Invalid public key');
-        if (hasList) {
-          if (listed > 0) {
-            logger.warn(
-              `Dakota webhook handler: ignoring the publicKey option (${reason.message}); ` +
-                `verifying with the ${listed} key(s) in publicKeys`
-            );
-          }
-        } else {
-          keyError = reason;
-        }
       }
-    }
-
-    if (hasList && keys.length === 0) {
+    } else {
       throw new SignatureVerificationError('At least one webhook public key is required');
     }
 
@@ -210,6 +201,36 @@ export class WebhookHandler {
       this.idempotencyStore = config.idempotencyStore;
     } else {
       this.idempotencyStore = new MemoryIdempotencyStore();
+    }
+  }
+
+  /**
+   * Warn, once, that `publicKey` is ignored because `publicKeys` is set,
+   * unless it is also listed there. Never logs a key value: a key id at most.
+   */
+  private warnIgnoredPublicKey(
+    publicKey: string,
+    listed: readonly Uint8Array[],
+    logger: WebhookHandlerLogger
+  ): void {
+    let legacy: Uint8Array;
+    try {
+      legacy = parsePublicKey(publicKey);
+    } catch (error) {
+      const reason =
+        error instanceof SignatureVerificationError ? error.message : 'Invalid public key';
+      logger.warn(
+        `Dakota webhook handler: ignoring the publicKey option (${reason}); ` +
+          `verifying with the ${listed.length} key(s) in publicKeys`
+      );
+      return;
+    }
+    const legacyHex = toHex(legacy);
+    if (!listed.some((key) => toHex(key) === legacyHex)) {
+      logger.warn(
+        `Dakota webhook handler: ignoring the publicKey option (key id ${keyId(legacy)}) ` +
+          'because publicKeys is set; add it to publicKeys if you still trust it'
+      );
     }
   }
 

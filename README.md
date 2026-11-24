@@ -392,8 +392,10 @@ Only trust keys listed on docs.dakota.xyz, and remove a retired key promptly.
 See [Key Rotation](https://docs.dakota.xyz/documentation/webhooks#key-rotation).
 
 **Upgrading from a single `publicKey`:** it still works, but it trusts one key,
-so it breaks at cutover. Move that key into `publicKeys` and drop `publicKey`
-(if you keep both, the handler trusts both and warns). A malformed key in
+so it breaks at cutover. Move that key into `publicKeys` and drop `publicKey`:
+once `publicKeys` has a key, `publicKey` is ignored (with a warning if it is
+not listed there), so removing a retired key from `publicKeys` always stops
+trusting it. A malformed key in
 `publicKeys` throws when the handler is built; a malformed legacy `publicKey`
 still only fails each request, as before.
 

@@ -480,12 +480,54 @@ function planChecks(trusted: TrustedKeys, headers: NormalizedHeaders): Check[] {
 const NO_TRUSTED_KEY = 'Signature verification failed';
 
 /**
- * Errors from @noble/ed25519 that mean the runtime cannot verify at all (no
- * SHA-512), as opposed to a malformed or wrong signature. They are rethrown,
- * so a misconfigured runtime is not mistaken for a forged webhook.
+ * A known-good signature (platform's golden vector,
+ * `internal/security/webhook_signer_rotation_test.go`). When a check throws,
+ * verifying this tells the two causes apart without depending on the
+ * library's error wording: if it verifies, the runtime is fine and the
+ * delivery's signature was malformed (that check fails); if it does not, the
+ * runtime cannot verify at all (for example no SHA-512), and the error is
+ * rethrown, so a misconfigured runtime is never mistaken for a forged webhook.
  */
-function isEnvironmentError(error: unknown): boolean {
-  return error instanceof Error && /sha512|crypto\.subtle/i.test(error.message);
+const SELF_TEST = {
+  publicKey: '79b5562e8fe654f94078b112e8a98ba7901f853ae695bed7e0e3910bad049664',
+  timestamp: '1795430000',
+  body: '{"id":"evt_golden"}',
+  signature:
+    'kIhEmnAagqhecIiFrM89I6C2n8J4m6VS8GI8Rf7R1EROAtsC1clJef+0BE9nTNwzB3OmR8wkVpBqGcEcpXZuAA==',
+};
+
+function selfTestInputs(): [Uint8Array, Uint8Array, Uint8Array] {
+  return [
+    parseSignature(SELF_TEST.signature),
+    buildSignedMessage(SELF_TEST.body, SELF_TEST.timestamp),
+    parsePublicKey(SELF_TEST.publicKey),
+  ];
+}
+
+/** Rethrows `error` unless the runtime verifies the known-good signature. */
+async function assertRuntimeCanVerify(error: unknown): Promise<void> {
+  let ok = false;
+  try {
+    ok = await ed25519.verifyAsync(...selfTestInputs());
+  } catch {
+    ok = false;
+  }
+  if (!ok) {
+    throw error;
+  }
+}
+
+/** Synchronous {@link assertRuntimeCanVerify}. */
+function assertRuntimeCanVerifySync(error: unknown): void {
+  let ok = false;
+  try {
+    ok = ed25519.verify(...selfTestInputs());
+  } catch {
+    ok = false;
+  }
+  if (!ok) {
+    throw error;
+  }
 }
 
 function prepare(
@@ -508,16 +550,19 @@ export async function verifyWithTrustedKeys(
   toleranceSeconds: number
 ): Promise<void> {
   const { checks, message } = prepare(payload, headers, trusted, toleranceSeconds);
+  let runtimeChecked = false;
   for (const { key, signature } of checks) {
     try {
       if (await ed25519.verifyAsync(signature, message, key)) {
         return;
       }
     } catch (error) {
-      if (isEnvironmentError(error)) {
-        throw error;
+      // A malformed signature fails this check; a runtime that cannot verify
+      // rethrows. The self-test runs at most once per delivery.
+      if (!runtimeChecked) {
+        await assertRuntimeCanVerify(error);
+        runtimeChecked = true;
       }
-      // Otherwise a signature that is not a valid encoding: this check fails.
     }
   }
   throw new SignatureVerificationError(NO_TRUSTED_KEY);
@@ -537,14 +582,16 @@ export function verifyWithTrustedKeysSync(
     );
   }
   const { checks, message } = prepare(payload, headers, trusted, toleranceSeconds);
+  let runtimeChecked = false;
   for (const { key, signature } of checks) {
     try {
       if (ed25519.verify(signature, message, key)) {
         return;
       }
     } catch (error) {
-      if (isEnvironmentError(error)) {
-        throw error;
+      if (!runtimeChecked) {
+        assertRuntimeCanVerifySync(error);
+        runtimeChecked = true;
       }
     }
   }

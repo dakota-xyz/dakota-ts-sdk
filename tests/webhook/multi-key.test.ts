@@ -18,6 +18,14 @@ vi.mock('@noble/ed25519', async (importOriginal) => {
 });
 const verifyAsyncCalls = ed25519.verifyAsync as unknown as ReturnType<typeof vi.fn>;
 
+/** Signature checks made for a delivery, leaving out the runtime self-test. */
+function deliveryChecks(): number {
+  const golden = '79b5562e8fe654f94078b112e8a98ba7901f853ae695bed7e0e3910bad049664';
+  return verifyAsyncCalls.mock.calls.filter(
+    (call) => Buffer.from(call[2] as Uint8Array).toString('hex') !== golden
+  ).length;
+}
+
 import {
   WebhookHandler,
   type WebhookHandlerConfig,
@@ -273,7 +281,7 @@ describe('verifyWebhookSignatures', () => {
     await expectRejected(
       verifyWebhookSignatures(BODY, { timestamp: ts, signatures: padded }, oldKey)
     );
-    expect(verifyAsyncCalls).toHaveBeenCalledTimes(1);
+    expect(deliveryChecks()).toBe(1);
   });
 
   it('checks every trusted key that shares an 8-hex key id', async () => {
@@ -311,7 +319,7 @@ describe('verifyWebhookSignatures', () => {
         oldKey,
       ])
     );
-    expect(verifyAsyncCalls).toHaveBeenCalledTimes(2);
+    expect(deliveryChecks()).toBe(2);
   });
 
   it('never throws anything but SignatureVerificationError on malformed entries, and checks the rest', async () => {
@@ -516,18 +524,74 @@ describe('verifyWebhookSignatures edge cases', () => {
     }
   });
 
-  it('rethrows a missing async SHA-512 instead of rejecting as a forgery', async () => {
+  it('rethrows a hashing failure, whatever its wording, instead of rejecting as a forgery', async () => {
     const ts = now();
     const signatures = await entry(oldPrivate, ts);
     const saved = ed25519.etc.sha512Async;
-    ed25519.etc.sha512Async = () => Promise.reject(new Error('crypto.subtle must be defined'));
+    // Wording no released @noble/ed25519 uses: the SDK must not depend on it.
+    ed25519.etc.sha512Async = () => Promise.reject(new Error('hashing backend unavailable'));
     try {
       const result = verifyWebhookSignatures(BODY, { timestamp: ts, signatures }, oldKey);
-      await expect(result).rejects.toThrow('crypto.subtle must be defined');
+      await expect(result).rejects.toThrow('hashing backend unavailable');
       await expect(result).rejects.not.toThrow(SignatureVerificationError);
     } finally {
       ed25519.etc.sha512Async = saved;
     }
+  });
+
+  it('rethrows a synchronous hashing failure, whatever its wording', async () => {
+    const ts = now();
+    const signatures = await entry(oldPrivate, ts);
+    const saved = ed25519.etc.sha512Sync;
+    ed25519.etc.sha512Sync = () => {
+      throw new Error('hashing backend unavailable');
+    };
+    try {
+      expect(() =>
+        verifyWebhookSignaturesSync(BODY, { timestamp: ts, signatures }, oldKey)
+      ).toThrow('hashing backend unavailable');
+    } finally {
+      ed25519.etc.sha512Sync = saved;
+    }
+  });
+
+  it('treats a decoding error with a working runtime as a failed check, and checks the other keys', async () => {
+    // @noble/ed25519 2.x returns false for malformed signatures today, but a
+    // release may throw instead. With a working runtime (the self-test
+    // passes), that must fail only the one check.
+    const ts = now();
+    const signatures = `${await entry(strangerPrivate, ts)}, ${await entry(oldPrivate, ts)}`;
+    const verifySyncCalls = ed25519.verify as unknown as ReturnType<typeof vi.fn>;
+
+    verifyAsyncCalls.mockImplementationOnce(() => Promise.reject(new Error('bad point encoding')));
+    await expect(
+      verifyWebhookSignatures(
+        BODY,
+        { timestamp: ts, signatures: await entry(oldPrivate, ts) },
+        oldKey
+      )
+    ).rejects.toThrow(/^Signature verification failed$/);
+    verifyAsyncCalls.mockImplementationOnce(() => Promise.reject(new Error('bad point encoding')));
+    await expectAccepted(
+      verifyWebhookSignatures(BODY, { timestamp: ts, signatures }, [strangerKey, oldKey])
+    );
+
+    verifySyncCalls.mockImplementationOnce(() => {
+      throw new Error('bad point encoding');
+    });
+    expect(() =>
+      verifyWebhookSignaturesSync(BODY, { timestamp: ts, signatures }, [strangerKey, oldKey])
+    ).not.toThrow();
+    verifySyncCalls.mockImplementationOnce(() => {
+      throw new Error('bad point encoding');
+    });
+    expect(() =>
+      verifyWebhookSignaturesSync(
+        BODY,
+        { timestamp: ts, signatures: signatures.split(', ')[1]! },
+        oldKey
+      )
+    ).toThrow(/^Signature verification failed$/);
   });
 
   describe.each([
@@ -696,17 +760,11 @@ describe('WebhookHandler with several trusted keys', () => {
   });
 
   it('reports the trusted key ids, which are safe to log', () => {
-    expect(
-      new WebhookHandler({
-        publicKey: oldKey,
-        publicKeys: [newKey],
-        logger: { warn: vi.fn() },
-      }).keyIds()
-    ).toEqual([keyId(oldKey), keyId(newKey)]);
-    // A key given in both options is kept once.
-    expect(
-      new WebhookHandler({ publicKey: oldKey, publicKeys: [newKey, oldKey] }).keyIds()
-    ).toEqual([keyId(newKey), keyId(oldKey)]);
+    expect(new WebhookHandler({ publicKeys: [newKey, oldKey, newKey] }).keyIds()).toEqual([
+      keyId(newKey),
+      keyId(oldKey),
+    ]);
+    expect(new WebhookHandler({ publicKey: oldKey }).keyIds()).toEqual([keyId(oldKey)]);
   });
 });
 
@@ -787,7 +845,7 @@ describe('WebhookHandler key configuration', () => {
     );
   });
 
-  it('accepts an empty publicKeys next to a valid publicKey (unset env var), but not alone', async () => {
+  it('uses publicKey when publicKeys is empty (unset env var); an empty publicKeys alone throws', async () => {
     const warn = vi.fn();
     const handler = new WebhookHandler({ publicKey: oldKey, publicKeys: '', logger: { warn } });
     await expectAccepted(handler.handleRequest(BODY, await platformHeaders([oldPrivate])));
@@ -795,9 +853,12 @@ describe('WebhookHandler key configuration', () => {
     expect(() => new WebhookHandler({ publicKeys: ' , ' })).toThrow(
       'At least one webhook public key is required'
     );
-    expect(
-      () => new WebhookHandler({ publicKey: malformed, publicKeys: '', logger: { warn } })
-    ).toThrow('At least one webhook public key is required');
+    expect(warn).not.toHaveBeenCalled();
+    // With an empty publicKeys, a malformed publicKey keeps its lazy contract.
+    const lazy = new WebhookHandler({ publicKey: malformed, publicKeys: '', logger: { warn } });
+    await expect(lazy.handleRequest(BODY, await platformHeaders([oldPrivate]))).rejects.toThrow(
+      'Invalid public key length'
+    );
   });
 
   it('keeps a malformed legacy publicKey lazy: construction succeeds and each request fails as before', async () => {
@@ -847,14 +908,20 @@ describe('WebhookHandler key configuration', () => {
     expect(handler.keyIds()).toEqual([keyId(newKey)]);
   });
 
-  it('merges a valid legacy publicKey with publicKeys, warning with its key id so it is not forgotten at retirement', async () => {
+  it('ignores a valid publicKey not listed in publicKeys, so a retired key stops being trusted', async () => {
     const warn = vi.fn();
+    // Retire: the old key was removed from publicKeys, but the old publicKey
+    // option is still configured.
     const handler = new WebhookHandler({
       publicKey: oldKey,
       publicKeys: [newKey],
       logger: { warn },
     });
-    await expectAccepted(handler.handleRequest(BODY, await platformHeaders([oldPrivate])));
+    expect(handler.keyIds()).toEqual([keyId(newKey)]);
+    await expectRejected(handler.handleRequest(BODY, await platformHeaders([oldPrivate])));
+    const legacyOnly = await platformHeaders([oldPrivate]);
+    delete legacyOnly['x-dakota-webhook-signatures'];
+    await expectRejected(handler.handleRequest(BODY, legacyOnly));
     await expectAccepted(handler.handleRequest(BODY, await platformHeaders([newPrivate])));
     expect(warn).toHaveBeenCalledTimes(1);
     const warning = String(warn.mock.calls[0]![0]);
@@ -891,6 +958,9 @@ describe('WebhookHandler key configuration', () => {
     const partial: Omit<WebhookHandlerConfig, 'logger'> = { publicKey: key };
     const multi: MultiKeyWebhookHandlerConfig = { publicKeys: [oldKey, newKey] };
     expect(new WebhookHandler(partial).keyIds()).toEqual([keyId(oldKey)]);
+    expect(
+      new WebhookHandler({ ...partial, publicKeys: [newKey], logger: { warn: vi.fn() } }).keyIds()
+    ).toEqual([keyId(newKey)]);
     expect(new WebhookHandler(multi).keyIds()).toEqual([keyId(oldKey), keyId(newKey)]);
   });
 

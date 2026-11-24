@@ -1036,8 +1036,9 @@ Verification rules (match docs.dakota.xyz "Verifying a Delivery"):
   is rejected.
 - `publicKey` (one key) still works but breaks at a key cutover. A malformed
   key in `publicKeys` throws in the constructor; a malformed legacy
-  `publicKey` fails each request instead (as before), and is skipped with a
-  warning if `publicKeys` is also set.
+  `publicKey` fails each request instead (as before). Once `publicKeys` has a
+  key, `publicKey` is ignored (one warning, key id only, unless it is listed
+  in `publicKeys`), so removing a retired key always stops trusting it.
 - Without the handler: `verifyWebhookSignatures(rawBody, { timestamp,
   signatures, signature }, publicKeys)`; `keyId(hex)` and `handler.keyIds()`
   give the 8-hex ids, safe to log.
