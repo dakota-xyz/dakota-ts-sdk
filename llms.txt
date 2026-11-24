@@ -81,7 +81,8 @@ const first = await client.customers.list().first();
 ```typescript
 import { WebhookHandler } from 'dakota-ts-sdk/webhook';
 
-const handler = new WebhookHandler({ publicKey: 'hex_key' });
+// Comma-separated trusted hex keys; two during a Dakota key rotation.
+const handler = new WebhookHandler({ publicKeys: process.env.DAKOTA_WEBHOOK_PUBLIC_KEYS! });
 handler.on('customer.created', async (event) => { /* ... */ });
 handler.on('transaction.*', async (event) => { /* wildcard */ });
 handler.onDefault(async (event) => { /* fallback */ });

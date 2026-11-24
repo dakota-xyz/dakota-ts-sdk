@@ -3,11 +3,21 @@
  */
 
 import {
-  verifySignature,
   SIGNATURE_HEADER,
+  SIGNATURES_HEADER,
   TIMESTAMP_HEADER,
   DEFAULT_TIMESTAMP_TOLERANCE,
   SignatureVerificationError,
+  parsePublicKey,
+  parsePublicKeyList,
+  keyId,
+  toHex,
+  trustedKeys,
+  normalizeSignatureHeaders,
+  verifyWithTrustedKeys,
+  validateTimestamp,
+  type TrustedKeys,
+  type WebhookSignatureHeaders,
 } from './signature.js';
 import { parseEvent, WebhookEvent, matchesEventType } from './events.js';
 import { IdempotencyStore, MemoryIdempotencyStore } from './idempotency.js';
@@ -23,15 +33,67 @@ export type WebhookEventHandler<T = unknown> = (event: WebhookEvent<T>) => Promi
 /**
  * Webhook handler configuration.
  */
-export interface WebhookHandlerConfig {
-  /** Hex-encoded Ed25519 public key for signature verification */
+export interface WebhookHandlerConfig extends WebhookHandlerOptions {
+  /**
+   * Hex-encoded Ed25519 public key for signature verification (one key).
+   *
+   * Kept for existing integrations: prefer `publicKeys`
+   * ({@link MultiKeyWebhookHandlerConfig}), which lets Dakota rotate its
+   * signing key without breaking you. A malformed `publicKey` does not throw
+   * here; every request fails verification instead, as in earlier versions.
+   */
   publicKey: string;
+  /**
+   * See {@link MultiKeyWebhookHandlerConfig.publicKeys}. When it has at least
+   * one key, `publicKey` is ignored.
+   */
+  publicKeys?: string | readonly string[];
+}
+
+/**
+ * Webhook handler configuration with several trusted keys.
+ */
+export interface MultiKeyWebhookHandlerConfig extends WebhookHandlerOptions {
+  /**
+   * Trusted hex-encoded Ed25519 public keys: an array, or a comma-separated
+   * list such as `process.env.DAKOTA_WEBHOOK_PUBLIC_KEYS`. A delivery is
+   * accepted if any of them signed it. During a key rotation, list the
+   * current and the new key; remove a key once Dakota retires it.
+   *
+   * Validated here: a malformed key throws `SignatureVerificationError`
+   * (naming its position, never its value).
+   */
+  publicKeys: string | readonly string[];
+  /**
+   * Ignored when `publicKeys` has at least one key, so removing a retired key
+   * from `publicKeys` always stops trusting it. If it is set and not listed
+   * in `publicKeys` (or malformed), the handler warns once, naming at most
+   * its key id. Used only when `publicKeys` is empty, for example an unset
+   * environment variable.
+   */
+  publicKey?: string;
+}
+
+/**
+ * Logger the handler warns through about its configuration. Messages never
+ * contain a key value.
+ */
+export interface WebhookHandlerLogger {
+  warn(message: string): void;
+}
+
+/**
+ * Webhook handler options other than the trusted keys.
+ */
+export interface WebhookHandlerOptions {
   /** Timestamp tolerance in seconds (default: 300) */
   timestampTolerance?: number;
   /** Maximum payload size in bytes (default: 65536) */
   maxPayloadSize?: number;
   /** Idempotency store for deduplication (default: in-memory) */
   idempotencyStore?: IdempotencyStore | false;
+  /** Where configuration warnings go (default: `console`) */
+  logger?: WebhookHandlerLogger;
 }
 
 /**
@@ -48,8 +110,9 @@ export interface WebhookHeaders {
  * ```typescript
  * import { WebhookHandler, WebhookEventType } from 'dakota-ts-sdk/webhook';
  *
+ * // Comma-separated hex keys; list two while Dakota rotates its signing key.
  * const handler = new WebhookHandler({
- *   publicKey: process.env.DAKOTA_WEBHOOK_PUBLIC_KEY!,
+ *   publicKeys: process.env.DAKOTA_WEBHOOK_PUBLIC_KEYS!,
  * });
  *
  * // Register event handlers. The resource lives under event.data.object.
@@ -78,7 +141,9 @@ export interface WebhookHeaders {
  * ```
  */
 export class WebhookHandler {
-  private readonly publicKey: string;
+  private readonly trusted: TrustedKeys;
+  /** Why the legacy `publicKey` was unusable, when it was the only key given. */
+  private readonly keyError: SignatureVerificationError | null;
   private readonly timestampTolerance: number;
   private readonly maxPayloadSize: number;
   private readonly idempotencyStore: IdempotencyStore | null;
@@ -90,12 +155,42 @@ export class WebhookHandler {
    *
    * @param config - Handler configuration
    */
-  constructor(config: WebhookHandlerConfig) {
-    if (!config.publicKey) {
+  constructor(config: WebhookHandlerConfig | MultiKeyWebhookHandlerConfig) {
+    const logger = config.logger ?? console;
+    const hasList = config.publicKeys !== undefined && config.publicKeys !== null;
+    if (!config.publicKey && !hasList) {
       throw new Error('Public key is required');
     }
 
-    this.publicKey = config.publicKey;
+    // publicKeys is new: validate it now and throw on a malformed key.
+    let keys = hasList ? parsePublicKeyList([config.publicKeys]) : [];
+    let keyError: SignatureVerificationError | null = null;
+
+    if (keys.length > 0) {
+      // publicKeys decides what is trusted. A publicKey next to it is never
+      // added, so removing a retired key from publicKeys always stops
+      // trusting it.
+      if (config.publicKey) {
+        this.warnIgnoredPublicKey(config.publicKey, keys, logger);
+      }
+    } else if (config.publicKey) {
+      // publicKey alone (or next to an empty publicKeys, such as an unset
+      // environment variable) keeps its old contract: a malformed value never
+      // throws here, and every request fails verification instead.
+      try {
+        keys = [parsePublicKey(config.publicKey)];
+      } catch (error) {
+        keyError =
+          error instanceof SignatureVerificationError
+            ? error
+            : new SignatureVerificationError('Invalid public key');
+      }
+    } else {
+      throw new SignatureVerificationError('At least one webhook public key is required');
+    }
+
+    this.trusted = trustedKeys(keys);
+    this.keyError = keyError;
     this.timestampTolerance = config.timestampTolerance ?? DEFAULT_TIMESTAMP_TOLERANCE;
     this.maxPayloadSize = config.maxPayloadSize ?? DEFAULT_MAX_PAYLOAD_SIZE;
 
@@ -107,6 +202,45 @@ export class WebhookHandler {
     } else {
       this.idempotencyStore = new MemoryIdempotencyStore();
     }
+  }
+
+  /**
+   * Warn, once, that `publicKey` is ignored because `publicKeys` is set,
+   * unless it is also listed there. Never logs a key value: a key id at most.
+   */
+  private warnIgnoredPublicKey(
+    publicKey: string,
+    listed: readonly Uint8Array[],
+    logger: WebhookHandlerLogger
+  ): void {
+    let legacy: Uint8Array;
+    try {
+      legacy = parsePublicKey(publicKey);
+    } catch (error) {
+      const reason =
+        error instanceof SignatureVerificationError ? error.message : 'Invalid public key';
+      logger.warn(
+        `Dakota webhook handler: ignoring the publicKey option (${reason}); ` +
+          `verifying with the ${listed.length} key(s) in publicKeys`
+      );
+      return;
+    }
+    const legacyHex = toHex(legacy);
+    if (!listed.some((key) => toHex(key) === legacyHex)) {
+      logger.warn(
+        `Dakota webhook handler: ignoring the publicKey option (key id ${keyId(legacy)}) ` +
+          'because publicKeys is set; add that key to publicKeys if you still need it'
+      );
+    }
+  }
+
+  /**
+   * Ids of the trusted keys (the first 8 hex characters of each), in the order
+   * they are checked for the legacy header. Safe to log, for example at
+   * startup to confirm which keys are configured.
+   */
+  keyIds(): string[] {
+    return this.trusted.keys.map((key) => keyId(key));
   }
 
   /**
@@ -186,19 +320,25 @@ export class WebhookHandler {
       throw new Error(`Payload too large: ${payload.length} bytes (max: ${this.maxPayloadSize})`);
     }
 
-    // Extract headers (case-insensitive)
-    const signature = this.getHeader(headers, SIGNATURE_HEADER);
-    const timestamp = this.getHeader(headers, TIMESTAMP_HEADER);
+    // Extract headers (case-insensitive). A list header a proxy split over
+    // several values is joined back with ",".
+    const { signatures, signature, timestamp } = normalizeSignatureHeaders({
+      signatures: this.getRawHeader(headers, SIGNATURES_HEADER),
+      signature: this.getRawHeader(headers, SIGNATURE_HEADER),
+      timestamp: this.getRawHeader(headers, TIMESTAMP_HEADER),
+    });
 
-    if (!signature) {
-      throw new SignatureVerificationError(`Missing ${SIGNATURE_HEADER} header`);
+    if (signatures === undefined && signature === undefined) {
+      throw new SignatureVerificationError(
+        `Missing ${SIGNATURES_HEADER} and ${SIGNATURE_HEADER} headers`
+      );
     }
     if (!timestamp) {
       throw new SignatureVerificationError(`Missing ${TIMESTAMP_HEADER} header`);
     }
 
     // Verify signature
-    await verifySignature(payload, signature, timestamp, this.publicKey, this.timestampTolerance);
+    await this.verify(payload, { timestamp, signatures, signature });
 
     // Parse event
     const event = parseEvent(payload);
@@ -228,17 +368,38 @@ export class WebhookHandler {
    * Use this when you need to verify and parse without dispatching.
    *
    * @param payload - Raw request body
-   * @param signature - X-Webhook-Signature header value
+   * @param signature - X-Webhook-Signature header value (used only when
+   *   `signatures` is missing or blank)
    * @param timestamp - X-Webhook-Timestamp header value
+   * @param signatures - X-Dakota-Webhook-Signatures header value (preferred)
    * @returns Parsed and verified event
    */
   async constructEvent<T = unknown>(
     payload: string | Uint8Array,
     signature: string,
-    timestamp: string
+    timestamp: string,
+    signatures?: string
   ): Promise<WebhookEvent<T>> {
-    await verifySignature(payload, signature, timestamp, this.publicKey, this.timestampTolerance);
+    await this.verify(payload, { timestamp, signatures, signature });
     return parseEvent<T>(payload);
+  }
+
+  /**
+   * Verify against the trusted keys. A malformed legacy `publicKey` fails
+   * here, after the timestamp check, exactly where it used to.
+   */
+  private async verify(
+    payload: string | Uint8Array,
+    headers: WebhookSignatureHeaders
+  ): Promise<void> {
+    if (this.keyError) {
+      validateTimestamp(
+        normalizeSignatureHeaders(headers).timestamp as string,
+        this.timestampTolerance
+      );
+      throw new SignatureVerificationError(this.keyError.message);
+    }
+    await verifyWithTrustedKeys(payload, headers, this.trusted, this.timestampTolerance);
   }
 
   /**
@@ -306,16 +467,9 @@ export class WebhookHandler {
   }
 
   /**
-   * Get a header value (case-insensitive).
+   * Get a raw header value (exact name, or its lowercase form as Node gives).
    */
-  private getHeader(headers: WebhookHeaders, name: string): string | undefined {
-    // Try exact match first
-    const value = headers[name] ?? headers[name.toLowerCase()];
-
-    if (Array.isArray(value)) {
-      return value[0];
-    }
-
-    return value;
+  private getRawHeader(headers: WebhookHeaders, name: string): string | string[] | undefined {
+    return headers[name] ?? headers[name.toLowerCase()];
   }
 }

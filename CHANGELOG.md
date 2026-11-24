@@ -4,6 +4,66 @@ All notable changes to the Dakota TypeScript SDK are documented in this file.
 
 ## [Unreleased]
 
+### Webhooks: trust several Dakota public keys (ENG-6686)
+
+Dakota is about to rotate its webhook signing key. A handler that trusts one
+key breaks at the cutover; one that trusts a list keeps working through the
+overlap, the cutover and the old key's retirement. The verification rules
+match docs.dakota.xyz ("Verifying a Delivery", "Key Rotation") and the Go SDK.
+On combining the single-key option with the list (below), go-sdk will follow
+this behaviour.
+
+#### Added
+
+- `WebhookHandler` option `publicKeys`: trusted hex Ed25519 public keys, as an
+  array or a comma-separated string (`DAKOTA_WEBHOOK_PUBLIC_KEYS`). A delivery
+  is accepted if any of them signed it. Its config type is
+  `MultiKeyWebhookHandlerConfig`; `WebhookHandlerConfig` keeps `publicKey:
+  string` and gains an optional `publicKeys`, so existing code still compiles.
+- Verification of the `X-Dakota-Webhook-Signatures` header
+  (`SIGNATURES_HEADER`): comma-separated `<key id>:<base64 signature>` entries,
+  where the key id is the first 8 hex characters of the public key. Entries for
+  keys you don't trust are skipped, each trusted key is checked at most once
+  (so a padded header costs at most one check per key), and two trusted keys
+  that share a key id are both checked. Spaces around an entry's key id are
+  ignored. A list header split over several header lines is joined back, and
+  blank lines are dropped (an all-blank list counts as missing).
+- `X-Webhook-Signature` is used only when the list header is missing or blank,
+  checked against every trusted key. A list header that is present but has no
+  entry that verifies is rejected; it never falls back.
+- `verifyWebhookSignatures` / `verifyWebhookSignaturesSync`: the same checks
+  without the handler. They take raw header values (string, string array or
+  unset). The sync variant needs `etc.sha512Sync` set on `@noble/ed25519` and
+  throws a plain `Error` saying so otherwise. A runtime that cannot hash is
+  never reported as a forged webhook: when a check throws, the SDK verifies a
+  known-good signature (platform's golden vector) and rethrows the error if
+  that fails too. `parsePublicKeys`, `keyId`, and `handler.keyIds()` (key
+  ids are safe to log).
+- `constructEvent(payload, signature, timestamp, signatures?)`: optional
+  fourth argument for the list header.
+- `logger` option (default `console`) for configuration warnings.
+
+#### Behaviour notes
+
+- `publicKey` still works unchanged, including for a malformed value: the
+  handler is still built, and every request fails verification as before.
+- A malformed key in `publicKeys` throws `SignatureVerificationError` when the
+  handler is built. The message names the key's position, never its value.
+- If both options are set and only `publicKey` is malformed, it is skipped
+  with one warning (without the key value), and the `publicKeys` keys are used.
+- Once `publicKeys` has a key, `publicKey` is ignored, so removing a retired
+  key from `publicKeys` always stops trusting it. If `publicKey` is valid and
+  not listed in `publicKeys`, the handler warns once, naming its key id only.
+  An empty `publicKeys` (an unset variable) falls back to `publicKey`, with
+  its old contract; on its own it throws.
+- A request with neither signature header fails with
+  `Missing x-dakota-webhook-signatures and x-webhook-signature headers`
+  (previously `Missing x-webhook-signature header`). A signature that no
+  trusted key verifies still fails with exactly `Signature verification
+  failed`, and `expressMiddleware` still answers with the error message, so
+  what a sender sees stays as generic as before: no key ids or key details.
+  Same error class. Timestamp tolerance is unchanged.
+
 ## [3.4.0] - 2026-11-18
 
 **Upgrading from 3.2.0:** 3.3.0 was never published to npm, so 3.4.0 is the

@@ -5,6 +5,9 @@
 export {
   WebhookHandler,
   type WebhookHandlerConfig,
+  type MultiKeyWebhookHandlerConfig,
+  type WebhookHandlerOptions,
+  type WebhookHandlerLogger,
   type WebhookEventHandler,
   type WebhookHeaders,
 } from './handler.js';
@@ -12,13 +15,20 @@ export {
 export {
   verifySignature,
   verifySignatureSync,
+  verifyWebhookSignatures,
+  verifyWebhookSignaturesSync,
   parsePublicKey,
+  parsePublicKeys,
+  keyId,
   parseSignature,
   validateTimestamp,
   SignatureVerificationError,
   SIGNATURE_HEADER,
+  SIGNATURES_HEADER,
   TIMESTAMP_HEADER,
   DEFAULT_TIMESTAMP_TOLERANCE,
+  type WebhookSignatureHeaders,
+  type WebhookHeaderValue,
 } from './signature.js';
 
 export {

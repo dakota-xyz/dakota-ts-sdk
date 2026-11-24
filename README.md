@@ -325,7 +325,9 @@ complete runs against sandbox.
 
 ## Handling Webhooks
 
-Dakota sends webhooks for all status changes. Set up a handler:
+Dakota sends webhooks for all status changes. Set up a handler with the
+Dakota public keys you trust, from
+[Dakota Public Keys](https://docs.dakota.xyz/documentation/webhooks#dakota-public-keys):
 
 ```typescript
 import express from 'express';
@@ -333,9 +335,11 @@ import { WebhookHandler, WebhookEventType } from '@dakota-xyz/ts-sdk/webhook';
 
 const app = express();
 
+// DAKOTA_WEBHOOK_PUBLIC_KEYS: comma-separated hex public keys.
 const handler = new WebhookHandler({
-  publicKey: 'your_webhook_public_key_hex',
+  publicKeys: process.env.DAKOTA_WEBHOOK_PUBLIC_KEYS!,
 });
+console.log('Trusting Dakota webhook keys', handler.keyIds()); // key ids are safe to log
 
 // Handle specific event types
 handler.on(WebhookEventType.CustomerCreated, async (event) => {
@@ -364,6 +368,51 @@ app.post(
 );
 
 app.listen(8080);
+```
+
+Keep the raw body (`express.raw`): every signature covers the timestamp
+followed by the exact bytes Dakota sent.
+
+### Key rotation
+
+Dakota can rotate its webhook signing key without downtime. Each delivery
+carries `X-Dakota-Webhook-Signatures`, one `<key id>:<signature>` entry per
+signing key (two during a rotation), and the handler accepts it if any key you
+trust signed it. It falls back to the single-key `X-Webhook-Signature` only
+when that list header is missing or empty.
+
+| Phase | What you do |
+|-------|-------------|
+| Normal | `DAKOTA_WEBHOOK_PUBLIC_KEYS=<current key>` |
+| Overlap | When Dakota publishes the new key, add it: `DAKOTA_WEBHOOK_PUBLIC_KEYS=<current key>,<new key>` |
+| Cutover | Nothing, if you already trust the new key |
+| Retire | Remove the old key: `DAKOTA_WEBHOOK_PUBLIC_KEYS=<new key>` |
+
+Only trust keys listed on docs.dakota.xyz, and remove a retired key promptly.
+See [Key Rotation](https://docs.dakota.xyz/documentation/webhooks#key-rotation).
+
+**Upgrading from a single `publicKey`:** it still works, but it trusts one key,
+so it breaks at cutover. Move that key into `publicKeys` and drop `publicKey`:
+once `publicKeys` has a key, `publicKey` is ignored (with a warning if it is
+not listed there), so removing a retired key from `publicKeys` always stops
+trusting it. A malformed key in
+`publicKeys` throws when the handler is built; a malformed legacy `publicKey`
+still only fails each request, as before.
+
+Without the handler, verify directly:
+
+```typescript
+import { verifyWebhookSignatures } from '@dakota-xyz/ts-sdk/webhook';
+
+await verifyWebhookSignatures(
+  rawBody,
+  {
+    timestamp: req.get('X-Webhook-Timestamp'),
+    signatures: req.get('X-Dakota-Webhook-Signatures'),
+    signature: req.get('X-Webhook-Signature'),
+  },
+  process.env.DAKOTA_WEBHOOK_PUBLIC_KEYS!
+); // throws SignatureVerificationError unless a trusted key signed it
 ```
 
 ## Pagination
