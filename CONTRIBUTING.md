@@ -186,8 +186,10 @@ Version bumps follow [Semantic Versioning](https://semver.org/):
 - **PATCH**: Bug fixes (backwards compatible)
 
 Anyone with write access to this repository can cut a release. Only the
-last step needs an npm maintainer of the package
-(`npm owner ls @dakota-xyz/ts-sdk`).
+last step needs an **npm maintainer** of the package: today Luis, Danny or
+Gabe. `npm owner ls @dakota-xyz/ts-sdk` is the authoritative list. Admin
+rights on this repository or in the GitHub org are not enough: if you are not
+on that list, ask one of them.
 
 1. **Open a release PR.** Run `npm version X.Y.Z --no-git-tag-version`
    (it bumps `package.json` and `package-lock.json`), and date the
@@ -205,9 +207,14 @@ last step needs an npm maintainer of the package
    that the tag matches `package.json`, is on `main` and is not on npm yet.
    Then it lints, type checks, tests, builds and runs `npm stage publish`.
    A staged version is not public.
-4. **An npm maintainer approves it with 2FA.** On npmjs.com, open
-   `@dakota-xyz/ts-sdk`, then the *Staged Packages* tab, then *Approve*. Or,
-   with npm 11.15 or later:
+4. **An npm maintainer approves it with 2FA.** Ask one in the release PR's
+   #eng-prs thread, with the stage id: the *Stage on npm* step of the publish
+   run logs it as `staged with id <stage-id>`. The maintainer then approves on
+   npmjs.com: open `@dakota-xyz/ts-sdk`, then the *Staged Packages* tab, then
+   *Approve*. This is the simplest way.
+
+   From the command line, the maintainer needs npm 11.15 or later, signed in
+   to their own npm account (`npm login`):
 
    ```bash
    npm stage list @dakota-xyz/ts-sdk
@@ -216,6 +223,11 @@ last step needs an npm maintainer of the package
    ```bash
    npm stage approve <stage-id>
    ```
+
+   An older npm answers `Unknown command: "stage"`. Run it once with a newer
+   npm instead, without upgrading, as `npx -y npm@11.15 stage approve <stage-id>`.
+   `E401 Unauthorized` means npm is not signed in, or the account is not a
+   maintainer of the package.
 
 5. **Check** that `npm view @dakota-xyz/ts-sdk dist-tags` shows the new
    version as `latest`. A version with a pre-release suffix (`3.5.0-beta.1`)
