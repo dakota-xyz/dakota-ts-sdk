@@ -229,7 +229,7 @@ export class WebhookHandler {
     if (!listed.some((key) => toHex(key) === legacyHex)) {
       logger.warn(
         `Dakota webhook handler: ignoring the publicKey option (key id ${keyId(legacy)}) ` +
-          'because publicKeys is set; add it to publicKeys if you still trust it'
+          'because publicKeys is set; add that key to publicKeys if you still need it'
       );
     }
   }

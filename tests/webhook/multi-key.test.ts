@@ -925,7 +925,8 @@ describe('WebhookHandler key configuration', () => {
     await expectAccepted(handler.handleRequest(BODY, await platformHeaders([newPrivate])));
     expect(warn).toHaveBeenCalledTimes(1);
     const warning = String(warn.mock.calls[0]![0]);
-    expect(warning).toContain(keyId(oldKey));
+    expect(warning).toContain(`ignoring the publicKey option (key id ${keyId(oldKey)})`);
+    expect(warning).toContain('add that key to publicKeys if you still need it');
     expect(warning).not.toContain(oldKey);
   });
 

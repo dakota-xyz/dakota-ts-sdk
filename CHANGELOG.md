@@ -8,8 +8,10 @@ All notable changes to the Dakota TypeScript SDK are documented in this file.
 
 Dakota is about to rotate its webhook signing key. A handler that trusts one
 key breaks at the cutover; one that trusts a list keeps working through the
-overlap, the cutover and the old key's retirement. The rules match
-docs.dakota.xyz ("Verifying a Delivery", "Key Rotation") and the Go SDK.
+overlap, the cutover and the old key's retirement. The verification rules
+match docs.dakota.xyz ("Verifying a Delivery", "Key Rotation") and the Go SDK.
+On combining the single-key option with the list (below), go-sdk will follow
+this behaviour.
 
 #### Added
 
