@@ -976,8 +976,10 @@ import {
   type CustomerRfiRequestedData,
 } from '@dakota-xyz/ts-sdk/webhook';
 
+// Trusted Dakota public keys, comma-separated hex. List two (current, new)
+// while Dakota rotates its signing key; remove the old one when it retires.
 const handler = new WebhookHandler({
-  publicKey: process.env.DAKOTA_WEBHOOK_PUBLIC_KEY!,
+  publicKeys: process.env.DAKOTA_WEBHOOK_PUBLIC_KEYS!,
   timestampTolerance: 300, // 5 minutes (default)
 });
 
@@ -1024,6 +1026,21 @@ app.post('/webhooks', async (req, res) => {
   }
 });
 ```
+
+Verification rules (match docs.dakota.xyz "Verifying a Delivery"):
+- Prefers `X-Dakota-Webhook-Signatures` (`<8-hex key id>:<base64 sig>` entries,
+  comma-separated): unknown key ids are skipped, each trusted key is checked at
+  most once, and any trusted entry that verifies accepts the delivery.
+- Falls back to `X-Webhook-Signature` (checked against every trusted key) ONLY
+  when the list header is missing or blank. A present list header that fails
+  is rejected.
+- `publicKey` (one key) still works but breaks at a key cutover. A malformed
+  key in `publicKeys` throws in the constructor; a malformed legacy
+  `publicKey` fails each request instead (as before), and is skipped with a
+  warning if `publicKeys` is also set.
+- Without the handler: `verifyWebhookSignatures(rawBody, { timestamp,
+  signatures, signature }, publicKeys)`; `keyId(hex)` and `handler.keyIds()`
+  give the 8-hex ids, safe to log.
 
 ## Error Handling
 
