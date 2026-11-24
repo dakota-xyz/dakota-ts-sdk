@@ -54,10 +54,10 @@ docs.dakota.xyz ("Verifying a Delivery", "Key Rotation") and the Go SDK.
 - A request with neither signature header fails with
   `Missing x-dakota-webhook-signatures and x-webhook-signature headers`
   (previously `Missing x-webhook-signature header`). A signature that no
-  trusted key verifies fails with `Signature verification failed: no trusted
-  key signed this webhook` (previously exactly `Signature verification
-  failed`), so code comparing the whole message with `===` must switch to
-  `startsWith`. Same error class. Timestamp tolerance is unchanged.
+  trusted key verifies still fails with exactly `Signature verification
+  failed`, and `expressMiddleware` still answers with the error message, so
+  what a sender sees stays as generic as before: no key ids or key details.
+  Same error class. Timestamp tolerance is unchanged.
 
 ## [3.4.0] - 2026-11-18
 

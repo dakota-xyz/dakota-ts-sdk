@@ -401,7 +401,7 @@ describe('verifyWebhookSignatures', () => {
     );
   });
 
-  it('keeps "Signature verification failed" at the start of the failure message', async () => {
+  it('fails with exactly the old generic "Signature verification failed" message', async () => {
     const ts = now();
     await expect(
       verifyWebhookSignatures(
@@ -409,7 +409,7 @@ describe('verifyWebhookSignatures', () => {
         { timestamp: ts, signatures: await entry(strangerPrivate, ts) },
         oldKey
       )
-    ).rejects.toThrow(/^Signature verification failed/);
+    ).rejects.toThrow(/^Signature verification failed$/);
   });
 });
 
@@ -707,6 +707,53 @@ describe('WebhookHandler with several trusted keys', () => {
     expect(
       new WebhookHandler({ publicKey: oldKey, publicKeys: [newKey, oldKey] }).keyIds()
     ).toEqual([keyId(newKey), keyId(oldKey)]);
+  });
+});
+
+// --- What the sender sees ------------------------------------------------------
+
+describe('expressMiddleware responses stay generic', () => {
+  function mockRes() {
+    const res = {
+      code: 0,
+      body: '',
+      status(code: number) {
+        res.code = code;
+        return { send: (body: string) => void (res.body = body) };
+      },
+      sendStatus(code: number) {
+        res.code = code;
+      },
+    };
+    return res;
+  }
+
+  it('answers a forged or untrusted delivery with 401 and the old generic text, no key ids', async () => {
+    const handler = new WebhookHandler({ publicKeys: [oldKey, newKey] });
+    const middleware = handler.expressMiddleware();
+    const ts = now();
+    const cases: Record<string, string | string[]>[] = [
+      { 'x-dakota-webhook-signatures': await entry(strangerPrivate, ts) },
+      { 'x-dakota-webhook-signatures': `${keyId(oldKey)}:${await sign(newPrivate, ts, BODY)}` },
+      {
+        'x-dakota-webhook-signatures': 'garbage',
+        'x-webhook-signature': await sign(oldPrivate, ts, BODY),
+      },
+      { 'x-webhook-signature': await sign(strangerPrivate, ts, BODY) },
+    ];
+    for (const extra of cases) {
+      const res = mockRes();
+      await middleware(
+        { body: Buffer.from(BODY), headers: { 'x-webhook-timestamp': ts, ...extra } },
+        res,
+        () => undefined
+      );
+      expect(res.code).toBe(401);
+      expect(res.body).toBe('Signature verification failed');
+      for (const id of [keyId(oldKey), keyId(newKey), keyId(strangerKey)]) {
+        expect(res.body).not.toContain(id);
+      }
+    }
   });
 });
 

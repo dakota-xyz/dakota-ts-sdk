@@ -475,7 +475,9 @@ function planChecks(trusted: TrustedKeys, headers: NormalizedHeaders): Check[] {
   return trusted.keys.map((key) => ({ key, signature }));
 }
 
-const NO_TRUSTED_KEY = 'Signature verification failed: no trusted key signed this webhook';
+// The same text as verifySignature's: expressMiddleware sends error messages
+// back to the sender, so it must stay as generic as before (no key ids).
+const NO_TRUSTED_KEY = 'Signature verification failed';
 
 /**
  * Errors from @noble/ed25519 that mean the runtime cannot verify at all (no
