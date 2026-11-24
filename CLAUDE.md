@@ -237,7 +237,12 @@ npm run typecheck     # Type check only
 Follow "Release Process" in `CONTRIBUTING.md`. Merging to `main` publishes
 nothing. Publishing a GitHub release `vX.Y.Z` runs `publish.yml`, which only
 STAGES the version on npm: an npm maintainer must approve it with 2FA before
-it is public. Never switch the workflow back to `npm publish`. The token can
+it is public. The maintainers are Luis, Danny and Gabe (`npm owner ls
+@dakota-xyz/ts-sdk`). Repository admins are not maintainers by default, so
+ask one of the maintainers in the release PR's #eng-prs thread, with the stage
+id from the publish run log (`staged with id …`). The npmjs.com *Staged
+Packages* page is the simplest way to approve; `npm stage` needs npm 11.15+,
+and a 401 means not signed in or not a maintainer. Never switch the workflow back to `npm publish`. The token can
 only stage, and npm answers `E403 E_STAGE_REQUIRED`. That is why 3.2.0 and
 3.3.0 failed in CI, and 3.3.0 never reached npm.
 
