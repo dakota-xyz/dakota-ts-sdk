@@ -4,6 +4,8 @@ All notable changes to the Dakota TypeScript SDK are documented in this file.
 
 ## [Unreleased]
 
+## [3.5.0] - 2026-11-24
+
 ### Webhooks: trust several Dakota public keys (ENG-6686)
 
 Dakota is about to rotate its webhook signing key. A handler that trusts one
