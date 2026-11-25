@@ -17,6 +17,7 @@ import {
 } from '../../src/client/errors.js';
 import type { EndorsedRequest } from '../../src/client/types.js';
 import { attachPolicyPayload, detachPolicyPayload } from '../../src/agentic/sign.js';
+import { canonicalJSON } from '../../src/agentic/canonicalize.js';
 import { createRoutedFetch } from './helpers.js';
 
 const decoder = new TextDecoder();
@@ -63,6 +64,64 @@ describe('policy attach/detach payloads with policy_version', () => {
       );
     }
   });
+});
+
+// The caller gives the version twice: once as `{ policyVersion }` (the signed
+// bytes) and once as the intent's `policy_version` (what is sent). The
+// platform verifies the signature over the intent it receives, so the
+// canonical form of the sent intent must be exactly the signed bytes. This
+// pins it for both intents, with and without a version.
+describe('the sent intent canonicalizes to the signed payload', () => {
+  type Intent = NonNullable<EndorsedRequest['intent']>;
+  const cases: Array<[string, Uint8Array, Intent]> = [
+    [
+      'attach with version',
+      attachPolicyPayload('wal-1', 'pol-1', 'key-1', { policyVersion: 5 }),
+      {
+        type: 'attach_policy_to_wallet',
+        wallet_id: 'wal-1',
+        policy_id: 'pol-1',
+        idempotency_key: 'key-1',
+        policy_version: 5,
+      },
+    ],
+    [
+      'attach without version',
+      attachPolicyPayload('wal-1', 'pol-1', 'key-1'),
+      {
+        type: 'attach_policy_to_wallet',
+        wallet_id: 'wal-1',
+        policy_id: 'pol-1',
+        idempotency_key: 'key-1',
+      },
+    ],
+    [
+      'detach with version',
+      detachPolicyPayload('wal-1', 'pol-1', 'key-1', { policyVersion: 5 }),
+      {
+        type: 'detach_policy_from_wallet',
+        wallet_id: 'wal-1',
+        policy_id: 'pol-1',
+        idempotency_key: 'key-1',
+        policy_version: 5,
+      },
+    ],
+    [
+      'detach without version',
+      detachPolicyPayload('wal-1', 'pol-1', 'key-1'),
+      {
+        type: 'detach_policy_from_wallet',
+        wallet_id: 'wal-1',
+        policy_id: 'pol-1',
+        idempotency_key: 'key-1',
+      },
+    ],
+  ];
+  for (const [name, signed, intent] of cases) {
+    it(name, () => {
+      expect(canonicalJSON(intent)).toBe(decoder.decode(signed));
+    });
+  }
 });
 
 // The platform's 409 for a stale policy_version, as its public spec gives it
