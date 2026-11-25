@@ -113,7 +113,10 @@ try {
 Signer-group governance refusals are `APIError` subclasses:
 `EndorsementRequiredError`, `InsufficientEndorsementsError`,
 `StaleSignerGroupVersionError`, `BelowThresholdError`,
-`InvalidGoverningGroupError`. Passkey helpers (`buildChallenge`,
+`InvalidGoverningGroupError`. A policy attach/detach signed with
+`attachPolicyPayload(..., { policyVersion })` / `detachPolicyPayload` and sent
+with the same `policy_version` throws `StalePolicyVersionError` (409) when the
+policy changed after signing. Passkey helpers (`buildChallenge`,
 `packAssertion`) live in the browser-safe `@dakota-xyz/ts-sdk/governance`.
 
 ## Environments

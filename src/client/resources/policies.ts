@@ -164,6 +164,12 @@ export class PoliciesResource extends BaseResource {
    * `AttachPolicyToWalletIntent`. The server rejects requests without a
    * valid endorsement body.
    *
+   * The intent may carry the policy's `policy_version` (sign it with
+   * `attachPolicyPayload(walletId, policyId, key, { policyVersion })`). If
+   * the policy changed after the signatures were made, the request fails
+   * with `StalePolicyVersionError` (409 `stale_policy_version`) and nothing
+   * changes: read the policy again and sign again under a new key.
+   *
    * @param policyId - Policy ID
    * @param walletId - Wallet ID
    * @param options - Request options (must include `endorsement`)
@@ -188,6 +194,9 @@ export class PoliciesResource extends BaseResource {
    * Endorsed endpoint — `options.endorsement` must contain a signed
    * `DetachPolicyFromWalletIntent`. The server rejects requests without a
    * valid endorsement body.
+   *
+   * Takes the same optional `policy_version` as {@link attachToWallet}
+   * (sign it with `detachPolicyPayload(..., { policyVersion })`).
    *
    * @param policyId - Policy ID
    * @param walletId - Wallet ID

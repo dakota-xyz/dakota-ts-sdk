@@ -46,6 +46,7 @@ export {
   EndorsementRequiredError,
   InsufficientEndorsementsError,
   StaleSignerGroupVersionError,
+  StalePolicyVersionError,
   BelowThresholdError,
   InvalidGoverningGroupError,
 } from './client/errors.js';
@@ -107,6 +108,7 @@ export {
   P256MandateSigner,
   type MandateAction,
   type MandateSigner,
+  type PolicyPayloadOptions,
   addPolicyRulePayload,
   attachGroupPayload,
   attachPolicyPayload,

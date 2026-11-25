@@ -4,6 +4,28 @@ All notable changes to the Dakota TypeScript SDK are documented in this file.
 
 ## [Unreleased]
 
+## [3.6.0] - 2026-11-25
+
+### Sign a policy attach or detach at the policy's version (ENG-6773)
+
+The platform (v0.3.181) accepts an optional, signed `policy_version` on a
+policy attach (`PUT /policies/{policy_id}/wallets/{wallet_id}`) or detach
+(`DELETE` on the same path). If the policy changed after the signatures were
+made, the request is refused with `409 stale_policy_version` and nothing
+changes, so a policy's rules cannot be loosened between the signers' approval
+and the request landing.
+
+#### Added
+
+- `attachPolicyPayload` and `detachPolicyPayload` take an optional fourth
+  argument, `{ policyVersion }`. With it, `policy_version` joins the signed
+  bytes exactly as the policy engine verifies them; without it the bytes are
+  the same as before. A version that is not a whole number from 1 to
+  2147483647 throws a `RangeError`. Type `PolicyPayloadOptions`.
+- The `AttachPolicyToWalletIntent` and `DetachPolicyFromWalletIntent` types
+  have an optional `policy_version`. Send the value you signed.
+- `StalePolicyVersionError` (409 `stale_policy_version`), an `APIError`.
+
 ## [3.5.0] - 2026-11-24
 
 ### Webhooks: trust several Dakota public keys (ENG-6686)

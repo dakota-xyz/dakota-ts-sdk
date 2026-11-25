@@ -220,7 +220,7 @@ const signer = P256MandateSigner.generate(); // or P256MandateSigner.fromPrivate
 
 // `mandate` comes from client.mandates.get / client.mandates.list.
 const payload = mandateSignPayload(mandate, 'approve');
-const signature = signer.sign(payload);
+const signature = signer.sign(payload); // an ES256Signer; one signature per required signer
 
 await client.mandates.approve(mandate.id!, {
   approver_public_key: signer.publicKeyBase64(),
@@ -302,6 +302,7 @@ WebCrypto key, use `webCryptoES256Signer(cryptoKey)`.
 | `EndorsementRequiredError` (400) | The change was sent unsigned | Use the signed helpers |
 | `InsufficientEndorsementsError` (403) | Too few governing signatures (`have`, `need`) | Prepare again (a new idempotency key) and collect every signature again |
 | `StaleSignerGroupVersionError` (409) | The group changed after signing | Prepare and sign again (or pass `staleRetries`) |
+| `StalePolicyVersionError` (409) | A policy attach or detach was signed at an old policy version | Read the policy again and sign again under a new key |
 | `BelowThresholdError` (422) | The removal would leave the group too small | Add members first, or remove fewer |
 | `InvalidGoverningGroupError` (409) | The governing group is gone or invalid | Fix the group's governance |
 
@@ -322,6 +323,51 @@ To build intents yourself (for example a governed crypto destination), use
 `updateSignerGroupGovernanceIntent` and `createCryptoDestinationIntent`. See
 `examples/governance-es256.ts` and `examples/governance-passkey.ts` for
 complete runs against sandbox.
+
+### Attaching or detaching a policy at a known version
+
+A policy attach or detach can carry the policy's version, so the signatures
+approve the rules the signers saw. If the policy changes after they sign (a
+rule added, changed or removed, or its signer group, endorser scope or
+client changed), the request fails with `StalePolicyVersionError` (409
+`stale_policy_version`) and nothing changes. Without the version, the attach
+or detach is signed and checked as before.
+
+```typescript
+import { randomUUID } from 'node:crypto';
+import { StalePolicyVersionError, attachPolicyPayload } from '@dakota-xyz/ts-sdk';
+
+const policy = await client.policies.get(policyId); // show the signers these rules
+const key = randomUUID();
+const payload = attachPolicyPayload(walletId, policyId, key, { policyVersion: policy.version });
+const signature = signer.sign(payload); // an ES256Signer; one signature per required signer
+
+try {
+  await client.policies.attachToWallet(policyId, walletId, {
+    idempotencyKey: key,
+    endorsement: {
+      intent: {
+        type: 'attach_policy_to_wallet',
+        wallet_id: walletId,
+        policy_id: policyId,
+        idempotency_key: key,
+        policy_version: policy.version, // exactly as signed
+      },
+      signatures: [signature],
+    },
+  });
+} catch (err) {
+  if (err instanceof StalePolicyVersionError) {
+    // The policy changed after signing: read it again, show the signers the
+    // new rules, and sign again under a new idempotency key.
+  }
+  throw err;
+}
+```
+
+`detachPolicyPayload` takes the same `{ policyVersion }`, with
+`client.policies.detachFromWallet`. Send `policy_version` exactly when you
+signed it: the signed bytes must match the request.
 
 ## Handling Webhooks
 

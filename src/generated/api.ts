@@ -8073,6 +8073,12 @@ export type components = {
              * @example idem_2N4YkKpKu7M3mKpGYmF8kcJ8oZT
              */
             readonly idempotency_key: string;
+            /**
+             * Format: int32
+             * @description Optional. The policy's current `version` (read it with `GET /policies/{policy_id}`). When sent it is part of the signed intent, and the request is refused with `409 stale_policy_version` unless it is still the policy's version, so the signatures approve the rules the signers saw. The version rises with every rule change, and when the policy's endorser scope, signer group or client changes. When omitted, the intent is signed and checked as before.
+             * @example 3
+             */
+            readonly policy_version?: number;
         };
         readonly DetachPolicyFromWalletIntent: {
             /**
@@ -8095,6 +8101,12 @@ export type components = {
              * @example idem_2N4YkKpKu7M3mKpGYmF8kcJ8oZT
              */
             readonly idempotency_key: string;
+            /**
+             * Format: int32
+             * @description Optional. The policy's current `version` (read it with `GET /policies/{policy_id}`). When sent it is part of the signed intent, and the request is refused with `409 stale_policy_version` unless it is still the policy's version, so the signatures approve the rules the signers saw. The version rises with every rule change, and when the policy's endorser scope, signer group or client changes. When omitted, the intent is signed and checked as before.
+             * @example 3
+             */
+            readonly policy_version?: number;
         };
         readonly AddPolicyRuleIntent: {
             /**

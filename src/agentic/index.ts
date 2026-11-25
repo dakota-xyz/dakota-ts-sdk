@@ -20,6 +20,7 @@ export {
   P256MandateSigner,
   type MandateAction,
   type MandateSigner,
+  type PolicyPayloadOptions,
   addPolicyRulePayload,
   attachGroupPayload,
   attachPolicyPayload,

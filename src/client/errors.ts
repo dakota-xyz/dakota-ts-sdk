@@ -218,6 +218,19 @@ export class StaleSignerGroupVersionError extends APIError {
 }
 
 /**
+ * `stale_policy_version` (409): a policy attach or detach carried the
+ * policy's version (`policyVersion`), and the policy changed after the
+ * signatures were made. Nothing changed. Read the policy again, check its
+ * rules, and sign again under a new idempotency key.
+ */
+export class StalePolicyVersionError extends APIError {
+  constructor(statusCode: number, code: string, message: string, options?: APIErrorOptions) {
+    super(statusCode, code, message, options);
+    this.name = 'StalePolicyVersionError';
+  }
+}
+
+/**
  * `below_threshold` (422): the removal would leave the group below a
  * threshold it must keep (at least one member, its governance quorum, or a
  * governed group's threshold). Add members first or remove fewer.
@@ -244,6 +257,7 @@ const GOVERNANCE_ERRORS = new Map<string, typeof APIError>([
   ['endorsement_required', EndorsementRequiredError],
   ['insufficient_endorsements', InsufficientEndorsementsError],
   ['stale_signer_group_version', StaleSignerGroupVersionError],
+  ['stale_policy_version', StalePolicyVersionError],
   ['below_threshold', BelowThresholdError],
   ['invalid_governing_group', InvalidGoverningGroupError],
 ]);
