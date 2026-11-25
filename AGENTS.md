@@ -460,11 +460,13 @@ const rule = await client.policies.addRule(policyId, {
   limit: '10000.00',
 });
 
-// Attach to wallet
-await client.policies.attachToWallet(policyId, walletId);
+// Attach to wallet (endorsed: sign attachPolicyPayload(walletId, policyId, key,
+// { policyVersion: policy.version }) and send the same policy_version in the
+// intent; a policy changed since signing throws StalePolicyVersionError)
+await client.policies.attachToWallet(policyId, walletId, { endorsement, idempotencyKey: key });
 
-// Detach from wallet
-await client.policies.detachFromWallet(policyId, walletId);
+// Detach from wallet (same, with detachPolicyPayload)
+await client.policies.detachFromWallet(policyId, walletId, { endorsement, idempotencyKey: key });
 
 // List wallets attached to this policy
 const policyWallets = await client.policies.getWallets(policyId);
@@ -555,6 +557,7 @@ and its `signatures[]` entry is `packAssertion(credential)`.
 Errors (subclasses of `APIError`): `EndorsementRequiredError` (400, unsigned),
 `InsufficientEndorsementsError` (403, `have`/`need`),
 `StaleSignerGroupVersionError` (409, re-read version and re-sign),
+`StalePolicyVersionError` (409 on a policy attach/detach signed with `policyVersion`: re-read the policy and re-sign),
 `BelowThresholdError` (422), `InvalidGoverningGroupError` (409).
 
 ### Signers

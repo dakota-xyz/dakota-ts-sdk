@@ -162,23 +162,70 @@ export function attachGroupPayload(
   );
 }
 
+/** Optional fields of {@link attachPolicyPayload} and {@link detachPolicyPayload}. */
+export interface PolicyPayloadOptions {
+  /**
+   * The policy's current `version` (read it with `client.policies.get`), so
+   * the signatures approve the rules the signers saw. It is part of the
+   * signed bytes: send the same value as the intent's `policy_version`.
+   *
+   * If the policy changes after the signatures are made (a rule added,
+   * changed or removed, or its signer group or endorser scope changed), the
+   * request is refused with 409 `stale_policy_version`
+   * ({@link StalePolicyVersionError}) and nothing changes: read the policy
+   * again, and sign again under a new idempotency key. Without it, the
+   * payload is the one signed before policy versions existed, and the
+   * attach or detach does not check the version.
+   *
+   * A whole number of 1 or more (versions start at 1); anything else throws.
+   */
+  policyVersion?: number;
+}
+
+const MAX_INT32 = 2 ** 31 - 1;
+
+/**
+ * Attach/detach canonical bytes. `policy_version` is added only when given,
+ * matching the policy engine's reconstruction: an intent without it signs
+ * exactly the bytes it always has.
+ */
+function policyPayload(
+  type: 'attach_policy_to_wallet' | 'detach_policy_from_wallet',
+  walletId: string,
+  policyId: string,
+  idempotencyKey: string,
+  options?: PolicyPayloadOptions
+): Uint8Array {
+  const intent: Record<string, unknown> = {
+    type,
+    wallet_id: walletId,
+    policy_id: policyId,
+    idempotency_key: idempotencyKey,
+  };
+  const version = options?.policyVersion;
+  if (version !== undefined) {
+    if (!Number.isInteger(version) || version < 1 || version > MAX_INT32) {
+      throw new RangeError(
+        `policy version must be a whole number from 1 to ${MAX_INT32}, got ${version}`
+      );
+    }
+    intent.policy_version = version;
+  }
+  return textBytes(canonicalJSON(intent));
+}
+
 /**
  * Canonical bytes a recognized wallet signer endorses to attach a policy to
- * a wallet.
+ * a wallet: JCS JSON of `{type, wallet_id, policy_id, idempotency_key}`, plus
+ * `policy_version` when `options.policyVersion` is given.
  */
 export function attachPolicyPayload(
   walletId: string,
   policyId: string,
-  idempotencyKey: string
+  idempotencyKey: string,
+  options?: PolicyPayloadOptions
 ): Uint8Array {
-  return textBytes(
-    canonicalJSON({
-      type: 'attach_policy_to_wallet',
-      wallet_id: walletId,
-      policy_id: policyId,
-      idempotency_key: idempotencyKey,
-    })
-  );
+  return policyPayload('attach_policy_to_wallet', walletId, policyId, idempotencyKey, options);
 }
 
 /**
@@ -202,21 +249,16 @@ export function detachGroupPayload(
 
 /**
  * Canonical bytes a recognized wallet signer endorses to remove a policy
- * from a wallet — the inverse of {@link attachPolicyPayload}.
+ * from a wallet — the inverse of {@link attachPolicyPayload}. Takes the same
+ * optional `policyVersion`.
  */
 export function detachPolicyPayload(
   walletId: string,
   policyId: string,
-  idempotencyKey: string
+  idempotencyKey: string,
+  options?: PolicyPayloadOptions
 ): Uint8Array {
-  return textBytes(
-    canonicalJSON({
-      type: 'detach_policy_from_wallet',
-      wallet_id: walletId,
-      policy_id: policyId,
-      idempotency_key: idempotencyKey,
-    })
-  );
+  return policyPayload('detach_policy_from_wallet', walletId, policyId, idempotencyKey, options);
 }
 
 /**
