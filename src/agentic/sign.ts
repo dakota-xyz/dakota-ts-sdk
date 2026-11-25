@@ -170,8 +170,8 @@ export interface PolicyPayloadOptions {
    * signed bytes: send the same value as the intent's `policy_version`.
    *
    * If the policy changes after the signatures are made (a rule added,
-   * changed or removed, or its signer group or endorser scope changed), the
-   * request is refused with 409 `stale_policy_version`
+   * changed or removed, or its signer group, endorser scope or client
+   * changed), the request is refused with 409 `stale_policy_version`
    * ({@link StalePolicyVersionError}) and nothing changes: read the policy
    * again, and sign again under a new idempotency key. Without it, the
    * payload is the one signed before policy versions existed, and the

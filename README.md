@@ -220,7 +220,7 @@ const signer = P256MandateSigner.generate(); // or P256MandateSigner.fromPrivate
 
 // `mandate` comes from client.mandates.get / client.mandates.list.
 const payload = mandateSignPayload(mandate, 'approve');
-const signature = signer.sign(payload);
+const signature = signer.sign(payload); // an ES256Signer; one signature per required signer
 
 await client.mandates.approve(mandate.id!, {
   approver_public_key: signer.publicKeyBase64(),
@@ -328,19 +328,19 @@ complete runs against sandbox.
 
 A policy attach or detach can carry the policy's version, so the signatures
 approve the rules the signers saw. If the policy changes after they sign (a
-rule added, changed or removed, or its signer group or endorser scope
-changed), the request fails with `StalePolicyVersionError` (409
+rule added, changed or removed, or its signer group, endorser scope or
+client changed), the request fails with `StalePolicyVersionError` (409
 `stale_policy_version`) and nothing changes. Without the version, the attach
 or detach is signed and checked as before.
 
 ```typescript
 import { randomUUID } from 'node:crypto';
-import { ES256Signer, StalePolicyVersionError, attachPolicyPayload } from '@dakota-xyz/ts-sdk';
+import { StalePolicyVersionError, attachPolicyPayload } from '@dakota-xyz/ts-sdk';
 
 const policy = await client.policies.get(policyId); // show the signers these rules
 const key = randomUUID();
 const payload = attachPolicyPayload(walletId, policyId, key, { policyVersion: policy.version });
-const signature = signer.sign(payload); // an ES256Signer
+const signature = signer.sign(payload); // an ES256Signer; one signature per required signer
 
 try {
   await client.policies.attachToWallet(policyId, walletId, {
